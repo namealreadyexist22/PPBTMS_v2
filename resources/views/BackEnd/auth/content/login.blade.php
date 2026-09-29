@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>SIDA Portal | Login</title>
+  <title>{{ setting('app_name', config('app.name')) }} | Login</title>
   <link rel="shortcut icon" href="{{asset('assets/img/SRALOGO.png') }}">
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -58,7 +58,7 @@
 
       <div class="text-center">
         <h2 class="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-[#166534] to-[#3f6212] uppercase">
-            System Portal
+            {{ setting('app_name', config('app.name')) }}
         </h2>
       </div>
 
