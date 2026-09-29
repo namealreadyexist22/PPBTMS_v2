@@ -17,7 +17,7 @@
             </h3>
 
             <p class="text-secondary mx-auto mb-0" style="max-width: 480px; font-size: 14px; line-height: 1.6; opacity: 0.85;">
-                Welcome to the SIDA Management System workspace directory platform. Select an option from the sidebar to begin processing records.
+                Welcome
             </p>
         </div>
     </div>

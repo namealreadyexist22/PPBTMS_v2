@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\BackEnd;
+namespace App\Core\Http\Controllers;
 
-use App\DataTables\UsersDataTable;
+use App\Core\DataTables\UsersDataTable;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\StoreUserRequest;
-use App\Http\Requests\UpdatePasswordRequest;
-use App\Services\BackEnd\UserService;
+use App\Core\Http\Requests\StoreUserRequest;
+use App\Core\Http\Requests\UpdatePasswordRequest;
+use App\Core\Services\UserService;
 use Illuminate\Http\Request;
 
 class UserController extends Controller

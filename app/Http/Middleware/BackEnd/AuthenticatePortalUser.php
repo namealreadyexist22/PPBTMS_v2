@@ -19,7 +19,7 @@ class AuthenticatePortalUser
         // If the user is NOT logged in, block them and redirect to login page with a flash message
         if (!Auth::check()) {
             return redirect()
-                ->route('auth.sida.login')
+                ->route('auth.login')
                 ->with('error', 'Access denied. Please log in to your account first.');
         }
 

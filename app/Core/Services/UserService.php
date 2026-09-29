@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\BackEnd;
+namespace App\Core\Services;
 
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -65,20 +65,17 @@ class UserService
             if ($request->hasFile('avatar')) {
                 $file = $request->file('avatar');
 
-                // Construct a clean, unique file name configuration string
-                $fileName = 'avatar_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $validated['avatar_data'] = base64_encode(file_get_contents($file->getRealPath()));
+                $validated['avatar_mime'] = $file->getMimeType();
+            }
 
-                // FIX: Specify the 'public' disk explicitly as the third argument
-                $file->storeAs('avatars', $fileName, 'public');
-
-                // Purge old files to save disk usage profiles context allocations
-                if ($userId && !empty($userInstance->img_slug) && $userInstance->img_slug !== 'avatar-default.png') {
-                    // FIX: Ensure the deletion explicitly targets the 'public' disk too
-                    Storage::disk('public')->delete('avatars/' . $userInstance->img_slug);
-                }
-
-                // Append the generated path to data payload field structure mapping properties
-                $validated['img_slug'] = $fileName;
+            // Persist the changes seamlessly
+            if ($userId) {
+                $userInstance->update($validated);
+                $message = 'System User record updates have been applied successfully.';
+            } else {
+                $userInstance = $this->user->create($validated);
+                $message = 'System User record has been processed and committed successfully.';
             }
 
             // Persist the changes seamlessly
@@ -90,9 +87,17 @@ class UserService
                 if (!isset($validated['img_slug'])) {
                     $validated['img_slug'] = 'avatar-default.png';
                 }
-                $this->user->create($validated);
+                $userInstance = $this->user->create($validated);
                 $message = 'System User record has been processed and committed successfully.';
             }
+
+            // Sync the RBAC role (single-select: empty selection clears any existing role)
+            $userInstance->syncRoles($validated['role'] ?? []);
+
+            activity()
+                ->causedBy($request->user())
+                ->performedOn($userInstance)
+                ->log("changed password for user \"{$userInstance->fullname}\"");
 
             return response()->json([
                 'status'  => 'success',
@@ -161,6 +166,11 @@ class UserService
 
             $statusText = $request->is_activated == 1 ? 'activated' : 'deactivated';
 
+            activity()
+                ->causedBy($request->user())
+                ->performedOn($userInstance)
+                ->log("{$statusText} user \"{$userInstance->fullname}\"");
+
             return response()->json([
                 'status'  => 'success',
                 'message' => "The profile record has been successfully {$statusText}."
@@ -189,6 +199,14 @@ class UserService
                     'message' => 'Security policy breach: You cannot delete your own active administrative session context.'
                 ], 403);
             }
+
+            $userInstance = $this->findById($request->id);
+            $fullname = $userInstance->fullname;
+
+            activity()
+                ->causedBy($request->user())
+                ->performedOn($userInstance)
+                ->log("deleted user \"{$fullname}\"");
 
             // Execute the deletion directly on the returned Model instance
             $this->findById($request->id)->delete();

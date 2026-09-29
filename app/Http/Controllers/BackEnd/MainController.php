@@ -14,9 +14,10 @@ use Laravel\Socialite\Facades\Socialite;
 class MainController extends Controller
 {
 
-    public function __construct(
-        protected MainService $mainService
-    ) {}
+    public function __construct(protected MainService $mainService) {
+        
+    }
+
     public function main_home(){
         return view('BackEnd.content.main.home');
     }
@@ -69,7 +70,7 @@ class MainController extends Controller
                     return response()->json([
                         'status'   => 'success',
                         'message'  => 'Password updated. Relogging...',
-                        'redirect' => route('auth.sida.login')
+                        'redirect' => route('auth.login')
                     ], 200);
 
                 case 'link_google':
@@ -117,7 +118,7 @@ class MainController extends Controller
                             return response()->json([
                                 'status'   => 'success',
                                 'message'  => 'Your active session has been terminated. Redirecting...',
-                                'redirect' => route('auth.sida.login')
+                                'redirect' => route('auth.login')
                             ], 200);
                         }
 

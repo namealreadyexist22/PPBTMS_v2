@@ -14,8 +14,10 @@ return new class extends Migration
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('img_slug')->nullable();
+            $table->mediumText('avatar_data')->nullable(); // base64-encoded image bytes
+            $table->string('avatar_mime')->nullable();  // e.g. image/png, image/jpeg
 
-            // Name fields - Restored!
+            // Name fields
             $table->string('fname')->nullable();
             $table->string('lname')->nullable();
             $table->string('minitial')->nullable();
@@ -31,7 +33,6 @@ return new class extends Migration
             // Identity & Roles
             $table->string('google_id')->nullable()->unique();
             $table->tinyInteger('categories')->default(0);
-            $table->tinyInteger('roletype')->default(0);
             $table->boolean('is_activated')->default(false);
 
             // Audit & Tracking

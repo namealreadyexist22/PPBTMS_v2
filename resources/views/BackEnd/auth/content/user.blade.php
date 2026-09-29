@@ -55,7 +55,7 @@
                 }
 
                 $.ajax({
-                    url: '{{ route("sida.user.entry") }}',
+                    url: '{{ route("core.users.entry") }}',
                     type: 'GET',
                     data: payload,
                     success: function (data) {
@@ -133,7 +133,7 @@
                 let formData = new FormData(form[0]);
 
                 $.ajax({
-                    url: '{{ route("sida.user.store") }}',
+                    url: '{{ route("core.users.store") }}',
                     type: 'POST',
                     data: formData,
                     processData: false, // Tell jQuery not to process data parameters
@@ -196,7 +196,7 @@
                 const userId = $(this).data('id');
 
                 $.ajax({
-                    url: '{{ route("sida.user.cpass") }}',
+                    url: '{{ route("core.users.cpass") }}',
                     type: 'GET',
                     data: { id: userId },
                     success: function (data) {
@@ -247,7 +247,7 @@
                 saveBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1.5"></i> Modifying...');
 
                 $.ajax({
-                    url: '{{ route("sida.user.upass") }}',
+                    url: '{{ route("core.users.upass") }}',
                     type: 'POST',
                     data: form.serialize(),
                     success: function(response) {
@@ -313,7 +313,7 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         $.ajax({
-                            url: '{{ route("sida.user.ustat") }}',
+                            url: '{{ route("core.users.ustat") }}',
                             type: 'POST',
                             data: {
                                 _token: '{{ csrf_token() }}',
@@ -357,7 +357,7 @@
                 }).then((result) => {
                     if (result.isConfirmed) {
                         $.ajax({
-                            url: '{{ route("sida.user.destroy") }}', // Update to your exact route mapping name
+                            url: '{{ route("core.users.destroy") }}', // Update to your exact route mapping name
                             type: 'POST', // Sent as POST but spoofed to DELETE via Laravel _method metadata
                             data: {
                                 _token: '{{ csrf_token() }}',

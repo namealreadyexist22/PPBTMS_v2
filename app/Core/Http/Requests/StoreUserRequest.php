@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Core\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
@@ -46,10 +46,10 @@ class StoreUserRequest extends FormRequest
             'email'      => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . ($userId ?? 'NULL')],
 
             // Password rules transition dynamically based on existence of creation vs update sequence state tracks
-            'password'   => $isUpdate ? ['nullable', 'string', 'min:8', 'confirmed'] : ['required', 'string', 'min:8', 'confirmed'],
+            'password'   => $isUpdate ? ['nullable', 'string', 'min:4', 'confirmed'] : ['required', 'string', 'min:4', 'confirmed'],
 
             'categories' => ['required', 'in:1,2'],
-            'roletype'   => ['required', 'in:1,2'],
+            'role' => ['nullable', 'string', 'exists:roles,name'],
         ];
     }
 

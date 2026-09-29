@@ -5,6 +5,7 @@
 
 /* Icon Packs */
 @import "@fortawesome/fontawesome-free/css/all.css";
+@import "./all.css";
 
 /* Toastr Notification Style Imports */
 @import "toastr/build/toastr.css";
@@ -429,3 +430,18 @@ div.dt-container .dt-paging .pagination .page-item.active .page-link {
 .dt-badge-warning   { background-color: #fef3c7; color: #92400e; }
 .dt-badge-info      { background-color: #e0f2fe; color: #075985; }
 .dt-badge-secondary { background-color: #f1f5f9; color: #475569; }
+
+
+.sidebar-mini.sidebar-collapse .app-sidebar:hover .sidebar-menu .nav-link p {
+    width: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+.sidebar-mini.sidebar-collapse .app-sidebar:hover .sidebar-brand .brand-text {
+    max-width: none !important;
+    width: auto !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    margin-left: 0.5rem !important;
+}

@@ -13,7 +13,7 @@
             <div class="d-flex flex-column flex-md-row align-items-center justify-content-between pb-4 mb-5 border-bottom border-light-subtle">
                 <div class="d-flex flex-column flex-md-row align-items-center gap-4 text-center text-md-start">
                     <div class="position-relative">
-                        <img src="{{ asset('assets/img/SRALOGO.png') }}"
+                        <img src="{{ asset('assets/img/userlogo.png') }}"
                              alt="Profile Identity"
                              class="rounded-circle border bg-white p-2 shadow-sm"
                              width="84"
@@ -25,12 +25,7 @@
                             {{ ucwords(strtolower($user->fname ?? 'System')) }} {{ ucwords(strtolower($user->lname ?? 'User')) }}
                         </h4>
                         <p class="text-secondary small mb-0 opacity-75" style="font-size: 12px; letter-spacing: 0.01em;">
-                            @switch($user->roletype ?? null)
-                                @case(1) <span class="text-warning fw-semibold">Scholar Account</span> @break
-                                @case(2) <span class="text-primary fw-semibold">HRDP Administrator</span> @break
-                                @case(3) <span class="text-dark fw-bold">Super Administrator</span> @break
-                                @default <span class="text-danger fw-semibold">Pending Verification</span>
-                            @endswitch
+                            {{ $user->roles->pluck('name')->join(', ') ?: 'None' }}
                             &bull; Active Gateway Session
                         </p>
                     </div>
@@ -221,7 +216,7 @@ function initProfileScripts($) {
         // Helper function to dispatch profile actions uniformly
         function dispatchProfileAction(payload, successCallback, errorCallback) {
             $.ajax({
-                url: '{{ route("sida.main.profile") }}',
+                url: '{{ route("app.main.profile") }}',
                 type: 'POST',
                 data: $.extend({}, payload, { _token: '{{ csrf_token() }}' }),
                 dataType: 'json',

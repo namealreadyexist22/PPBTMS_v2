@@ -22,17 +22,17 @@ class RedirectIfAuthenticatedPortal
             // Example Role Split: Check for pending approval
             if ($user->roletype === 0) {
                 session()->flash('warning', 'Your account profile status is still pending validation.');
-                return redirect()->route('sida.main.home');
+                return redirect()->route('app.main.home');
             }
 
              if (in_array($user->roletype, [2, 3])) {
                 session()->flash('info', 'Admin panel session initialized.');
-                return redirect()->route('sida.main.home');
+                return redirect()->route('app.main.home');
             }
 
             // Standard successful dashboard entry notification
             session()->flash('info', 'You are already signed into your active session.');
-            return redirect()->route('sida.main.home');
+            return redirect()->route('app.main.home');
         }
 
         // If they are not logged in, allow them to view the login page normally

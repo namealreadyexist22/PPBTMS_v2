@@ -123,11 +123,14 @@
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
                         <div class="col-md-6">
-                            <label for="roletype" class="form-label small fw-semibold text-muted mb-1">System Security Role</label>
-                            <select class="form-select form-select-sm rounded" id="roletype" name="roletype" required>
-                                <option value="" disabled {{ !isset($user) ? 'selected' : '' }}>Assign security policy...</option>
-                                <option value="1" {{ isset($user) && $user->roletype == 1 ? 'selected' : '' }}>Role 1</option>
-                                <option value="2" {{ isset($user) && $user->roletype == 2 ? 'selected' : '' }}>Role 2</option>
+                            <label for="role" class="form-label small fw-semibold text-muted mb-1">System Security Role</label>
+                            <select class="form-select form-select-sm rounded" id="role" name="role">
+                                <option value="">— No role —</option>
+                                @foreach (\Spatie\Permission\Models\Role::orderBy('name')->get() as $r)
+                                    <option value="{{ $r->name }}" {{ isset($user) && $user->hasRole($r->name) ? 'selected' : '' }}>
+                                        {{ $r->name }}
+                                    </option>
+                                @endforeach
                             </select>
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>

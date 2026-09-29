@@ -100,7 +100,7 @@ class LoginController extends Controller
             $seconds = RateLimiter::availableIn($this->googleThrottleKey($request));
 
             // Dynamic fallback redirection depending on whether they are logged in or guest
-            $route = Auth::check() ? 'sida.main.profile' : 'auth.sida.login';
+            $route = Auth::check() ? 'main.profile' : 'auth.login';
             return redirect()->route($route)->withErrors([
                 'username' => "Too many login attempts. Please try again in {$seconds} seconds."
             ]);
@@ -111,7 +111,7 @@ class LoginController extends Controller
             $googleUser = Socialite::driver('google')->user();
         } catch (\Exception $e) {
             RateLimiter::hit($this->googleThrottleKey($request));
-            $route = Auth::check() ? 'sida.main.profile' : 'auth.sida.login';
+            $route = Auth::check() ? 'main.profile' : 'auth.login';
             return redirect()->route($route)->withErrors([
                 'username' => 'Google authentication failed. Please try again.'
             ]);
@@ -130,7 +130,7 @@ class LoginController extends Controller
             RateLimiter::clear($this->googleThrottleKey($request));
 
             return redirect()
-                ->route('sida.main.profile')
+                ->route('app.main.profile')
                 ->with('success', 'Your Google account has been linked successfully!');
         }
 
@@ -150,7 +150,7 @@ class LoginController extends Controller
         // 4. Fail if user does not exist in the system
         if (!$user) {
             RateLimiter::hit($this->googleThrottleKey($request));
-            return redirect()->route('auth.sida.login')->withErrors([
+            return redirect()->route('auth.login')->withErrors([
                 'username' => 'Your Google Account is not registered or linked with an active account. Please use your standard credentials or contact MIS.'
             ]);
         }
@@ -185,7 +185,7 @@ class LoginController extends Controller
         $welcomeMessage = "Welcome back, {$firstName}! Logged in successfully.";
 
         return redirect()
-            ->route('sida.main.home')
+            ->route('app.main.home')
             ->with('success', $welcomeMessage);
     }
 
@@ -196,7 +196,7 @@ class LoginController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()
-            ->route('auth.sida.login')
+            ->route('auth.login')
             ->with('success', 'You have been logged out.');
     }
 

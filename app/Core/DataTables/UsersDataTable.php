@@ -1,9 +1,9 @@
 <?php
 
-namespace App\DataTables;
+namespace App\Core\DataTables;
 
 use App\Models\User;
-use App\Traits\HasModernDataTable; // Import your custom trait
+use App\Core\DataTables\Traits\HasModernDataTable; // Import your custom trait
 use Illuminate\Database\Eloquent\Builder as QueryBuilder;
 use Yajra\DataTables\EloquentDataTable;
 use Yajra\DataTables\Html\Builder as HtmlBuilder;
@@ -38,7 +38,7 @@ class UsersDataTable extends DataTable
 
     public function query(User $model): QueryBuilder
     {
-        return $model->newQuery();
+        return $model->newQuery()->with('roles');
     }
 
     public function html(): HtmlBuilder
