@@ -1,5 +1,6 @@
 <?php
 
+use App\Core\Http\Controllers\AvatarController;
 use App\Core\Http\Controllers\LogController;
 use App\Core\Http\Controllers\MenuController;
 use App\Core\Http\Controllers\NotificationController;
@@ -7,9 +8,9 @@ use App\Core\Http\Controllers\RoleController;
 use App\Core\Http\Controllers\SettingsController;
 use App\Core\Http\Controllers\UserAccessController;
 use App\Core\Http\Controllers\UserController;
-use App\Core\Http\Controllers\AvatarController;
 use App\Http\Controllers\BackEnd\LoginController;
 use App\Http\Controllers\BackEnd\MainController;
+use App\Http\Controllers\Procurement\PpmpController;
 use Illuminate\Support\Facades\Route;
 
     Route::get('/', function () {
@@ -109,5 +110,19 @@ use Illuminate\Support\Facades\Route;
         Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
         Route::post('notifications/{id}/read', [NotificationController::class, 'markRead'])->name('notifications.read');
         Route::post('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
+
+    });
+
+    Route::prefix('procurement')
+        ->as('procurement.')
+        ->middleware(['portal.auth'])
+    ->group(function () {
+
+        Route::middleware('perm:manage ppmp')->group(function () {
+            Route::get('ppmp', [PpmpController::class, 'index'])->name('ppmp.index');
+
+            Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
+                ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');
+        });
 
     });
