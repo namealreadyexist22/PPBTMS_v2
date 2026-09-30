@@ -15,6 +15,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('division')->nullable();
             $table->string('section')->nullable();
+            // Division -> sections. A section's PPMP is approved by its division head.
             $table->foreignId('parent_id')->nullable()->constrained('offices')->nullOnDelete();
             $table->foreignId('head_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->boolean('is_active')->default(true);

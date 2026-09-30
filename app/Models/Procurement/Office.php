@@ -40,6 +40,17 @@ class Office extends Model
         return $this->belongsTo(User::class, 'head_user_id');
     }
 
+    /**
+     * Who approves this office's PPMP: a section's PPMP goes to its division
+     * head (the parent office's head); a division without a parent approves its own.
+     */
+    public function approverId(): ?int
+    {
+        $headId = $this->parent_id ? $this->parent?->head_user_id : $this->head_user_id;
+
+        return $headId ? (int) $headId : null;
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);

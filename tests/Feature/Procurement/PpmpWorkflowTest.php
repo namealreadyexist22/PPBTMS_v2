@@ -190,4 +190,56 @@ class PpmpWorkflowTest extends TestCase
 
         $this->assertEquals('100000.00', $line->fresh()->availableBudget());
     }
+
+    protected function ppspdWithSections(): array
+    {
+        $divisionHead = User::factory()->create(['designation' => 'Division Chief']);
+        $sectionHead = User::factory()->create(['designation' => 'Section Chief']);
+        $division = Office::create(['code' => 'PPSPD', 'name' => 'Planning Division', 'head_user_id' => $divisionHead->id]);
+        $planning = Office::create(['code' => 'PPSPD-PS', 'name' => 'Planning Section', 'parent_id' => $division->id, 'head_user_id' => $sectionHead->id]);
+        $special = Office::create(['code' => 'PPSPD-SPS', 'name' => 'Special Project Section', 'parent_id' => $division->id]);
+
+        return [$divisionHead, $sectionHead, $planning, $special];
+    }
+
+    public function test_section_ppmp_is_approved_by_division_head(): void
+    {
+        [$divisionHead, $sectionHead, $planning] = $this->ppspdWithSections();
+        $staff = User::factory()->create(['office_id' => $planning->id]);
+
+        $ppmp = $this->ppmps->create($planning, 2027, $staff);
+        $this->ppmps->addItem($ppmp, $this->line());
+        $this->ppmps->submit($ppmp, $staff);
+
+        try {
+            $this->ppmps->approve($ppmp->fresh(), $sectionHead);
+            $this->fail('Section head must not approve.');
+        } catch (ProcurementException) {
+        }
+
+        $this->ppmps->approve($ppmp->fresh(), $divisionHead);
+        $this->assertSame(PpmpStatus::Approved, $ppmp->fresh()->status);
+    }
+
+    public function test_visibility_by_office_division_and_view_all(): void
+    {
+        [$divisionHead, , $planning, $special] = $this->ppspdWithSections();
+        $planningStaff = User::factory()->create(['office_id' => $planning->id]);
+        $specialStaff = User::factory()->create(['office_id' => $special->id]);
+
+        $a = $this->ppmps->create($planning, 2027, $planningStaff);
+        $b = $this->ppmps->create($special, 2027, $specialStaff);
+        $c = $this->ppmps->create($this->office, 2027, $this->staff);
+
+        $ids = fn (User $u) => Ppmp::visibleTo($u)->pluck('id')->sort()->values()->all();
+
+        $this->assertSame([$a->id], $ids($planningStaff));
+        $this->assertSame([$a->id, $b->id], $ids($divisionHead));
+        $this->assertSame([$c->id], $ids($this->head));
+
+        \Spatie\Permission\Models\Permission::create(['name' => Ppmp::VIEW_ALL_PERMISSION, 'guard_name' => 'web']);
+        $bac = User::factory()->create();
+        $bac->givePermissionTo(Ppmp::VIEW_ALL_PERMISSION);
+        $this->assertSame([$a->id, $b->id, $c->id], $ids($bac));
+    }
 }

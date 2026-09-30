@@ -13,7 +13,8 @@ use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * PPMP lifecycle: office prepares (draft) -> submits -> head approves or returns.
+ * PPMP lifecycle: office/section prepares (draft) -> submits -> division head approves
+ * or returns. Approved PPMPs are then visible to BAC for consolidation into the APP.
  * An approved PPMP is changed only through an amendment (new version).
  */
 class PpmpService
@@ -114,25 +115,25 @@ class PpmpService
         });
     }
 
-    public function returnToOffice(Ppmp $ppmp, User $head, string $remarks): Ppmp
+    public function returnToOffice(Ppmp $ppmp, User $approver, string $remarks): Ppmp
     {
         $this->assertStatus($ppmp, PpmpStatus::Submitted);
-        $this->assertIsHead($ppmp, $head);
+        $this->assertIsApprover($ppmp, $approver);
 
-        return DB::transaction(function () use ($ppmp, $head, $remarks) {
-            $ppmp->update(['status' => PpmpStatus::Returned, 'updated_by' => $head->id]);
-            $ppmp->sign($head, 'returned', $remarks);
+        return DB::transaction(function () use ($ppmp, $approver, $remarks) {
+            $ppmp->update(['status' => PpmpStatus::Returned, 'updated_by' => $approver->id]);
+            $ppmp->sign($approver, 'returned', $remarks);
 
             return $ppmp;
         });
     }
 
-    public function approve(Ppmp $ppmp, User $head, ?string $remarks = null): Ppmp
+    public function approve(Ppmp $ppmp, User $approver, ?string $remarks = null): Ppmp
     {
         $this->assertStatus($ppmp, PpmpStatus::Submitted);
-        $this->assertIsHead($ppmp, $head);
+        $this->assertIsApprover($ppmp, $approver);
 
-        return DB::transaction(function () use ($ppmp, $head, $remarks) {
+        return DB::transaction(function () use ($ppmp, $approver, $remarks) {
             if ($ppmp->amended_from_id) {
                 $this->carryOverCharges($ppmp);
             }
@@ -140,9 +141,9 @@ class PpmpService
             $ppmp->update([
                 'status'      => PpmpStatus::Approved,
                 'approved_at' => now(),
-                'updated_by'  => $head->id,
+                'updated_by'  => $approver->id,
             ]);
-            $ppmp->sign($head, 'approved', $remarks);
+            $ppmp->sign($approver, 'approved', $remarks);
 
             return $ppmp;
         });
@@ -262,10 +263,19 @@ class PpmpService
         }
     }
 
-    protected function assertIsHead(Ppmp $ppmp, User $user): void
+    protected function assertIsApprover(Ppmp $ppmp, User $user): void
     {
-        if ((int) $ppmp->office->head_user_id !== (int) $user->id) {
-            throw new ProcurementException('Only the head of '.$ppmp->office->name.' can approve or return this PPMP.');
+        $office = $ppmp->office;
+        $approverId = $office->approverId();
+
+        if (! $approverId) {
+            throw new ProcurementException('No division head is set for '.$office->name.'.');
+        }
+
+        if ($approverId !== (int) $user->id) {
+            $division = $office->parent ?? $office;
+
+            throw new ProcurementException('Only the head of '.$division->name.' can approve or return this PPMP.');
         }
     }
 }
