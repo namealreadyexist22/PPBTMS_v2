@@ -14,6 +14,7 @@ class DatabaseSeeder extends Seeder
             MenuSeeder::class,
             ActionPermissionSeeder::class,
             SettingsSeeder::class,
+            ProcurementLookupSeeder::class,
         ]);
     }
 }

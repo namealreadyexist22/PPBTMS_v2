@@ -15,6 +15,8 @@ use Spatie\Permission\Traits\HasRoles;
     'fname',
     'lname',
     'minitial',
+    'designation',
+    'office_id',
     'fullname',
     'username',
     'email',
@@ -46,6 +48,11 @@ class User extends Authenticatable
             'password'          => 'hashed',
             'is_activated'      => 'boolean',
         ];
+    }
+
+    public function office()
+    {
+        return $this->belongsTo(\App\Models\Procurement\Office::class);
     }
 
     public function menuOverrides()

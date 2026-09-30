@@ -1,0 +1,193 @@
+<?php
+
+namespace Tests\Feature\Procurement;
+
+use App\Enums\PpmpStatus;
+use App\Enums\ProjectType;
+use App\Exceptions\ProcurementException;
+use App\Models\Procurement\FundSource;
+use App\Models\Procurement\Office;
+use App\Models\Procurement\Ppmp;
+use App\Models\Procurement\ProcurementMode;
+use App\Models\User;
+use App\Services\Procurement\PpmpBudgetService;
+use App\Services\Procurement\PpmpService;
+use Database\Seeders\ProcurementLookupSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class PpmpWorkflowTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected PpmpService $ppmps;
+    protected PpmpBudgetService $budget;
+    protected Office $office;
+    protected User $staff;
+    protected User $head;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(ProcurementLookupSeeder::class);
+
+        $this->ppmps = app(PpmpService::class);
+        $this->budget = app(PpmpBudgetService::class);
+
+        $this->head = User::factory()->create(['designation' => 'Regional Executive Director']);
+        $this->office = Office::create(['code' => 'ORED', 'name' => 'Office of the RED', 'head_user_id' => $this->head->id]);
+        $this->staff = User::factory()->create(['office_id' => $this->office->id, 'designation' => 'Senior Agriculturist']);
+    }
+
+    protected function line(array $overrides = []): array
+    {
+        return array_merge([
+            'description'         => 'Supply of office supplies',
+            'project_type'        => ProjectType::Goods,
+            'quantity_size'       => '1 lot',
+            'procurement_mode_id' => ProcurementMode::where('code', 'SVP')->value('id'),
+            'fund_source_id'      => FundSource::where('code', 'GAA')->value('id'),
+            'proc_start'          => '2027-01-01',
+            'proc_end'            => '2027-02-01',
+            'delivery_period'     => 'March 2027',
+            'estimated_budget'    => '100000.00',
+        ], $overrides);
+    }
+
+    protected function approvedPpmp(): Ppmp
+    {
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
+        $this->ppmps->addItem($ppmp, $this->line());
+        $this->ppmps->addItem($ppmp, $this->line(['description' => 'Laptops', 'estimated_budget' => '250000']));
+        $this->ppmps->submit($ppmp, $this->staff);
+
+        return $this->ppmps->approve($ppmp->fresh(), $this->head);
+    }
+
+    public function test_office_prepares_submits_and_head_approves(): void
+    {
+        $ppmp = $this->approvedPpmp();
+
+        $this->assertSame(PpmpStatus::Approved, $ppmp->status);
+        $this->assertSame('PPMP-2027-ORED-01', $ppmp->ppmp_no);
+        $this->assertEquals('350000.00', $ppmp->fresh()->total_budget);
+        $this->assertEqualsCanonicalizing(['prepared', 'submitted', 'approved'], $ppmp->signatories()->pluck('role')->all());
+        $this->assertSame('Senior Agriculturist', $ppmp->latestSignatory('submitted')->designation_snapshot);
+    }
+
+    public function test_only_office_head_can_approve(): void
+    {
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
+        $this->ppmps->addItem($ppmp, $this->line());
+        $this->ppmps->submit($ppmp, $this->staff);
+
+        $this->expectException(ProcurementException::class);
+        $this->ppmps->approve($ppmp->fresh(), $this->staff);
+    }
+
+    public function test_returned_ppmp_can_be_edited_and_resubmitted(): void
+    {
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
+        $item = $this->ppmps->addItem($ppmp, $this->line());
+        $this->ppmps->submit($ppmp, $this->staff);
+        $this->ppmps->returnToOffice($ppmp->fresh(), $this->head, 'Split the lot');
+
+        $this->ppmps->updateItem($item->fresh(), ['estimated_budget' => '80000']);
+        $this->ppmps->submit($ppmp->fresh(), $this->staff);
+
+        $this->assertSame(PpmpStatus::Submitted, $ppmp->fresh()->status);
+        $this->assertEquals('80000.00', $ppmp->fresh()->total_budget);
+    }
+
+    public function test_approved_ppmp_is_locked(): void
+    {
+        $ppmp = $this->approvedPpmp();
+
+        $this->expectException(ProcurementException::class);
+        $this->ppmps->addItem($ppmp, $this->line());
+    }
+
+    public function test_one_ppmp_per_office_per_year(): void
+    {
+        $this->ppmps->create($this->office, 2027, $this->staff);
+
+        $this->expectException(ProcurementException::class);
+        $this->ppmps->create($this->office, 2027, $this->staff);
+    }
+
+    public function test_budget_charge_is_blocked_when_exceeding_available(): void
+    {
+        $line = $this->approvedPpmp()->items()->first();
+
+        $this->budget->charge($line, '60000');
+        $this->assertEquals('40000.00', $line->fresh()->availableBudget());
+
+        $this->expectException(ProcurementException::class);
+        $this->budget->charge($line, '40000.01');
+    }
+
+    public function test_cannot_charge_unapproved_ppmp(): void
+    {
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
+        $line = $this->ppmps->addItem($ppmp, $this->line());
+
+        $this->expectException(ProcurementException::class);
+        $this->budget->charge($line, '100');
+    }
+
+    public function test_amendment_carries_charges_and_supersedes_old_version(): void
+    {
+        $v1 = $this->approvedPpmp();
+        $oldLine = $v1->items()->first();
+        $this->budget->charge($oldLine, '30000');
+
+        $v2 = $this->ppmps->amend($v1, $this->staff);
+        $this->assertSame('PPMP-2027-ORED-02', $v2->ppmp_no);
+
+        // Charge made while the amendment is still being prepared.
+        $this->budget->charge($oldLine, '10000');
+
+        $newLine = $v2->items()->where('line_uuid', $oldLine->line_uuid)->first();
+        $this->ppmps->updateItem($newLine, ['estimated_budget' => '150000']);
+        $this->ppmps->submit($v2->fresh(), $this->staff);
+        $this->ppmps->approve($v2->fresh(), $this->head);
+
+        $this->assertSame(PpmpStatus::Superseded, $v1->fresh()->status);
+        $this->assertEquals('40000.00', $newLine->fresh()->committed_amount);
+
+        // Charging via the old line now lands on the current version.
+        $current = $this->budget->charge($oldLine, '5000');
+        $this->assertSame($newLine->id, $current->id);
+        $this->assertEquals('105000.00', $current->availableBudget());
+    }
+
+    public function test_amendment_cannot_drop_budget_below_charges(): void
+    {
+        $v1 = $this->approvedPpmp();
+        $oldLine = $v1->items()->first();
+        $v2 = $this->ppmps->amend($v1, $this->staff);
+        $newLine = $v2->items()->where('line_uuid', $oldLine->line_uuid)->first();
+        $this->ppmps->updateItem($newLine, ['estimated_budget' => '20000']);
+        $this->ppmps->submit($v2->fresh(), $this->staff);
+
+        // PR charged on v1 after the amendment was submitted.
+        $this->budget->charge($oldLine, '50000');
+
+        try {
+            $this->ppmps->approve($v2->fresh(), $this->head);
+            $this->fail('Approval should have been blocked.');
+        } catch (ProcurementException) {
+            $this->assertSame(PpmpStatus::Approved, $v1->fresh()->status);
+            $this->assertSame(PpmpStatus::Submitted, $v2->fresh()->status);
+        }
+    }
+
+    public function test_release_returns_budget(): void
+    {
+        $line = $this->approvedPpmp()->items()->first();
+        $this->budget->charge($line, '25000');
+        $this->budget->release($line, '25000');
+
+        $this->assertEquals('100000.00', $line->fresh()->availableBudget());
+    }
+}
