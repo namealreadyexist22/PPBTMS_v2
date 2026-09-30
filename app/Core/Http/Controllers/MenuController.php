@@ -23,10 +23,17 @@ class MenuController extends Controller
             $menu->parent_id = $request->parent_id;
         }
 
+        // Anything that can hold submenus (top level + their direct children),
+        // listed as a tree. Never the menu itself or one of its own children.
         $parents = Menu::whereNull('parent_id')
-            ->when($menu->exists, fn ($q) => $q->where('id', '!=', $menu->id))
+            ->with('children')
             ->orderBy('order')
-            ->get();
+            ->get()
+            ->flatMap(fn (Menu $root) => collect([$root])->merge($root->children))
+            ->when($menu->exists, fn ($list) => $list->reject(
+                fn (Menu $m) => $m->id === $menu->id || $m->parent_id === $menu->id
+            ))
+            ->values();
 
         $basePermissionName = $menu->exists
             ? $menu->linkedPermissions->first(fn ($p) => str_starts_with($p->name, 'manage '))?->name

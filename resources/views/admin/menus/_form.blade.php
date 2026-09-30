@@ -33,7 +33,7 @@
                         <option value="">— Top level —</option>
                         @foreach ($parents as $parent)
                             <option value="{{ $parent->id }}" {{ $menu->parent_id == $parent->id ? 'selected' : '' }}>
-                                {{ $parent->name }}
+                                {{ $parent->parent_id ? '— ' : '' }}{{ $parent->name }}
                             </option>
                         @endforeach
                     </select>
