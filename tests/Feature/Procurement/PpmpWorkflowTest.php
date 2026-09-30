@@ -242,4 +242,12 @@ class PpmpWorkflowTest extends TestCase
         $bac->givePermissionTo(Ppmp::VIEW_ALL_PERMISSION);
         $this->assertSame([$a->id, $b->id, $c->id], $ids($bac));
     }
+
+    public function test_user_can_only_create_for_own_office(): void
+    {
+        Office::create(['code' => 'OTHER', 'name' => 'Other Office']);
+
+        $this->assertSame([$this->office->id], Office::assignableTo($this->staff)->pluck('id')->all());
+        $this->assertSame([], Office::assignableTo(User::factory()->create())->pluck('id')->all());
+    }
 }

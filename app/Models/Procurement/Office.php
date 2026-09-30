@@ -25,6 +25,17 @@ class Office extends Model
         return $query->where('is_active', true);
     }
 
+    /**
+     * Offices a user may prepare a PPMP for: their own office.
+     * Super Admin may pick any active office (for setup and testing).
+     */
+    public function scopeAssignableTo(Builder $query, User $user): Builder
+    {
+        $query->active()->orderBy('code');
+
+        return $user->hasRole('Super Admin') ? $query : $query->whereKey($user->office_id);
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(self::class, 'parent_id');
