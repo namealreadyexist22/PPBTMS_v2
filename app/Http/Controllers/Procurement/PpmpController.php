@@ -11,6 +11,9 @@ class PpmpController extends Controller
         return view('procurement.ppmp.index');
     }
 
-    
+    public function destroy(){
+        
+    }
+
 }
 
