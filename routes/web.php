@@ -129,6 +129,8 @@ use Illuminate\Support\Facades\Route;
 
         Route::middleware('perm:manage ppmp')->group(function () {
             Route::get('ppmp', [PpmpController::class, 'index'])->name('ppmp.index');
+            Route::get('ppmp/entry', [PpmpController::class, 'entry'])->name('ppmp.entry');
+            Route::post('ppmp/store', [PpmpController::class, 'store'])->name('ppmp.store');
 
             Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
                 ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');
