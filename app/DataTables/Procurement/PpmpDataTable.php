@@ -30,18 +30,11 @@ class PpmpDataTable extends DataTable
 
     public function query(Ppmp $model): QueryBuilder
     {
-        $user = auth()->user();
-        $query = $model->newQuery()->with('office')->latest('id');
-
-        // Super Admin sees everything; everyone else sees their own office,
-        // plus offices they head (for approving).
-        if (! $user->hasRole('Super Admin')) {
-            $query->whereHas('office', fn ($q) => $q
-                ->where('id', $user->office_id)
-                ->orWhere('head_user_id', $user->id));
-        }
-
-        return $query;
+        // Own office, sections of a division you head, or everything with "PPMP View All".
+        return $model->newQuery()
+            ->with('office')
+            ->visibleTo(auth()->user())
+            ->latest('id');
     }
 
     public function html(): HtmlBuilder
