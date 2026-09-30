@@ -1,0 +1,83 @@
+<div class="modal fade" id="{{ $modalName }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+
+            <div class="modal-header bg-light py-3 border-bottom border-light">
+                <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
+                    @if ($office)
+                        <i class="fas fa-edit text-warning me-2"></i> Update Office
+                    @else
+                        <i class="fas fa-building text-primary me-2"></i> Add New Office
+                    @endif
+                </h5>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <form id="form_office_entry" autocomplete="off" novalidate>
+                @csrf
+                @if ($office)
+                    <input type="hidden" name="id" value="{{ $office->id }}">
+                @endif
+
+                <div class="modal-body p-4">
+                    <div id="modal_error_summary" class="alert alert-danger d-none py-2 px-3 small rounded mb-3 shadow-sm">
+                        <i class="fas fa-exclamation-triangle me-1"></i> <span>Please correct the highlighted errors below.</span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-4">
+                            <label class="form-label small fw-semibold text-muted mb-1">Code</label>
+                            <input type="text" name="code" class="form-control form-control-sm" value="{{ $office->code ?? '' }}" placeholder="e.g. PPSPD-PS" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-8">
+                            <label class="form-label small fw-semibold text-muted mb-1">Name</label>
+                            <input type="text" name="name" class="form-control form-control-sm" value="{{ $office->name ?? '' }}" placeholder="e.g. Planning Section" required>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1">Division</label>
+                        <select name="parent_id" class="form-select form-select-sm">
+                            <option value="">— None (this office is a division) —</option>
+                            @foreach ($divisions as $division)
+                                <option value="{{ $division->id }}" @selected(($office->parent_id ?? null) == $division->id)>
+                                    {{ $division->code }} — {{ $division->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">Pick a division if this is a section. Its PPMP will be approved by that division's head.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1">Head</label>
+                        <select name="head_user_id" class="form-select form-select-sm">
+                            <option value="">— Not set —</option>
+                            @foreach ($users as $user)
+                                <option value="{{ $user->id }}" @selected(($office->head_user_id ?? null) == $user->id)>
+                                    {{ $user->fullname }}{{ $user->designation ? ' (' . $user->designation . ')' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback"></div>
+                    </div>
+
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="is_active" value="1" id="office_is_active"
+                            @checked($office->is_active ?? true)>
+                        <label class="form-check-label small" for="office_is_active">Active</label>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light border-top border-light py-2">
+                    <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="btn_save_office" class="btn btn-sm btn-primary px-3">
+                        <i class="fas fa-save me-1"></i> Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

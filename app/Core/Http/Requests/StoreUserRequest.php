@@ -50,6 +50,9 @@ class StoreUserRequest extends FormRequest
 
             'categories' => ['required', 'in:1,2'],
             'role' => ['nullable', 'string', 'exists:roles,name'],
+
+            'office_id'   => ['nullable', 'integer', 'exists:offices,id'],
+            'designation' => ['nullable', 'string', 'max:255'],
         ];
     }
 

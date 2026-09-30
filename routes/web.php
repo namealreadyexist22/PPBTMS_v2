@@ -4,6 +4,7 @@ use App\Core\Http\Controllers\AvatarController;
 use App\Core\Http\Controllers\LogController;
 use App\Core\Http\Controllers\MenuController;
 use App\Core\Http\Controllers\NotificationController;
+use App\Core\Http\Controllers\OfficeController;
 use App\Core\Http\Controllers\RoleController;
 use App\Core\Http\Controllers\SettingsController;
 use App\Core\Http\Controllers\UserAccessController;
@@ -73,6 +74,14 @@ use Illuminate\Support\Facades\Route;
         Route::middleware('perm:manage access')->group(function () {
             Route::get('access', [UserAccessController::class, 'index'])->name('access.index');
             Route::put('users/{user}/access', [UserAccessController::class, 'update'])->name('access.update');
+        });
+
+        Route::middleware('perm:manage offices')->group(function () {
+            Route::get('offices', [OfficeController::class, 'index'])->name('offices.index');
+            Route::get('offices/entry', [OfficeController::class, 'entry'])->name('offices.entry');
+            Route::post('offices/store', [OfficeController::class, 'store'])->name('offices.store');
+
+            Route::delete('offices/destroy', [OfficeController::class, 'destroy'])->name('offices.destroy')->middleware('perm:menu.offices-destroy');
         });
 
         Route::middleware('perm:manage menus')->group(function () {

@@ -109,6 +109,30 @@
                     </div>
 
                     <small class="text-uppercase fw-bold text-secondary tracking-wider d-block mb-3" style="font-size: 0.75rem;">
+                        <i class="fas fa-building me-1"></i> Office Assignment
+                    </small>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Office / Section</label>
+                            <select class="form-select form-select-sm rounded" id="office_id" name="office_id">
+                                <option value="">— No office —</option>
+                                @foreach ($offices as $office)
+                                    <option value="{{ $office->id }}" {{ isset($user) && $user->office_id == $office->id ? 'selected' : '' }}>
+                                        {{ $office->parent ? $office->parent->code . ' › ' : '' }}{{ $office->code }} — {{ $office->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback small fw-medium"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="designation" class="form-label small fw-semibold text-muted mb-1">Designation</label>
+                            <input type="text" class="form-control form-control-sm rounded" id="designation" name="designation" placeholder="e.g. Senior Agriculturist" value="{{ $user->designation ?? '' }}">
+                            <div class="invalid-feedback small fw-medium"></div>
+                        </div>
+                    </div>
+
+                    <small class="text-uppercase fw-bold text-secondary tracking-wider d-block mb-3" style="font-size: 0.75rem;">
                         <i class="fas fa-sliders-h me-1"></i> Governance & Access Configuration
                     </small>
 

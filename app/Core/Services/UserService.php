@@ -32,7 +32,8 @@ class UserService
 
         return view('BackEnd.auth.extras.user_entry', [
             'user'      => $user,
-            'modalName' => 'USER_ENTRY_MODAL'
+            'modalName' => 'USER_ENTRY_MODAL',
+            'offices'   => \App\Models\Procurement\Office::active()->with('parent')->orderBy('code')->get(),
         ]);
     }
 
@@ -74,15 +75,6 @@ class UserService
                 $userInstance->update($validated);
                 $message = 'System User record updates have been applied successfully.';
             } else {
-                $userInstance = $this->user->create($validated);
-                $message = 'System User record has been processed and committed successfully.';
-            }
-
-            // Persist the changes seamlessly
-            if ($userId) {
-                $userInstance->update($validated);
-                $message = 'System User record updates have been applied successfully.';
-            } else {
                 // Default fallback avatar configuration assignments
                 if (!isset($validated['img_slug'])) {
                     $validated['img_slug'] = 'avatar-default.png';
@@ -97,7 +89,7 @@ class UserService
             activity()
                 ->causedBy($request->user())
                 ->performedOn($userInstance)
-                ->log("changed password for user \"{$userInstance->fullname}\"");
+                ->log(($userId ? 'updated' : 'created') . " user \"{$userInstance->fullname}\"");
 
             return response()->json([
                 'status'  => 'success',
