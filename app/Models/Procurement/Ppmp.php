@@ -66,6 +66,13 @@ class Ppmp extends Model
     /** Permission (a hidden "PPMP View All" submenu) for BAC / consolidators. */
     public const VIEW_ALL_PERMISSION = 'menu.ppmp-view-all';
 
+    /** The user who approves/returns this PPMP once submitted (nearest head above the office). */
+    public function isApprovableBy(User $user): bool
+    {
+        return $this->status === PpmpStatus::Submitted
+            && $this->office->approverId() === (int) $user->id;
+    }
+
     /** Only the home office (or Super Admin) may edit or submit a PPMP. */
     public function isEditableBy(User $user): bool
     {

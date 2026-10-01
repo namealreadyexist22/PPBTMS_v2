@@ -44,6 +44,12 @@
         let isModalOpen = false;
         const modalName = 'PPMP_ENTRY_MODAL';
 
+        // Open a PPMP's details page
+        $(document).on('click', '.btn-open-ppmp', function (e) {
+            e.preventDefault();
+            window.location.href = '{{ route("procurement.ppmp.show", "__ID__") }}'.replace('__ID__', $(this).data('id'));
+        });
+
         // Open the Create PPMP modal
         $('#btn_add').on('click', function (e) {
             e.preventDefault();
@@ -91,7 +97,8 @@
                 success: function (response) {
                     toastr.success(response.message, 'Success');
                     bootstrap.Modal.getInstance(document.getElementById(modalName)).hide();
-                    window.LaravelDataTables['tblPpmp'].ajax.reload(null, false);
+                    // Go straight to the new PPMP to add its procurement projects
+                    window.location.href = response.url;
                 },
                 error: function (xhr) {
                     saveBtn.prop('disabled', false).html(originalBtnHtml);

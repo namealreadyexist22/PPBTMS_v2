@@ -132,6 +132,16 @@ use Illuminate\Support\Facades\Route;
             Route::get('ppmp/entry', [PpmpController::class, 'entry'])->name('ppmp.entry');
             Route::post('ppmp/store', [PpmpController::class, 'store'])->name('ppmp.store');
 
+            // Details page and its actions ({ppmp} is the PPMP's uuid)
+            Route::get('ppmp/{ppmp}', [PpmpController::class, 'show'])->name('ppmp.show');
+            Route::get('ppmp/{ppmp}/items/entry', [PpmpController::class, 'itemEntry'])->name('ppmp.items.entry');
+            Route::post('ppmp/{ppmp}/items/store', [PpmpController::class, 'itemStore'])->name('ppmp.items.store');
+            Route::delete('ppmp/{ppmp}/items/destroy', [PpmpController::class, 'itemDestroy'])->name('ppmp.items.destroy');
+            Route::post('ppmp/{ppmp}/submit', [PpmpController::class, 'submit'])->name('ppmp.submit');
+            Route::post('ppmp/{ppmp}/approve', [PpmpController::class, 'approve'])->name('ppmp.approve');
+            Route::post('ppmp/{ppmp}/return', [PpmpController::class, 'returnToOffice'])->name('ppmp.return');
+            Route::post('ppmp/{ppmp}/amend', [PpmpController::class, 'amend'])->name('ppmp.amend');
+
             Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
                 ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');
         });

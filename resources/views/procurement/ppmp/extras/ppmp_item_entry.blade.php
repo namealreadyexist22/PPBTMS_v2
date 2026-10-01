@@ -1,0 +1,169 @@
+<div class="modal fade" id="{{ $modalName }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content border-0 shadow">
+
+            <div class="modal-header bg-light py-3 border-bottom border-light">
+                <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
+                    @if ($item)
+                        <i class="fas fa-edit text-warning me-2"></i> Edit Procurement Project
+                    @else
+                        <i class="fas fa-plus-circle text-primary me-2"></i> Add Procurement Project
+                    @endif
+                </h5>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <form id="form_ppmp_item" autocomplete="off" novalidate>
+                @csrf
+                @if ($item)
+                    <input type="hidden" name="id" value="{{ $item->id }}">
+                @endif
+
+                <div class="modal-body p-4">
+                    <div id="item_error_summary" class="alert alert-danger d-none py-2 px-3 small rounded mb-3 shadow-sm">
+                        <i class="fas fa-exclamation-triangle me-1"></i> <span>Please correct the highlighted errors below.</span>
+                    </div>
+
+                    {{-- 1. Procurement project --}}
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Procurement Project</small>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-semibold text-muted mb-1">General Description and Objective</label>
+                            <textarea name="description" class="form-control form-control-sm" rows="2" required
+                                placeholder="e.g. Procurement of office supplies for the operations of the Planning Section">{{ $item->description ?? '' }}</textarea>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold text-muted mb-1">Type of Project</label>
+                            <select name="project_type" class="form-select form-select-sm" required>
+                                @foreach ($projectTypes as $type)
+                                    <option value="{{ $type->value }}" @selected(($item?->project_type) === $type)>{{ $type->label() }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        @if ($catalog->isNotEmpty())
+                            <div class="col-md-12">
+                                <label class="form-label small fw-semibold text-muted mb-1">Catalog Item (optional)</label>
+                                <select name="item_id" class="form-select form-select-sm">
+                                    <option value="">— None —</option>
+                                    @foreach ($catalog as $catalogItem)
+                                        <option value="{{ $catalogItem->id }}" @selected(($item->item_id ?? null) == $catalogItem->id)>{{ $catalogItem->code }} — {{ $catalogItem->name }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="invalid-feedback"></div>
+                            </div>
+                        @endif
+                    </div>
+
+                    {{-- 2. Quantity and size --}}
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Quantity and Size</small>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold text-muted mb-1">Quantity</label>
+                            <input type="number" step="0.01" min="0" name="quantity" class="form-control form-control-sm" value="{{ $item?->quantity !== null ? (float) $item->quantity : '' }}">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold text-muted mb-1">Unit</label>
+                            <select name="unit_id" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                @foreach ($units as $unit)
+                                    <option value="{{ $unit->id }}" @selected(($item->unit_id ?? null) == $unit->id)>{{ $unit->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Size / Description (optional)</label>
+                            <input type="text" name="quantity_size" class="form-control form-control-sm" value="{{ $item->quantity_size ?? '' }}" placeholder="e.g. 1 lot">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+
+                    {{-- 3. Procurement details --}}
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Procurement Details</small>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Recommended Mode of Procurement</label>
+                            <select name="procurement_mode_id" class="form-select form-select-sm" required>
+                                <option value="">Choose...</option>
+                                @foreach ($modes as $mode)
+                                    <option value="{{ $mode->id }}" @selected(($item->procurement_mode_id ?? null) == $mode->id)>{{ $mode->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6 d-flex align-items-end">
+                            <div class="form-check form-switch mb-1">
+                                <input class="form-check-input" type="checkbox" name="pre_proc_conference" value="1" id="pre_proc_conference"
+                                    @checked($item->pre_proc_conference ?? false)>
+                                <label class="form-check-label small" for="pre_proc_conference">Pre-Procurement Conference required</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold text-muted mb-1">Start of Procurement Activity</label>
+                            <input type="month" name="proc_start" class="form-control form-control-sm" required value="{{ $item?->proc_start?->format('Y-m') ?? $ppmp->fiscal_year . '-01' }}">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold text-muted mb-1">End of Procurement Activity</label>
+                            <input type="month" name="proc_end" class="form-control form-control-sm" required value="{{ $item?->proc_end?->format('Y-m') ?? $ppmp->fiscal_year . '-01' }}">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold text-muted mb-1">Expected Delivery / Implementation</label>
+                            <input type="text" name="delivery_period" class="form-control form-control-sm" value="{{ $item->delivery_period ?? '' }}" placeholder="e.g. March {{ $ppmp->fiscal_year }}">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+
+                    {{-- 4. Funding --}}
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Funding</small>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Source of Funds</label>
+                            <select name="fund_source_id" class="form-select form-select-sm" required>
+                                <option value="">Choose...</option>
+                                @foreach ($fundSources as $fund)
+                                    <option value="{{ $fund->id }}" @selected(($item->fund_source_id ?? null) == $fund->id)>{{ $fund->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Estimated Budget / Authorized Budgetary Allocation (PHP)</label>
+                            <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end" required
+                                value="{{ $item ? number_format((float) $item->estimated_budget, 2, '.', '') : '' }}" placeholder="0.00">
+                            <div class="invalid-feedback"></div>
+                            @if ($item && (float) $item->committed_amount > 0)
+                                <div class="form-text text-warning">Already charged by PRs: {{ number_format((float) $item->committed_amount, 2) }}. The budget cannot go below this.</div>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- 5. Others --}}
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Attached Supporting Documents</label>
+                            <textarea name="supporting_documents" class="form-control form-control-sm" rows="2" placeholder="e.g. Technical specifications, market study">{{ $item->supporting_documents ?? '' }}</textarea>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Remarks</label>
+                            <textarea name="remarks" class="form-control form-control-sm" rows="2">{{ $item->remarks ?? '' }}</textarea>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-light border-top border-light py-2">
+                    <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" id="btn_save_item" class="btn btn-sm btn-primary px-3">
+                        <i class="fas fa-save me-1"></i> Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

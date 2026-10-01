@@ -153,6 +153,22 @@ class PpmpService
         });
     }
 
+    /**
+     * Delete a PPMP that was never submitted (a draft or an unsubmitted amendment).
+     * Removed for good so its number and version can be used again.
+     */
+    public function deleteDraft(Ppmp $ppmp): void
+    {
+        if ($ppmp->status !== PpmpStatus::Draft) {
+            throw new ProcurementException("Only a draft PPMP can be deleted. {$ppmp->ppmp_no} is {$ppmp->status->value}.");
+        }
+
+        DB::transaction(function () use ($ppmp) {
+            $ppmp->signatories()->delete();
+            $ppmp->forceDelete();   // items cascade
+        });
+    }
+
     /** Start an amendment: copy the approved PPMP into a new draft version. */
     public function amend(Ppmp $ppmp, User $user, ?PpmpType $type = null, ?string $remarks = null): Ppmp
     {
