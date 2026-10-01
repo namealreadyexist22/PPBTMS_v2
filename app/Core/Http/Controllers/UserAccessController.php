@@ -29,6 +29,7 @@ class UserAccessController extends Controller
         $menuOverrides = collect();
         $permissionOverrides = collect();
         $rolePermissionNames = collect();
+        $actionPermissions = collect();
 
         if ($request->filled('user')) {
             $selectedUser = User::findOrFail($request->user);
@@ -43,14 +44,24 @@ class UserAccessController extends Controller
                 ->get()
                 ->groupBy(fn ($p) => $p->group ?: 'General');
 
+            $actionPermissions = $this->actionPermissions($groupedMenus)->keyBy('name');
+
             $menuOverrides = $selectedUser->menuOverrides()->pluck('access', 'menu_id');
             $permissionOverrides = $selectedUser->permissionOverrides()->pluck('access', 'permission_id');
         }
 
         return view('admin.users.access', compact(
             'users', 'selectedUser', 'groupedMenus', 'unassignedGrouped',
-            'menuOverrides', 'permissionOverrides', 'rolePermissionNames'
+            'menuOverrides', 'permissionOverrides', 'rolePermissionNames', 'actionPermissions'
         ));
+    }
+
+    /** Permissions of the hidden action gates (e.g. menu.ppmp-view-all) under the given pages. */
+    protected function actionPermissions($groupedMenus)
+    {
+        $names = $groupedMenus->flatten()->flatMap(fn (Menu $menu) => $menu->actionChildren)->pluck('permission_name');
+
+        return Permission::whereIn('name', $names)->get();
     }
 
     /**
@@ -100,7 +111,8 @@ class UserAccessController extends Controller
         // excluding the "manage X" ones already handled above.
         $otherPermissionIds = Permission::where('name', 'not like', 'menu.%')
             ->where('name', 'not like', 'manage %')
-            ->pluck('id');
+            ->pluck('id')
+            ->merge($this->actionPermissions($groupedMenus)->pluck('id'));
 
         foreach ($otherPermissionIds as $permissionId) {
             $overrideOn = $request->boolean("perm_override.$permissionId");

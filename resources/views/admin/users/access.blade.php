@@ -83,6 +83,21 @@
                                             :overridden="$menuOverrideValue !== null"
                                             :roleDefault="$rolePermissionNames->contains($menu->permission_name)" />
 
+                                        {{-- Hidden action gates are checked via canAccessPermission(), so they use permission overrides --}}
+                                        @foreach ($menu->actionChildren as $action)
+                                            @php
+                                                $actionPermission = $actionPermissions->get($action->permission_name);
+                                                $permOverrideValue = $actionPermission ? $permissionOverrides->get($actionPermission->id) : null;
+                                            @endphp
+                                            @if ($actionPermission)
+                                                <x-permission-chip stateField="perm_state" overrideField="perm_override"
+                                                    :id="$actionPermission->id" :label="$action->nav_name ?: $action->name"
+                                                    :checked="$permOverrideValue === 'allow'"
+                                                    :overridden="$permOverrideValue !== null"
+                                                    :roleDefault="$rolePermissionNames->contains($action->permission_name)" />
+                                            @endif
+                                        @endforeach
+
                                         @foreach ($otherLinkedPermissions as $permission)
                                             @php $permOverrideValue = $permissionOverrides->get($permission->id); @endphp
                                             <x-permission-chip stateField="perm_state" overrideField="perm_override"

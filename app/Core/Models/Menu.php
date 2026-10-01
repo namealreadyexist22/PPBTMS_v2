@@ -92,6 +92,15 @@ class Menu extends Model
         return $names;
     }
 
+    /**
+     * Hidden action gates under a page, e.g. "PPMP View All" or "Manage Users
+     * Destroy": child menus with no route of their own.
+     */
+    public function actionChildren(): HasMany
+    {
+        return $this->hasMany(Menu::class, 'parent_id')->whereNull('route')->orderBy('order');
+    }
+
     public function overrides(): HasMany
     {
         return $this->hasMany(MenuUserOverride::class);
@@ -132,7 +141,7 @@ class Menu extends Model
      */
     public static function leafMenusGroupedForCards()
     {
-        $leafMenus = static::with(['parent', 'linkedPermissions'])
+        $leafMenus = static::with(['parent', 'linkedPermissions', 'actionChildren'])
             ->whereNotNull('route')
             ->orderBy('order')
             ->get();
