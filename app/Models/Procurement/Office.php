@@ -44,14 +44,14 @@ class Office extends Model
     }
 
     /**
-     * Offices a user may prepare a PPMP for: their home office plus any extra
-     * offices assigned to them. Super Admin may pick any active office.
+     * Offices a user may prepare a PPMP for: their home office only.
+     * (Extra offices are for PRs.) Super Admin may pick any active office.
      */
     public function scopeAssignableTo(Builder $query, User $user): Builder
     {
         $query->active()->orderBy('code');
 
-        return $user->hasRole('Super Admin') ? $query : $query->whereKey($user->accessibleOfficeIds());
+        return $user->hasRole('Super Admin') ? $query : $query->whereKey($user->office_id);
     }
 
     /**

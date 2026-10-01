@@ -133,7 +133,7 @@
                     </div>
 
                     <div class="mb-4">
-                        <label class="form-label small fw-semibold text-muted mb-1">Additional PPMP Offices (optional)</label>
+                        <label class="form-label small fw-semibold text-muted mb-1">Additional Offices for PR (optional)</label>
                         <input type="text" class="form-control form-control-sm rounded mb-1" id="office_ids_filter" placeholder="Filter offices...">
                         @php $extraIds = isset($user) ? $user->offices->pluck('id')->all() : []; @endphp
                         <div class="border rounded px-2 py-1" style="max-height: 160px; overflow-y: auto;" id="office_ids_list">
@@ -145,7 +145,7 @@
                                 </div>
                             @endforeach
                         </div>
-                        <div class="form-text">Other offices this user may prepare PPMPs for, e.g. SIDA-SCP and SIDA-HRD.</div>
+                        <div class="form-text">Offices whose approved PPMPs this user may use when creating a PR (view only, no PPMP editing), e.g. SIDA-SCP and SIDA-HRD.</div>
                         <script>
                             document.getElementById('office_ids_filter').addEventListener('input', function () {
                                 const q = this.value.toLowerCase();

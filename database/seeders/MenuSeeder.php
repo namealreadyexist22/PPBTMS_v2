@@ -50,6 +50,27 @@ class MenuSeeder extends Seeder
             ['icon' => 'fas fa-sliders-h', 'route' => 'core.settings.index', 'order' => 7]
         );
 
+        Menu::updateOrCreate(
+            ['name' => 'Offices', 'parent_id' => $settings->id],
+            ['icon' => 'fas fa-building', 'route' => 'core.offices.index', 'order' => 8]
+        );
+
+        $procurement = Menu::updateOrCreate(
+            ['name' => 'Procurement', 'parent_id' => null],
+            ['icon' => 'fas fa-shopping-cart', 'order' => 10]
+        );
+
+        $ppmp = Menu::updateOrCreate(
+            ['name' => 'PPMP', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-clipboard-list', 'route' => 'procurement.ppmp.index', 'order' => 1]
+        );
+
+        // Hidden gate: BAC / consolidators see every office's PPMP (menu.ppmp-view-all)
+        Menu::firstOrCreate(
+            ['name' => 'PPMP View All', 'parent_id' => $ppmp->id],
+            ['nav_name' => 'View All', 'is_nav' => false, 'order' => 90, 'is_active' => true]
+        );
+
         // Give Super Admin every menu permission that exists so far.
         $superAdmin = Role::where('name', 'Super Admin')->first();
         if ($superAdmin) {

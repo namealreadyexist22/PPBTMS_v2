@@ -66,8 +66,14 @@ class Ppmp extends Model
     /** Permission (a hidden "PPMP View All" submenu) for BAC / consolidators. */
     public const VIEW_ALL_PERMISSION = 'menu.ppmp-view-all';
 
+    /** Only the home office (or Super Admin) may edit or submit a PPMP. */
+    public function isEditableBy(User $user): bool
+    {
+        return $user->hasRole('Super Admin') || (int) $user->office_id === (int) $this->office_id;
+    }
+
     /**
-     * PPMPs a user may see: their own offices' (home + extra), everything at or
+     * PPMPs a user may see: their home and PR offices' (read-only for PR offices), everything at or
      * below an office they head (to approve or monitor), or all of them with the
      * view-all permission (BAC / consolidator; Super Admin passes too).
      */
@@ -78,7 +84,7 @@ class Ppmp extends Model
         }
 
         $headed = Office::where('head_user_id', $user->id)->pluck('id');
-        $officeIds = Office::withDescendantIds($headed)->merge($user->accessibleOfficeIds())->unique();
+        $officeIds = Office::withDescendantIds($headed)->merge($user->prOfficeIds())->unique();
 
         return $query->whereIn('office_id', $officeIds);
     }

@@ -21,6 +21,10 @@ class PpmpService
 {
     public function create(Office $office, int $fiscalYear, User $user, PpmpType $type = PpmpType::Indicative, ?string $remarks = null): Ppmp
     {
+        if (! Office::assignableTo($user)->whereKey($office->id)->exists()) {
+            throw new ProcurementException('You can only create a PPMP for your home office.');
+        }
+
         if (Ppmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->exists()) {
             throw new ProcurementException("{$office->shortName()} already has a PPMP for FY {$fiscalYear}. Amend it instead.");
         }

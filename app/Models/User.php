@@ -56,14 +56,17 @@ class User extends Authenticatable
         return $this->belongsTo(\App\Models\Procurement\Office::class);
     }
 
-    /** Extra offices this user may prepare PPMPs for (e.g. SIDA-SCP and SIDA-HRD). */
+    /**
+     * Extra offices whose approved PPMPs this user may charge PRs to
+     * (e.g. SIDA-SCP and SIDA-HRD). They can view those PPMPs but not edit them.
+     */
     public function offices()
     {
         return $this->belongsToMany(\App\Models\Procurement\Office::class)->withTimestamps();
     }
 
-    /** Home office plus extra offices. */
-    public function accessibleOfficeIds(): array
+    /** Offices this user may create PRs for: home office plus extra offices. */
+    public function prOfficeIds(): array
     {
         return $this->offices()->pluck('offices.id')
             ->push($this->office_id)

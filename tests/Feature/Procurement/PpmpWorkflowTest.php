@@ -266,21 +266,32 @@ class PpmpWorkflowTest extends TestCase
         $this->assertSame($deputy->id, $top->approverId());        // top level approves its own
     }
 
-    public function test_user_with_extra_offices_can_prepare_and_see_them(): void
+    public function test_extra_offices_are_for_prs_only(): void
     {
         $scp = Office::create(['code' => '11000', 'name' => 'SIDA-SCP']);
         $hrd = Office::create(['code' => '12000', 'name' => 'SIDA-HRD']);
         Office::create(['code' => '13000', 'name' => 'SIDA-FMR']);
         $bien = User::factory()->create(['office_id' => $scp->id]);
         $bien->offices()->attach($hrd);
+        $hrdStaff = User::factory()->create(['office_id' => $hrd->id]);
 
-        $this->assertEqualsCanonicalizing([$scp->id, $hrd->id], Office::assignableTo($bien)->pluck('id')->all());
-
+        // PPMP: home office only
+        $this->assertSame([$scp->id], Office::assignableTo($bien)->pluck('id')->all());
         $a = $this->ppmps->create($scp, 2027, $bien);
-        $b = $this->ppmps->create($hrd, 2027, $bien);
+        $b = $this->ppmps->create($hrd, 2027, $hrdStaff);
         $this->ppmps->create($this->office, 2027, $this->staff);
 
+        try {
+            $this->ppmps->create($hrd, 2028, $bien);
+            $this->fail('Bien must not create a PPMP for SIDA-HRD.');
+        } catch (ProcurementException) {
+        }
+
+        // PR: home + extra offices; he can see SIDA-HRD's PPMP but not edit it
+        $this->assertEqualsCanonicalizing([$scp->id, $hrd->id], $bien->prOfficeIds());
         $this->assertEqualsCanonicalizing([$a->id, $b->id], Ppmp::visibleTo($bien)->pluck('id')->all());
+        $this->assertTrue($a->isEditableBy($bien));
+        $this->assertFalse($b->isEditableBy($bien));
     }
 
     public function test_head_sees_ppmps_of_all_offices_below(): void
@@ -290,8 +301,8 @@ class PpmpWorkflowTest extends TestCase
         $division = Office::create(['code' => '05010', 'name' => 'PPPD', 'parent_id' => $dept->id]);
         $section = Office::create(['code' => '05011', 'name' => 'PPRS', 'parent_id' => $division->id]);
 
-        $p1 = $this->ppmps->create($division, 2027, $manager);
-        $p2 = $this->ppmps->create($section, 2027, $manager);
+        $p1 = $this->ppmps->create($division, 2027, User::factory()->create(['office_id' => $division->id]));
+        $p2 = $this->ppmps->create($section, 2027, User::factory()->create(['office_id' => $section->id]));
         $this->ppmps->create($this->office, 2027, $this->staff);
 
         $this->assertEqualsCanonicalizing([$p1->id, $p2->id], Ppmp::visibleTo($manager)->pluck('id')->all());

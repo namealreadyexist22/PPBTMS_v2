@@ -29,6 +29,8 @@ class ActionPermissionSeeder extends Seeder
             'manage users'    => 'Manage Users',
             'manage access'   => 'User Access',
             'manage settings' => 'App Settings',
+            'manage offices'  => 'Offices',
+            'manage ppmp'     => 'PPMP',
         ];
 
         foreach ($links as $permissionName => $menuName) {
@@ -53,6 +55,8 @@ class ActionPermissionSeeder extends Seeder
             'Roles & Permissions' => ['Roles & Permissions Destroy', 'Delete'],
             'Manage Users'        => ['Manage Users Destroy', 'Delete'],
             'Activity Logs'       => ['Activity Logs Clear', 'Clear'],
+            'Offices'             => ['Offices Destroy', 'Delete'],
+            'PPMP'                => ['PPMP Destroy', 'Delete'],
         ];
 
         $createdPermissionNames = [];

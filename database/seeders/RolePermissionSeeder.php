@@ -22,6 +22,11 @@ class RolePermissionSeeder extends Seeder
             Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
         }
 
+        // Procurement gates; granted to roles in Roles & Permissions, not to Admin by default
+        foreach (['manage offices', 'manage ppmp'] as $perm) {
+            Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+        }
+
         Role::firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
         $admin = Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web']);
         Role::firstOrCreate(['name' => 'User', 'guard_name' => 'web']);
