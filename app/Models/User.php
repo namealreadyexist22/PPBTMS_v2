@@ -17,7 +17,6 @@ use Spatie\Permission\Traits\HasRoles;
     'minitial',
     'designation',
     'office_id',
-    'fullname',
     'username',
     'email',
     'email_verified_at',

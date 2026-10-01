@@ -19,11 +19,19 @@ trait HasSignatories
         return $this->signatories()->create([
             'role'                 => $role,
             'user_id'              => $user->id,
-            'name_snapshot'        => trim(preg_replace('/\s+/', ' ', "{$user->fname} {$user->minitial} {$user->lname}")) ?: $user->username,
+            'name_snapshot'        => $this->signatoryName($user),
             'designation_snapshot' => $user->designation,
             'signed_at'            => now(),
             'remarks'              => $remarks,
         ]);
+    }
+
+    /** "Juan M. Cruz", same format as the users.fullname column. */
+    protected function signatoryName(User $user): string
+    {
+        $initial = $user->minitial ? rtrim($user->minitial, '.') . '.' : null;
+
+        return implode(' ', array_filter([$user->fname, $initial, $user->lname])) ?: $user->username;
     }
 
     public function latestSignatory(string $role): ?DocumentSignatory

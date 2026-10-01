@@ -36,4 +36,15 @@ class UserStoreTest extends TestCase
         // Home office is not duplicated as an extra office
         $this->assertSame([$extra->id], $user->offices()->pluck('offices.id')->all());
     }
+
+    public function test_fullname_skips_missing_middle_initial(): void
+    {
+        $with = User::factory()->create(['fname' => 'Juan', 'minitial' => 'M', 'lname' => 'Cruz'])->fresh();
+        $without = User::factory()->create(['fname' => 'Maria', 'minitial' => null, 'lname' => 'Santos'])->fresh();
+        $blank = User::factory()->create(['fname' => 'Jose', 'minitial' => '', 'lname' => 'Rizal'])->fresh();
+
+        $this->assertSame('Juan M. Cruz', $with->fullname);
+        $this->assertSame('Maria Santos', $without->fullname);
+        $this->assertSame('Jose Rizal', $blank->fullname);
+    }
 }

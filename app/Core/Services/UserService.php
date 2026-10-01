@@ -83,6 +83,9 @@ class UserService
                 $message = 'System User record has been processed and committed successfully.';
             }
 
+            // Pick up DB-generated columns (fullname)
+            $userInstance->refresh();
+
             // Extra offices this user may prepare PPMPs for (home office excluded)
             $userInstance->offices()->sync(
                 collect($validated['office_ids'] ?? [])->reject(fn ($id) => $id == $userInstance->office_id)->all()
