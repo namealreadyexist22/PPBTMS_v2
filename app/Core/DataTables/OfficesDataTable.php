@@ -20,11 +20,12 @@ class OfficesDataTable extends DataTable
     {
         return (new EloquentDataTable($query))
             ->addColumn('parent', fn ($row) => $row->parent?->shortName() ?? '<span class="text-muted">— Top level —</span>')
+            ->editColumn('name', fn ($row) => e($row->name) . ($row->is_consolidating ? ' <span class="badge bg-info-subtle text-info border" title="Consolidates PPMPs">Division PPMP</span>' : ''))
             ->addColumn('head', fn ($row) => $row->head?->fullname ?? '<span class="text-muted">Not set</span>')
             ->addColumn('users_count', fn ($row) => $row->users_count)
             ->editColumn('is_active', fn ($row) => view('BackEnd.auth.extras.user_is_activated', ['is_activated' => $row->is_active])->render())
             ->addColumn('action', fn ($row) => view('BackEnd.offices.extras.office_action', ['office' => $row])->render())
-            ->rawColumns(['parent', 'head', 'is_active', 'action'])
+            ->rawColumns(['name', 'parent', 'head', 'is_active', 'action'])
             ->setRowId('id');
     }
 

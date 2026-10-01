@@ -14,6 +14,7 @@ class SettingsSeeder extends Seeder
         Setting::firstOrCreate(['key' => 'app_logo'], ['value' => null]);
         // Printed on procurement forms (PPMP, APP, ...)
         Setting::firstOrCreate(['key' => 'agency_name'], ['value' => 'Sugar Regulatory Administration']);
+        Setting::firstOrCreate(['key' => 'agency_address'], ['value' => 'Sugar Center Building, North Avenue, Diliman, Quezon City']);
         
         if (! Setting::where('key', 'default_avatar_data')->exists()) {
             $path = public_path('assets/img/userlogo.png');

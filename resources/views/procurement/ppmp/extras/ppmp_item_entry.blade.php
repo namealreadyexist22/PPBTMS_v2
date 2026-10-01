@@ -27,6 +27,15 @@
                     {{-- 1. Procurement project --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Procurement Project</small>
                     <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label small fw-semibold text-muted mb-1">PAP</label>
+                            <select name="ppmp_pap_id" class="form-select form-select-sm" required>
+                                @foreach ($paps as $pap)
+                                    <option value="{{ $pap->id }}" @selected(($item->ppmp_pap_id ?? $selectedPap) == $pap->id)>{{ $pap->label() }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
                         <div class="col-md-8">
                             <label class="form-label small fw-semibold text-muted mb-1">General Description and Objective</label>
                             <textarea name="description" class="form-control form-control-sm" rows="2" required
@@ -57,7 +66,7 @@
                     </div>
 
                     {{-- 2. Quantity and size --}}
-                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Quantity and Size</small>
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Quantity and Size (QTY and Specs)</small>
                     <div class="row g-3 mb-3">
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold text-muted mb-1">Quantity</label>
@@ -75,8 +84,8 @@
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted mb-1">Size / Description (optional)</label>
-                            <input type="text" name="quantity_size" class="form-control form-control-sm" value="{{ $item->quantity_size ?? '' }}" placeholder="e.g. 1 lot">
+                            <label class="form-label small fw-semibold text-muted mb-1">Specifications (optional)</label>
+                            <textarea name="quantity_size" class="form-control form-control-sm" rows="2" placeholder="e.g. 3.5&quot; HDD, SATA, 7200 RPM">{{ $item->quantity_size ?? '' }}</textarea>
                             <div class="invalid-feedback"></div>
                         </div>
                     </div>

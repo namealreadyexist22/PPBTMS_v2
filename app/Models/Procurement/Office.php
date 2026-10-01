@@ -19,11 +19,11 @@ class Office extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'head_user_id', 'is_active'];
+    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'head_user_id', 'is_consolidating', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean'];
     }
 
     /** Short name for lists: the acronym, or the office number if none. */
@@ -55,23 +55,44 @@ class Office extends Model
     }
 
     /**
-     * Who approves this office's PPMP: the head of the nearest office above it
-     * that has a head (a section goes to its division head, a division to its
-     * department manager). A top-level office approves its own.
+     * The office whose Division PPMP this office's PPMP is combined into: the nearest
+     * office at or above this one marked "consolidates PPMPs". If none is marked, the
+     * nearest office above with a head (a top-level office combines its own).
      */
-    public function approverId(): ?int
+    public function consolidatingOffice(): ?Office
     {
-        $ancestor = $this->parent;
-
-        while ($ancestor) {
-            if ($ancestor->head_user_id) {
-                return (int) $ancestor->head_user_id;
+        for ($office = $this; $office; $office = $office->parent) {
+            if ($office->is_consolidating) {
+                return $office;
             }
-
-            $ancestor = $ancestor->parent;
         }
 
-        return $this->parent_id ? null : ($this->head_user_id ? (int) $this->head_user_id : null);
+        for ($office = $this->parent; $office; $office = $office->parent) {
+            if ($office->head_user_id) {
+                return $office;
+            }
+        }
+
+        return $this->parent_id ? null : $this;
+    }
+
+    /** Who approves this office's PPMP: the head of its consolidating office. */
+    public function approverId(): ?int
+    {
+        $headId = $this->consolidatingOffice()?->head_user_id;
+
+        return $headId ? (int) $headId : null;
+    }
+
+    /** Offices whose PPMPs are combined into this office's Division PPMP (including itself). */
+    public function consolidatedOfficeIds(): array
+    {
+        return static::whereKey(static::withDescendantIds([$this->id]))
+            ->with('parent')
+            ->get()
+            ->filter(fn (Office $office) => $office->consolidatingOffice()?->id === $this->id)
+            ->pluck('id')
+            ->all();
     }
 
     /** Ids of the given offices and everything below them, at any depth. */
@@ -128,5 +149,10 @@ class Office extends Model
     public function ppmps(): HasMany
     {
         return $this->hasMany(Ppmp::class);
+    }
+
+    public function divisionPpmps(): HasMany
+    {
+        return $this->hasMany(DivisionPpmp::class);
     }
 }

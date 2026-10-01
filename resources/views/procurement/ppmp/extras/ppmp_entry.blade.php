@@ -35,7 +35,7 @@
                         </div>
 
                         <div class="row g-3 mb-3">
-                            <div class="col-6">
+                            <div class="col-12">
                                 <label class="form-label small fw-semibold text-muted mb-1">Fiscal Year</label>
                                 <select name="fiscal_year" class="form-select form-select-sm" required>
                                     @foreach ($years as $year)
@@ -44,15 +44,7 @@
                                 </select>
                                 <div class="invalid-feedback"></div>
                             </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold text-muted mb-1">Type</label>
-                                <select name="type" class="form-select form-select-sm" required>
-                                    @foreach ($types as $type)
-                                        <option value="{{ $type->value }}">{{ $type->label() }}</option>
-                                    @endforeach
-                                </select>
-                                <div class="invalid-feedback"></div>
-                            </div>
+
                         </div>
 
                         <div class="mb-0">

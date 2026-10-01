@@ -45,12 +45,13 @@ class StorePpmpItemRequest extends FormRequest
     {
         return [
             'id'                   => ['nullable', 'integer'],
+            'ppmp_pap_id'          => ['required', 'integer'],
             'item_id'              => ['nullable', 'integer', 'exists:items,id'],
             'description'          => ['required', 'string', 'max:2000'],
             'project_type'         => ['required', Rule::enum(ProjectType::class)],
             'quantity'             => ['nullable', 'numeric', 'min:0'],
             'unit_id'              => ['nullable', 'integer', 'exists:units,id'],
-            'quantity_size'        => ['nullable', 'string', 'max:255'],
+            'quantity_size'        => ['nullable', 'string', 'max:2000'],   // specifications
             'procurement_mode_id'  => ['required', 'integer', 'exists:procurement_modes,id'],
             'pre_proc_conference'  => ['boolean'],
             'proc_start'           => ['required', 'date'],
@@ -66,6 +67,8 @@ class StorePpmpItemRequest extends FormRequest
     public function attributes(): array
     {
         return [
+            'ppmp_pap_id'         => 'PAP',
+            'quantity_size'       => 'specifications',
             'procurement_mode_id' => 'mode of procurement',
             'fund_source_id'      => 'source of funds',
             'proc_start'          => 'start of procurement activity',

@@ -8,18 +8,20 @@ use App\Exceptions\ProcurementException;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpItem;
+use App\Models\Procurement\PpmpPap;
 use App\Models\User;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * PPMP lifecycle: office prepares (draft) -> submits -> the nearest head above it
- * (Office::approverId) approves or returns. Approved PPMPs are then visible to BAC for consolidation into the APP.
- * An approved PPMP is changed only through an amendment (new version).
+ * Section PPMP lifecycle: a section prepares its PPMP (PAPs and their projects) ->
+ * submits -> the head of its consolidating office returns it, or approves it as part
+ * of the Division PPMP (DivisionPpmpService). An approved PPMP is changed only
+ * through an amendment (new version), which goes into the next Division PPMP number.
  */
 class PpmpService
 {
-    public function create(Office $office, int $fiscalYear, User $user, PpmpType $type = PpmpType::Indicative, ?string $remarks = null): Ppmp
+    public function create(Office $office, int $fiscalYear, User $user, PpmpType $type = PpmpType::Final, ?string $remarks = null): Ppmp
     {
         if (! Office::assignableTo($user)->whereKey($office->id)->exists()) {
             throw new ProcurementException('You can only create a PPMP for your home office.');
@@ -48,10 +50,58 @@ class PpmpService
         });
     }
 
+    /** Next PAP code for this section and year: YY-office number-NN, e.g. 26-05012-03. */
+    public function suggestPapCode(Ppmp $ppmp): string
+    {
+        $prefix = sprintf('%02d-%s-', $ppmp->fiscal_year % 100, $ppmp->office->code);
+
+        $highest = PpmpPap::whereIn('ppmp_id', Ppmp::withTrashed()->where('office_id', $ppmp->office_id)->where('fiscal_year', $ppmp->fiscal_year)->select('id'))
+            ->where('code', 'like', $prefix . '%')
+            ->pluck('code')
+            ->map(fn ($code) => (int) substr($code, strlen($prefix)))
+            ->max();
+
+        return $prefix . str_pad((string) (($highest ?? 0) + 1), 2, '0', STR_PAD_LEFT);
+    }
+
+    public function addPap(Ppmp $ppmp, string $code, string $title): PpmpPap
+    {
+        $this->assertEditable($ppmp);
+        $this->assertPapCodeFree($ppmp, $code);
+
+        return $ppmp->paps()->create([
+            'code'       => trim($code),
+            'title'      => trim($title),
+            'sort_order' => (int) $ppmp->paps()->max('sort_order') + 1,
+        ]);
+    }
+
+    public function updatePap(PpmpPap $pap, string $code, string $title): PpmpPap
+    {
+        $this->assertEditable($pap->ppmp);
+        $this->assertPapCodeFree($pap->ppmp, $code, $pap->id);
+
+        $pap->update(['code' => trim($code), 'title' => trim($title)]);
+
+        return $pap;
+    }
+
+    public function removePap(PpmpPap $pap): void
+    {
+        $this->assertEditable($pap->ppmp);
+
+        if ($pap->items()->exists()) {
+            throw new ProcurementException("PAP {$pap->code} still has projects. Remove or move them first.");
+        }
+
+        $pap->delete();
+    }
+
     public function addItem(Ppmp $ppmp, array $data): PpmpItem
     {
         $this->assertEditable($ppmp);
         $this->assertItemData($data);
+        $this->assertPapBelongs($ppmp, $data['ppmp_pap_id'] ?? null);
 
         return DB::transaction(function () use ($ppmp, $data) {
             $data['sort_order'] ??= (int) $ppmp->items()->max('sort_order') + 1;
@@ -70,6 +120,10 @@ class PpmpService
         $this->assertEditable($ppmp);
         unset($data['line_uuid'], $data['committed_amount'], $data['ppmp_id']);
         $this->assertItemData(array_merge($item->only(['proc_start', 'proc_end', 'estimated_budget']), $data));
+
+        if (array_key_exists('ppmp_pap_id', $data)) {
+            $this->assertPapBelongs($ppmp, $data['ppmp_pap_id']);
+        }
 
         if (isset($data['estimated_budget'])
             && Money::toCents($data['estimated_budget']) < Money::toCents($item->committed_amount)) {
@@ -203,9 +257,16 @@ class PpmpService
                 'updated_by'      => $user->id,
             ]);
 
+            $papIds = [];
+            foreach ($ppmp->paps as $pap) {
+                $papIds[$pap->id] = $copy->paps()->create($pap->only(['code', 'title', 'sort_order']))->id;
+            }
+
             foreach ($ppmp->items as $item) {
                 // Same line_uuid keeps PR charges attached to the line across versions.
-                $copy->items()->create($item->only($item->getFillable()));
+                $copy->items()->create(array_merge($item->only($item->getFillable()), [
+                    'ppmp_pap_id' => $papIds[$item->ppmp_pap_id] ?? null,
+                ]));
             }
 
             $copy->sign($user, 'prepared', $remarks);
@@ -252,10 +313,33 @@ class PpmpService
         $previous->update(['status' => PpmpStatus::Superseded]);
     }
 
+    /**
+     * Section PPMP reference, e.g. 05012-2026-V1 (V2, V3 for amendments). The official
+     * "PPMP NO." belongs to the Division PPMP; YY-office number-NN codes are PAP codes.
+     */
     protected function number(Office $office, int $fiscalYear, int $version): string
     {
-        // YY-office number-series, e.g. 27-05000-01 (series = version; amendments are 02, 03, ...)
-        return sprintf('%02d-%s-%02d', $fiscalYear % 100, $office->code, $version);
+        return sprintf('%s-%d-V%d', $office->code, $fiscalYear, $version);
+    }
+
+    protected function assertPapCodeFree(Ppmp $ppmp, string $code, ?int $ignoreId = null): void
+    {
+        if (trim($code) === '') {
+            throw new ProcurementException('The PAP code is required.');
+        }
+
+        $taken = $ppmp->paps()->where('code', trim($code))->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))->exists();
+
+        if ($taken) {
+            throw new ProcurementException("PAP {$code} is already in this PPMP.");
+        }
+    }
+
+    protected function assertPapBelongs(Ppmp $ppmp, $papId): void
+    {
+        if (! $papId || ! $ppmp->paps()->whereKey($papId)->exists()) {
+            throw new ProcurementException('Choose the PAP this project belongs to.');
+        }
     }
 
     protected function assertItemData(array $data): void

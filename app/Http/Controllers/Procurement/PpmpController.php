@@ -51,7 +51,7 @@ class PpmpController extends Controller
                 Office::findOrFail($request->office_id),
                 (int) $request->fiscal_year,
                 $request->user(),
-                PpmpType::from($request->type),
+                PpmpType::tryFrom((string) $request->type) ?? PpmpType::Final,
                 $request->remarks,
             );
 
@@ -73,7 +73,7 @@ class PpmpController extends Controller
         $this->authorizeView($request, $ppmp);
 
         $user = $request->user();
-        $ppmp->load(['office.parent', 'items.procurementMode', 'items.fundSource', 'items.unit', 'signatories']);
+        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'items', 'signatories', 'divisionPpmps']);
 
         $hasOpenAmendment = Ppmp::where('amended_from_id', $ppmp->id)
             ->whereIn('status', [PpmpStatus::Draft, PpmpStatus::Submitted, PpmpStatus::Returned])
@@ -82,7 +82,8 @@ class PpmpController extends Controller
         return view('procurement.ppmp.show', [
             'ppmp'       => $ppmp,
             'canEdit'    => $ppmp->status->isEditable() && $ppmp->isEditableBy($user),
-            'canApprove' => $ppmp->isApprovableBy($user),
+            // Approval happens on the Division PPMP page; the head can return a section's PPMP here
+            'canReturn'  => $ppmp->isApprovableBy($user),
             'canAmend'   => $ppmp->status === PpmpStatus::Approved && $ppmp->isEditableBy($user) && ! $hasOpenAmendment,
             'canDelete'  => $ppmp->status === PpmpStatus::Draft && $ppmp->isEditableBy($user)
                             && $user->canAccessPermission('menu.ppmp-destroy'),
@@ -91,6 +92,7 @@ class PpmpController extends Controller
                             ->orderBy('version')
                             ->get(['uuid', 'ppmp_no', 'version', 'status']),
             'approver'   => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
+            'division'   => $ppmp->office->consolidatingOffice(),
         ]);
     }
 
@@ -99,15 +101,23 @@ class PpmpController extends Controller
     {
         $this->authorizeView($request, $ppmp);
 
-        $ppmp->load(['office', 'items.procurementMode', 'items.fundSource', 'items.unit', 'signatories']);
+        $ppmp->load(['office', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'signatories']);
         $approverId = $ppmp->office->approverId();
+        $approver = $approverId ? \App\Models\User::find($approverId) : null;
+        $prepared = $ppmp->latestSignatory('prepared');
 
         return view('procurement.ppmp.print', [
-            'ppmp'      => $ppmp,
-            'prepared'  => $ppmp->latestSignatory('prepared'),
-            'submitted' => $ppmp->latestSignatory('submitted'),
-            'approved'  => $ppmp->latestSignatory('approved'),
-            'approver'  => $approverId ? \App\Models\User::find($approverId) : null,
+            'title'      => "PPMP {$ppmp->ppmp_no} (Section copy)",
+            'number'     => null,
+            'type'       => $ppmp->type,
+            'fiscalYear' => $ppmp->fiscal_year,
+            'endUser'    => $ppmp->office->name,
+            'paps'       => $ppmp->paps,
+            'total'      => $ppmp->total_budget,
+            'watermark'  => $ppmp->status === PpmpStatus::Approved ? 'SECTION COPY' : ($ppmp->status === PpmpStatus::Superseded ? 'SUPERSEDED' : 'DRAFT'),
+            'prepared'   => ['name' => $prepared?->name_snapshot, 'position' => $prepared?->designation_snapshot, 'date' => $prepared?->signed_at],
+            'submitted'  => ['name' => $approver?->fullname, 'position' => $approver?->designation, 'date' => null],
+            'footer'     => "Section PPMP {$ppmp->ppmp_no} · {$ppmp->status->label()}",
         ]);
     }
 
@@ -120,6 +130,8 @@ class PpmpController extends Controller
             'modalName'    => 'PPMP_ITEM_MODAL',
             'ppmp'         => $ppmp,
             'item'         => $request->filled('id') ? $ppmp->items()->findOrFail($request->id) : null,
+            'paps'         => $ppmp->paps,
+            'selectedPap'  => $request->integer('pap_id') ?: null,
             'projectTypes' => ProjectType::cases(),
             'modes'        => ProcurementMode::active()->orderBy('name')->get(),
             'fundSources'  => FundSource::active()->orderBy('name')->get(),
@@ -146,6 +158,54 @@ class PpmpController extends Controller
         });
     }
 
+    /** Add / edit PAP modal (code + title). */
+    public function papEntry(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeEdit($request, $ppmp);
+        $pap = $request->filled('id') ? $ppmp->paps()->findOrFail($request->id) : null;
+
+        return view('procurement.ppmp.extras.ppmp_pap_entry', [
+            'modalName'     => 'PPMP_PAP_MODAL',
+            'ppmp'          => $ppmp,
+            'pap'           => $pap,
+            'suggestedCode' => $pap ? $pap->code : $this->ppmpService->suggestPapCode($ppmp),
+        ]);
+    }
+
+    public function papStore(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeEdit($request, $ppmp);
+        $data = $this->validateJson($request, [
+            'id'    => ['nullable', 'integer'],
+            'code'  => ['required', 'string', 'max:50'],
+            'title' => ['required', 'string', 'max:255'],
+        ], [], ['code' => 'PAP code', 'title' => 'PAP title']);
+
+        return $this->attempt(function () use ($request, $ppmp, $data) {
+            if ($request->filled('id')) {
+                $this->ppmpService->updatePap($ppmp->paps()->findOrFail($request->id), $data['code'], $data['title']);
+
+                return 'PAP updated.';
+            }
+
+            $this->ppmpService->addPap($ppmp, $data['code'], $data['title']);
+
+            return 'PAP added.';
+        });
+    }
+
+    public function papDestroy(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeEdit($request, $ppmp);
+        $this->validateJson($request, ['id' => ['required', 'integer']]);
+
+        return $this->attempt(function () use ($request, $ppmp) {
+            $this->ppmpService->removePap($ppmp->paps()->findOrFail($request->id));
+
+            return 'PAP removed.';
+        });
+    }
+
     public function itemDestroy(Request $request, Ppmp $ppmp)
     {
         $this->authorizeEdit($request, $ppmp);
@@ -166,17 +226,6 @@ class PpmpController extends Controller
             $this->ppmpService->submit($ppmp, $request->user(), $request->input('remarks'));
 
             return "PPMP {$ppmp->ppmp_no} submitted for approval.";
-        });
-    }
-
-    public function approve(Request $request, Ppmp $ppmp)
-    {
-        $this->authorizeView($request, $ppmp);
-
-        return $this->attempt(function () use ($request, $ppmp) {
-            $this->ppmpService->approve($ppmp, $request->user(), $request->input('remarks'));
-
-            return "PPMP {$ppmp->ppmp_no} approved.";
         });
     }
 
@@ -258,9 +307,9 @@ class PpmpController extends Controller
     }
 
     /** Validate and answer with the same JSON shape as the FormRequests on failure. */
-    protected function validateJson(Request $request, array $rules, array $messages = []): array
+    protected function validateJson(Request $request, array $rules, array $messages = [], array $attributes = []): array
     {
-        $validator = Validator::make($request->all(), $rules, $messages);
+        $validator = Validator::make($request->all(), $rules, $messages, $attributes);
 
         if ($validator->fails()) {
             throw new HttpResponseException(response()->json([

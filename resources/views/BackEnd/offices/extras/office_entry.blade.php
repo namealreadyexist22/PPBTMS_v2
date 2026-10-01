@@ -71,6 +71,14 @@
                         <div class="invalid-feedback"></div>
                     </div>
 
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="is_consolidating" value="1" id="office_is_consolidating"
+                            @checked($office->is_consolidating ?? false)>
+                        <label class="form-check-label small" for="office_is_consolidating">
+                            Consolidates PPMPs <span class="text-muted">— the section PPMPs under this office are combined into its Division PPMP, which its head approves and submits to BAC</span>
+                        </label>
+                    </div>
+
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="is_active" value="1" id="office_is_active"
                             @checked($office->is_active ?? true)>

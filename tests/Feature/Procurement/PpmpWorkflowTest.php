@@ -54,11 +54,19 @@ class PpmpWorkflowTest extends TestCase
         ], $overrides);
     }
 
+    /** Add a project under the PPMP's first PAP (created if the PPMP has none yet). */
+    protected function addLine(Ppmp $ppmp, array $data): \App\Models\Procurement\PpmpItem
+    {
+        $pap = $ppmp->paps()->first() ?? $this->ppmps->addPap($ppmp, $this->ppmps->suggestPapCode($ppmp), 'General');
+
+        return $this->ppmps->addItem($ppmp, $data + ['ppmp_pap_id' => $pap->id]);
+    }
+
     protected function approvedPpmp(): Ppmp
     {
         $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
-        $this->ppmps->addItem($ppmp, $this->line());
-        $this->ppmps->addItem($ppmp, $this->line(['description' => 'Laptops', 'estimated_budget' => '250000']));
+        $this->addLine($ppmp, $this->line());
+        $this->addLine($ppmp, $this->line(['description' => 'Laptops', 'estimated_budget' => '250000']));
         $this->ppmps->submit($ppmp, $this->staff);
 
         return $this->ppmps->approve($ppmp->fresh(), $this->head);
@@ -69,7 +77,7 @@ class PpmpWorkflowTest extends TestCase
         $ppmp = $this->approvedPpmp();
 
         $this->assertSame(PpmpStatus::Approved, $ppmp->status);
-        $this->assertSame('27-01000-01', $ppmp->ppmp_no);
+        $this->assertSame('01000-2027-V1', $ppmp->ppmp_no);
         $this->assertEquals('350000.00', $ppmp->fresh()->total_budget);
         $this->assertEqualsCanonicalizing(['prepared', 'submitted', 'approved'], $ppmp->signatories()->pluck('role')->all());
         $this->assertSame('Senior Agriculturist', $ppmp->latestSignatory('submitted')->designation_snapshot);
@@ -78,7 +86,7 @@ class PpmpWorkflowTest extends TestCase
     public function test_only_office_head_can_approve(): void
     {
         $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
-        $this->ppmps->addItem($ppmp, $this->line());
+        $this->addLine($ppmp, $this->line());
         $this->ppmps->submit($ppmp, $this->staff);
 
         $this->expectException(ProcurementException::class);
@@ -88,7 +96,7 @@ class PpmpWorkflowTest extends TestCase
     public function test_returned_ppmp_can_be_edited_and_resubmitted(): void
     {
         $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
-        $item = $this->ppmps->addItem($ppmp, $this->line());
+        $item = $this->addLine($ppmp, $this->line());
         $this->ppmps->submit($ppmp, $this->staff);
         $this->ppmps->returnToOffice($ppmp->fresh(), $this->head, 'Split the lot');
 
@@ -104,7 +112,7 @@ class PpmpWorkflowTest extends TestCase
         $ppmp = $this->approvedPpmp();
 
         $this->expectException(ProcurementException::class);
-        $this->ppmps->addItem($ppmp, $this->line());
+        $this->addLine($ppmp, $this->line());
     }
 
     public function test_one_ppmp_per_office_per_year(): void
@@ -129,7 +137,7 @@ class PpmpWorkflowTest extends TestCase
     public function test_cannot_charge_unapproved_ppmp(): void
     {
         $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
-        $line = $this->ppmps->addItem($ppmp, $this->line());
+        $line = $this->addLine($ppmp, $this->line());
 
         $this->expectException(ProcurementException::class);
         $this->budget->charge($line, '100');
@@ -142,7 +150,7 @@ class PpmpWorkflowTest extends TestCase
         $this->budget->charge($oldLine, '30000');
 
         $v2 = $this->ppmps->amend($v1, $this->staff);
-        $this->assertSame('27-01000-02', $v2->ppmp_no);
+        $this->assertSame('01000-2027-V2', $v2->ppmp_no);
 
         // Charge made while the amendment is still being prepared.
         $this->budget->charge($oldLine, '10000');
@@ -208,7 +216,7 @@ class PpmpWorkflowTest extends TestCase
         $staff = User::factory()->create(['office_id' => $planning->id]);
 
         $ppmp = $this->ppmps->create($planning, 2027, $staff);
-        $this->ppmps->addItem($ppmp, $this->line());
+        $this->addLine($ppmp, $this->line());
         $this->ppmps->submit($ppmp, $staff);
 
         try {
@@ -306,5 +314,44 @@ class PpmpWorkflowTest extends TestCase
         $this->ppmps->create($this->office, 2027, $this->staff);
 
         $this->assertEqualsCanonicalizing([$p1->id, $p2->id], Ppmp::visibleTo($manager)->pluck('id')->all());
+    }
+
+    public function test_office_marked_consolidating_takes_over_approval(): void
+    {
+        $manager = User::factory()->create();
+        $chief = User::factory()->create();
+        $dept = Office::create(['code' => '05000', 'name' => 'PPSPD', 'head_user_id' => $manager->id, 'is_consolidating' => true]);
+        $division = Office::create(['code' => '05010', 'name' => 'PPPD', 'parent_id' => $dept->id, 'head_user_id' => $chief->id]);
+        $section = Office::create(['code' => '05011', 'name' => 'PPRS', 'parent_id' => $division->id]);
+
+        // Without the flag the division chief would approve; the flag sends it to the department
+        $this->assertSame($dept->id, $section->consolidatingOffice()->id);
+        $this->assertSame($manager->id, $section->approverId());
+        $this->assertEqualsCanonicalizing([$dept->id, $division->id, $section->id], $dept->consolidatedOfficeIds());
+    }
+
+    public function test_division_approval_needs_submissions_and_the_head(): void
+    {
+        $divisions = app(\App\Services\Procurement\DivisionPpmpService::class);
+
+        try {
+            $divisions->approve($this->office, 2027, $this->head, $this->staff);
+            $this->fail('Nothing submitted yet.');
+        } catch (ProcurementException) {
+        }
+
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
+        $this->addLine($ppmp, $this->line());
+        $this->ppmps->submit($ppmp, $this->staff);
+
+        try {
+            $divisions->approve($this->office, 2027, $this->staff, $this->staff);
+            $this->fail('Only the head approves.');
+        } catch (ProcurementException) {
+        }
+
+        $no1 = $divisions->approve($this->office, 2027, $this->head, $this->staff);
+        $this->assertSame(1, $no1->ppmp_number);
+        $this->assertSame(['prepared', 'submitted'], $no1->signatories()->orderBy('id')->pluck('role')->all());
     }
 }

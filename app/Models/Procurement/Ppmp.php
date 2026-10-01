@@ -106,6 +106,16 @@ class Ppmp extends Model
         return $this->hasMany(PpmpItem::class)->orderBy('sort_order');
     }
 
+    public function paps(): HasMany
+    {
+        return $this->hasMany(PpmpPap::class)->orderBy('sort_order')->orderBy('code');
+    }
+
+    public function divisionPpmps(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(DivisionPpmp::class, 'division_ppmp_ppmp');
+    }
+
     public function amendedFrom(): BelongsTo
     {
         return $this->belongsTo(self::class, 'amended_from_id');

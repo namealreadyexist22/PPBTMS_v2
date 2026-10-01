@@ -11,6 +11,7 @@ use App\Core\Http\Controllers\UserAccessController;
 use App\Core\Http\Controllers\UserController;
 use App\Http\Controllers\BackEnd\LoginController;
 use App\Http\Controllers\BackEnd\MainController;
+use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use Illuminate\Support\Facades\Route;
 
@@ -138,10 +139,19 @@ use Illuminate\Support\Facades\Route;
             Route::get('ppmp/{ppmp}/items/entry', [PpmpController::class, 'itemEntry'])->name('ppmp.items.entry');
             Route::post('ppmp/{ppmp}/items/store', [PpmpController::class, 'itemStore'])->name('ppmp.items.store');
             Route::delete('ppmp/{ppmp}/items/destroy', [PpmpController::class, 'itemDestroy'])->name('ppmp.items.destroy');
+            Route::get('ppmp/{ppmp}/paps/entry', [PpmpController::class, 'papEntry'])->name('ppmp.paps.entry');
+            Route::post('ppmp/{ppmp}/paps/store', [PpmpController::class, 'papStore'])->name('ppmp.paps.store');
+            Route::delete('ppmp/{ppmp}/paps/destroy', [PpmpController::class, 'papDestroy'])->name('ppmp.paps.destroy');
             Route::post('ppmp/{ppmp}/submit', [PpmpController::class, 'submit'])->name('ppmp.submit');
-            Route::post('ppmp/{ppmp}/approve', [PpmpController::class, 'approve'])->name('ppmp.approve');
             Route::post('ppmp/{ppmp}/return', [PpmpController::class, 'returnToOffice'])->name('ppmp.return');
             Route::post('ppmp/{ppmp}/amend', [PpmpController::class, 'amend'])->name('ppmp.amend');
+
+            // Division PPMP: sections combined, approved by the division head -> PPMP No. 1, 2, 3...
+            Route::get('division-ppmp', [DivisionPpmpController::class, 'index'])->name('division-ppmp.index');
+            Route::post('division-ppmp/approve', [DivisionPpmpController::class, 'approve'])->name('division-ppmp.approve');
+            Route::get('division-ppmp/preview/{office}', [DivisionPpmpController::class, 'preview'])->name('division-ppmp.preview');
+            Route::get('division-ppmp/{divisionPpmp}', [DivisionPpmpController::class, 'show'])->name('division-ppmp.show');
+            Route::get('division-ppmp/{divisionPpmp}/print', [DivisionPpmpController::class, 'print'])->name('division-ppmp.print');
 
             Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
                 ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');

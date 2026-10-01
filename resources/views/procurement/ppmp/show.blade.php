@@ -33,11 +33,11 @@
                     <i class="fas fa-print me-1"></i> Print
                 </a>
                 @if ($canEdit)
-                    <button class="btn btn-sm btn-success" id="btn_add_item"><i class="fas fa-plus me-1"></i> Add Project</button>
+                    <button class="btn btn-sm btn-success" id="btn_add_pap"><i class="fas fa-folder-plus me-1"></i> Add PAP</button>
                     <button class="btn btn-sm btn-primary" id="btn_submit"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
                 @endif
-                @if ($canApprove)
-                    <button class="btn btn-sm btn-success" id="btn_approve"><i class="fas fa-check me-1"></i> Approve</button>
+                @if ($canReturn)
+                    <a href="{{ route('procurement.division-ppmp.index', ['fy' => $ppmp->fiscal_year]) }}" class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Approve in Division PPMP</a>
                     <button class="btn btn-sm btn-warning" id="btn_return"><i class="fas fa-undo me-1"></i> Return</button>
                 @endif
                 @if ($canAmend)
@@ -57,8 +57,14 @@
                 <div class="fw-semibold">{{ $ppmp->fiscal_year }}</div>
             </div>
             <div class="col-6 col-md-2">
-                <div class="text-muted">Type</div>
-                <div class="fw-semibold">{{ $ppmp->type->label() }}</div>
+                <div class="text-muted">Included in</div>
+                <div class="fw-semibold">
+                    @forelse ($ppmp->divisionPpmps as $divisionPpmp)
+                        <a href="{{ route('procurement.division-ppmp.show', $divisionPpmp) }}" class="badge {{ $divisionPpmp->isCurrent() ? 'bg-success' : 'bg-light text-dark border' }} text-decoration-none">PPMP No. {{ $divisionPpmp->ppmp_number }}</a>
+                    @empty
+                        <span class="text-muted fw-normal">Not yet approved</span>
+                    @endforelse
+                </div>
             </div>
             <div class="col-6 col-md-2">
                 <div class="text-muted">Version</div>
@@ -74,8 +80,9 @@
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="text-muted">Approving Head</div>
+                <div class="text-muted">Division / Approving Head</div>
                 <div class="fw-semibold">{{ $approver?->fullname ?? 'Not set — set the head in Offices' }}</div>
+                @if ($division && $division->id !== $ppmp->office_id)<div class="text-muted">{{ $division->shortName() }}</div>@endif
             </div>
             <div class="col-12 col-md-3 text-md-end">
                 <div class="text-muted">Total Estimated Budget</div>
@@ -98,10 +105,11 @@
     </div>
 </div>
 
-{{-- Procurement projects --}}
+{{-- Procurement projects, grouped by PAP --}}
+@php $colspan = $canEdit ? 11 : 10; $n = 0; @endphp
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
-        <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>Procurement Projects ({{ $ppmp->items->count() }})</h6>
+        <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>PAPs and Procurement Projects ({{ $ppmp->paps->count() }} PAP, {{ $ppmp->items->count() }} projects)</h6>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -112,7 +120,7 @@
                         @if ($canEdit)<th></th>@endif
                         <th style="min-width: 240px;">Procurement Project</th>
                         <th>Type</th>
-                        <th>Qty &amp; Size</th>
+                        <th>Qty &amp; Specs</th>
                         <th>Mode</th>
                         <th class="text-center" title="Pre-Procurement Conference">Pre-Proc</th>
                         <th title="Start and end of procurement activity">Proc. Period</th>
@@ -122,55 +130,70 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse ($ppmp->items as $i => $item)
-                        <tr>
-                            <td class="ps-4 text-muted">{{ $i + 1 }}</td>
-                            @if ($canEdit)
-                                <td class="text-nowrap">
-                                    <button class="btn btn-sm btn-link p-0 me-2 btn-edit-item" data-id="{{ $item->id }}" title="Edit"><i class="fas fa-edit"></i></button>
-                                    <button class="btn btn-sm btn-link p-0 text-danger btn-delete-item" data-id="{{ $item->id }}" title="Remove"><i class="fas fa-trash-alt"></i></button>
-                                </td>
-                            @endif
-                            <td>
-                                {{ $item->description }}
-                                @if ($item->supporting_documents)
-                                    <div class="text-muted mt-1"><i class="fas fa-paperclip me-1"></i>{{ $item->supporting_documents }}</div>
-                                @endif
-                                @if ($item->remarks)
-                                    <div class="text-muted"><i class="fas fa-comment-alt me-1"></i>{{ $item->remarks }}</div>
+                    @forelse ($ppmp->paps as $pap)
+                        <tr class="table-secondary">
+                            <td colspan="{{ $colspan - 1 }}" class="ps-4 fw-bold">
+                                PAP CODE: {{ $pap->code }} - {{ $pap->title }}
+                                @if ($canEdit)
+                                    <button class="btn btn-sm btn-link p-0 ms-2 btn-add-item" data-pap="{{ $pap->id }}" title="Add a project under this PAP"><i class="fas fa-plus-circle"></i> Add Project</button>
+                                    <button class="btn btn-sm btn-link p-0 ms-2 btn-edit-pap" data-id="{{ $pap->id }}" title="Edit PAP"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-link p-0 ms-1 text-danger btn-delete-pap" data-id="{{ $pap->id }}" title="Remove PAP"><i class="fas fa-trash-alt"></i></button>
                                 @endif
                             </td>
-                            <td class="text-nowrap" title="{{ $item->project_type->label() }}">{{ ucfirst(\Illuminate\Support\Str::before($item->project_type->label(), ' ')) }}</td>
-                            <td class="text-nowrap">
-                                @if ($item->quantity !== null)
-                                    {{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }} {{ $item->unit?->name }}
-                                @endif
-                                @if ($item->quantity_size)<div class="{{ $item->quantity !== null ? 'text-muted' : '' }}">{{ $item->quantity_size }}</div>@endif
-                            </td>
-                            <td class="text-nowrap" title="{{ $item->procurementMode->name }}">{{ $item->procurementMode->code }}</td>
-                            <td class="text-center">{!! $item->pre_proc_conference ? '<i class="fas fa-check text-success"></i>' : '—' !!}</td>
-                            <td class="text-nowrap">
-                                @if ($item->proc_start->year === $item->proc_end->year)
-                                    {{ $item->proc_start->format('M') }}{{ $item->proc_start->month !== $item->proc_end->month ? '–' . $item->proc_end->format('M') : '' }} {{ $item->proc_end->format('Y') }}
-                                @else
-                                    {{ $item->proc_start->format('M Y') }}–{{ $item->proc_end->format('M Y') }}
-                                @endif
-                            </td>
-                            <td>{{ $item->delivery_period }}</td>
-                            <td class="text-nowrap" title="{{ $item->fundSource->name }}">{{ $item->fundSource->code }}</td>
-                            <td class="text-end text-nowrap fw-semibold pe-4">
-                                {{ number_format((float) $item->estimated_budget, 2) }}
-                                @if ((float) $item->committed_amount > 0)
-                                    <div class="text-muted fw-normal" title="Charged by PRs">PR: {{ number_format((float) $item->committed_amount, 2) }}</div>
-                                @endif
-                            </td>
+                            <td class="text-end fw-bold text-nowrap pe-4">{{ number_format($pap->items->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
                         </tr>
+                        @forelse ($pap->items as $item)
+                            <tr>
+                                <td class="ps-4 text-muted">{{ ++$n }}</td>
+                                @if ($canEdit)
+                                    <td class="text-nowrap">
+                                        <button class="btn btn-sm btn-link p-0 me-2 btn-edit-item" data-id="{{ $item->id }}" title="Edit"><i class="fas fa-edit"></i></button>
+                                        <button class="btn btn-sm btn-link p-0 text-danger btn-delete-item" data-id="{{ $item->id }}" title="Remove"><i class="fas fa-trash-alt"></i></button>
+                                    </td>
+                                @endif
+                                <td>
+                                    {{ $item->description }}
+                                    @if ($item->supporting_documents)
+                                        <div class="text-muted mt-1"><i class="fas fa-paperclip me-1"></i>{{ $item->supporting_documents }}</div>
+                                    @endif
+                                    @if ($item->remarks)
+                                        <div class="text-muted"><i class="fas fa-comment-alt me-1"></i>{{ $item->remarks }}</div>
+                                    @endif
+                                </td>
+                                <td class="text-nowrap" title="{{ $item->project_type->label() }}">{{ ucfirst(\Illuminate\Support\Str::before($item->project_type->label(), ' ')) }}</td>
+                                <td style="min-width: 120px;">
+                                    @if ($item->quantity !== null)
+                                        <span class="text-nowrap">QTY: {{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }} {{ $item->unit?->name }}</span>
+                                    @endif
+                                    @if ($item->quantity_size)<div class="text-muted" style="white-space: pre-line;">{{ $item->quantity_size }}</div>@endif
+                                </td>
+                                <td class="text-nowrap" title="{{ $item->procurementMode->name }}">{{ $item->procurementMode->code }}</td>
+                                <td class="text-center">{!! $item->pre_proc_conference ? '<i class="fas fa-check text-success"></i>' : '—' !!}</td>
+                                <td class="text-nowrap">
+                                    @if ($item->proc_start->year === $item->proc_end->year)
+                                        {{ $item->proc_start->format('M') }}{{ $item->proc_start->month !== $item->proc_end->month ? '–' . $item->proc_end->format('M') : '' }} {{ $item->proc_end->format('Y') }}
+                                    @else
+                                        {{ $item->proc_start->format('M Y') }}–{{ $item->proc_end->format('M Y') }}
+                                    @endif
+                                </td>
+                                <td>{{ $item->delivery_period }}</td>
+                                <td class="text-nowrap" title="{{ $item->fundSource->name }}">{{ $item->fundSource->code }}</td>
+                                <td class="text-end text-nowrap fw-semibold pe-4">
+                                    {{ number_format((float) $item->estimated_budget, 2) }}
+                                    @if ((float) $item->committed_amount > 0)
+                                        <div class="text-muted fw-normal" title="Charged by PRs">PR: {{ number_format((float) $item->committed_amount, 2) }}</div>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="{{ $colspan }}" class="ps-5 text-muted fst-italic">No projects under this PAP yet.</td></tr>
+                        @endforelse
                     @empty
                         <tr>
-                            <td colspan="{{ $canEdit ? 11 : 10 }}" class="text-center text-muted py-5">
+                            <td colspan="{{ $colspan }}" class="text-center text-muted py-5">
                                 <i class="fas fa-inbox fa-2x mb-2 d-block opacity-50"></i>
-                                No procurement projects yet.
-                                @if ($canEdit) Click <strong>Add Project</strong> to start. @endif
+                                No PAPs yet.
+                                @if ($canEdit) Click <strong>Add PAP</strong> (e.g. 26-05012-01 ICT Infrastructure Management), then add its projects. @endif
                             </td>
                         </tr>
                     @endforelse
@@ -178,7 +201,7 @@
                 @if ($ppmp->items->isNotEmpty())
                     <tfoot class="table-light">
                         <tr>
-                            <td colspan="{{ $canEdit ? 10 : 9 }}" class="text-end fw-bold ps-4">TOTAL</td>
+                            <td colspan="{{ $colspan - 1 }}" class="text-end fw-bold ps-4">TOTAL BUDGET</td>
                             <td class="text-end fw-bold text-nowrap pe-4">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
                         </tr>
                     </tfoot>
@@ -235,14 +258,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ---------- Add / edit procurement project ----------
-    function loadItemModal(itemId = null) {
+    function loadItemModal(itemId = null, papId = null) {
         if (isModalOpen) return;
         isModalOpen = true;
 
         $.ajax({
             url: '{{ route("procurement.ppmp.items.entry", $ppmp) }}',
             type: 'GET',
-            data: itemId ? { id: itemId } : {},
+            data: itemId ? { id: itemId } : { pap_id: papId },
             success: function (html) {
                 $('#modal-body').html(html);
                 const modalElement = document.getElementById(itemModalName);
@@ -259,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    $('#btn_add_item').on('click', function (e) { e.preventDefault(); loadItemModal(); });
+    $(document).on('click', '.btn-add-item', function (e) { e.preventDefault(); loadItemModal(null, $(this).data('pap')); });
     $(document).on('click', '.btn-edit-item', function (e) { e.preventDefault(); loadItemModal($(this).data('id')); });
 
     $(document).off('submit', '#form_ppmp_item').on('submit', '#form_ppmp_item', function (e) {
@@ -317,28 +340,91 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    // ---------- PAPs ----------
+    function loadPapModal(papId = null) {
+        if (isModalOpen) return;
+        isModalOpen = true;
+
+        $.ajax({
+            url: '{{ route("procurement.ppmp.paps.entry", $ppmp) }}',
+            type: 'GET',
+            data: papId ? { id: papId } : {},
+            success: function (html) {
+                $('#modal-body').html(html);
+                const modalElement = document.getElementById('PPMP_PAP_MODAL');
+                new bootstrap.Modal(modalElement).show();
+                modalElement.addEventListener('hidden.bs.modal', function () {
+                    isModalOpen = false;
+                    $('#modal-body').html('');
+                });
+            },
+            error: function (xhr) {
+                isModalOpen = false;
+                toastr.error(xhr.responseJSON?.message ?? 'Could not open form.', 'Error');
+            }
+        });
+    }
+
+    $('#btn_add_pap').on('click', function (e) { e.preventDefault(); loadPapModal(); });
+    $(document).on('click', '.btn-edit-pap', function (e) { e.preventDefault(); loadPapModal($(this).data('id')); });
+
+    $(document).off('submit', '#form_ppmp_pap').on('submit', '#form_ppmp_pap', function (e) {
+        e.preventDefault();
+        const form = $(this);
+        const errorSummary = $('#pap_error_summary');
+        form.find('.is-invalid').removeClass('is-invalid');
+        form.find('.invalid-feedback').text('');
+        errorSummary.addClass('d-none');
+        $('#btn_save_pap').prop('disabled', true);
+
+        $.ajax({
+            url: '{{ route("procurement.ppmp.paps.store", $ppmp) }}',
+            type: 'POST',
+            data: form.serialize(),
+            success: function (response) {
+                toastr.success(response.message, 'Success');
+                bootstrap.Modal.getInstance(document.getElementById('PPMP_PAP_MODAL')).hide();
+                setTimeout(function () { window.location.reload(); }, 500);
+            },
+            error: function (xhr) {
+                $('#btn_save_pap').prop('disabled', false);
+                const res = xhr.responseJSON || {};
+                errorSummary.removeClass('d-none');
+                if (res.errors) {
+                    $.each(res.errors, function (key, messages) {
+                        const input = form.find('[name="' + key + '"]');
+                        input.addClass('is-invalid');
+                        input.siblings('.invalid-feedback').text(messages[0]);
+                    });
+                } else {
+                    errorSummary.find('span').text(res.message ?? 'Something went wrong.');
+                }
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-delete-pap', function (e) {
+        e.preventDefault();
+        const papId = $(this).data('id');
+        Swal.fire({
+            title: 'Remove this PAP?', text: 'Only a PAP with no projects can be removed.', icon: 'warning', showCancelButton: true,
+            confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b', confirmButtonText: 'Yes, remove', reverseButtons: true
+        }).then((result) => {
+            if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.paps.destroy", $ppmp) }}', { id: papId }, 'DELETE');
+        });
+    });
+
     // ---------- Workflow ----------
     $('#btn_submit').on('click', function () {
         Swal.fire({
             title: 'Submit for approval?',
-            html: 'The PPMP will be locked and sent to <b>{{ $approver?->fullname ?? "the approving head" }}</b>.',
+            html: 'The PPMP will be locked and sent to <b>{{ $approver?->fullname ?? "the approving head" }}</b> to be combined into the Division PPMP.',
             input: 'textarea', inputPlaceholder: 'Remarks (optional)',
             icon: 'question', showCancelButton: true,
             confirmButtonColor: '#0d6efd', cancelButtonColor: '#64748b',
             confirmButtonText: 'Submit', reverseButtons: true
         }).then((result) => {
             if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.submit", $ppmp) }}', { remarks: result.value });
-        });
-    });
-
-    $('#btn_approve').on('click', function () {
-        Swal.fire({
-            title: 'Approve this PPMP?', input: 'textarea', inputPlaceholder: 'Remarks (optional)',
-            icon: 'question', showCancelButton: true,
-            confirmButtonColor: '#10b981', cancelButtonColor: '#64748b',
-            confirmButtonText: 'Approve', reverseButtons: true
-        }).then((result) => {
-            if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.approve", $ppmp) }}', { remarks: result.value });
         });
     });
 

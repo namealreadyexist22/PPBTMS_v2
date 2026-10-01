@@ -32,7 +32,7 @@ class StorePpmpRequest extends FormRequest
             // Only offices this user may prepare a PPMP for
             'office_id'   => ['required', Rule::in(Office::assignableTo($this->user())->pluck('id'))],
             'fiscal_year' => ['required', 'integer', 'between:' . $year . ',' . ($year + 2)],
-            'type'        => ['required', Rule::enum(PpmpType::class)],
+            'type'        => ['nullable', Rule::enum(PpmpType::class)],
             'remarks'     => ['nullable', 'string', 'max:1000'],
         ];
     }
