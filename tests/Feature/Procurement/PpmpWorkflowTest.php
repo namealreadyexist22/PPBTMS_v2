@@ -250,4 +250,50 @@ class PpmpWorkflowTest extends TestCase
         $this->assertSame([$this->office->id], Office::assignableTo($this->staff)->pluck('id')->all());
         $this->assertSame([], Office::assignableTo(User::factory()->create())->pluck('id')->all());
     }
+
+    public function test_approver_is_nearest_head_above_at_any_depth(): void
+    {
+        $deputy = User::factory()->create();
+        $manager = User::factory()->create();
+        $top = Office::create(['code' => '06000', 'name' => 'Deputy Admin', 'head_user_id' => $deputy->id]);
+        $dept = Office::create(['code' => '06010', 'name' => 'AFD-LM Manager III', 'parent_id' => $top->id, 'head_user_id' => $manager->id]);
+        $division = Office::create(['code' => '06020', 'name' => 'GAD', 'parent_id' => $dept->id]);   // no head yet
+        $section = Office::create(['code' => '06021', 'name' => 'HRRS', 'parent_id' => $division->id]);
+
+        $this->assertSame($manager->id, $section->approverId());   // skips GAD (no head)
+        $this->assertSame($manager->id, $division->approverId());
+        $this->assertSame($deputy->id, $dept->approverId());
+        $this->assertSame($deputy->id, $top->approverId());        // top level approves its own
+    }
+
+    public function test_user_with_extra_offices_can_prepare_and_see_them(): void
+    {
+        $scp = Office::create(['code' => '11000', 'name' => 'SIDA-SCP']);
+        $hrd = Office::create(['code' => '12000', 'name' => 'SIDA-HRD']);
+        Office::create(['code' => '13000', 'name' => 'SIDA-FMR']);
+        $bien = User::factory()->create(['office_id' => $scp->id]);
+        $bien->offices()->attach($hrd);
+
+        $this->assertEqualsCanonicalizing([$scp->id, $hrd->id], Office::assignableTo($bien)->pluck('id')->all());
+
+        $a = $this->ppmps->create($scp, 2027, $bien);
+        $b = $this->ppmps->create($hrd, 2027, $bien);
+        $this->ppmps->create($this->office, 2027, $this->staff);
+
+        $this->assertEqualsCanonicalizing([$a->id, $b->id], Ppmp::visibleTo($bien)->pluck('id')->all());
+    }
+
+    public function test_head_sees_ppmps_of_all_offices_below(): void
+    {
+        $manager = User::factory()->create();
+        $dept = Office::create(['code' => '05000', 'name' => 'PPSPD Manager III', 'head_user_id' => $manager->id]);
+        $division = Office::create(['code' => '05010', 'name' => 'PPPD', 'parent_id' => $dept->id]);
+        $section = Office::create(['code' => '05011', 'name' => 'PPRS', 'parent_id' => $division->id]);
+
+        $p1 = $this->ppmps->create($division, 2027, $manager);
+        $p2 = $this->ppmps->create($section, 2027, $manager);
+        $this->ppmps->create($this->office, 2027, $this->staff);
+
+        $this->assertEqualsCanonicalizing([$p1->id, $p2->id], Ppmp::visibleTo($manager)->pluck('id')->all());
+    }
 }

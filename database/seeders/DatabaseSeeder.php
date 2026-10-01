@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             ActionPermissionSeeder::class,
             SettingsSeeder::class,
             ProcurementLookupSeeder::class,
+            OfficeSeeder::class,
         ]);
     }
 }

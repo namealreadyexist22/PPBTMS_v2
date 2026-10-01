@@ -50,9 +50,28 @@ class User extends Authenticatable
         ];
     }
 
+    /** Home office. */
     public function office()
     {
         return $this->belongsTo(\App\Models\Procurement\Office::class);
+    }
+
+    /** Extra offices this user may prepare PPMPs for (e.g. SIDA-SCP and SIDA-HRD). */
+    public function offices()
+    {
+        return $this->belongsToMany(\App\Models\Procurement\Office::class)->withTimestamps();
+    }
+
+    /** Home office plus extra offices. */
+    public function accessibleOfficeIds(): array
+    {
+        return $this->offices()->pluck('offices.id')
+            ->push($this->office_id)
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function menuOverrides()

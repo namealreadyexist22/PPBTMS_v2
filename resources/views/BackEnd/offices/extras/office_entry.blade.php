@@ -45,17 +45,17 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted mb-1">Division</label>
+                        <label class="form-label small fw-semibold text-muted mb-1">Under (Parent Office)</label>
                         <select name="parent_id" class="form-select form-select-sm">
-                            <option value="">— None (this office is a division) —</option>
-                            @foreach ($divisions as $division)
-                                <option value="{{ $division->id }}" @selected(($office->parent_id ?? null) == $division->id)>
-                                    {{ $division->label() }}
+                            <option value="">— None (top-level office) —</option>
+                            @foreach ($parents as $parent)
+                                <option value="{{ $parent->id }}" @selected(($office->parent_id ?? null) == $parent->id)>
+                                    {{ $parent->label() }}
                                 </option>
                             @endforeach
                         </select>
                         <div class="invalid-feedback"></div>
-                        <div class="form-text">Pick a division if this is a section. Its PPMP will be approved by that division's head.</div>
+                        <div class="form-text">This office's PPMP is approved by the nearest head above it. A top-level office's head approves its own.</div>
                     </div>
 
                     <div class="mb-3">

@@ -19,12 +19,12 @@ class OfficesDataTable extends DataTable
     public function dataTable(QueryBuilder $query): EloquentDataTable
     {
         return (new EloquentDataTable($query))
-            ->addColumn('division', fn ($row) => $row->parent?->shortName() ?? '<span class="text-muted">— Division —</span>')
+            ->addColumn('parent', fn ($row) => $row->parent?->shortName() ?? '<span class="text-muted">— Top level —</span>')
             ->addColumn('head', fn ($row) => $row->head?->fullname ?? '<span class="text-muted">Not set</span>')
             ->addColumn('users_count', fn ($row) => $row->users_count)
             ->editColumn('is_active', fn ($row) => view('BackEnd.auth.extras.user_is_activated', ['is_activated' => $row->is_active])->render())
             ->addColumn('action', fn ($row) => view('BackEnd.offices.extras.office_action', ['office' => $row])->render())
-            ->rawColumns(['division', 'head', 'is_active', 'action'])
+            ->rawColumns(['parent', 'head', 'is_active', 'action'])
             ->setRowId('id');
     }
 
@@ -43,8 +43,8 @@ class OfficesDataTable extends DataTable
         return [
             Column::make('code')->title('Office No.'),
             Column::make('acronym')->title('Acronym'),
-            Column::make('name')->title('Office / Section Name'),
-            Column::computed('division')->title('Division'),
+            Column::make('name')->title('Office Name'),
+            Column::computed('parent')->title('Under'),
             Column::computed('head')->title('Head'),
             Column::computed('users_count')->title('Users')->addClass('text-center'),
             Column::make('is_active')->title('Status')->addClass('text-center'),

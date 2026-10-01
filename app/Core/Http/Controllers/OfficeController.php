@@ -23,9 +23,9 @@ class OfficeController extends Controller
         return view('BackEnd.offices.extras.office_entry', [
             'modalName' => 'OFFICE_ENTRY_MODAL',
             'office'    => $office,
-            // Divisions only (top-level), excluding the office being edited
-            'divisions' => Office::whereNull('parent_id')
-                ->when($office, fn ($q) => $q->whereKeyNot($office->id))
+            // Any office except this one and its own sub-offices
+            'parents'   => Office::query()
+                ->when($office, fn ($q) => $q->whereKeyNot(Office::withDescendantIds([$office->id])))
                 ->orderBy('code')
                 ->get(),
             'users'     => User::where('is_activated', true)->orderBy('lname')->get(),

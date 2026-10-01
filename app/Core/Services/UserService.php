@@ -83,6 +83,11 @@ class UserService
                 $message = 'System User record has been processed and committed successfully.';
             }
 
+            // Extra offices this user may prepare PPMPs for (home office excluded)
+            $userInstance->offices()->sync(
+                collect($validated['office_ids'] ?? [])->reject(fn ($id) => $id == $userInstance->office_id)->all()
+            );
+
             // Sync the RBAC role (single-select: empty selection clears any existing role)
             $userInstance->syncRoles($validated['role'] ?? []);
 

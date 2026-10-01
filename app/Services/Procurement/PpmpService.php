@@ -13,8 +13,8 @@ use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * PPMP lifecycle: office/section prepares (draft) -> submits -> division head approves
- * or returns. Approved PPMPs are then visible to BAC for consolidation into the APP.
+ * PPMP lifecycle: office prepares (draft) -> submits -> the nearest head above it
+ * (Office::approverId) approves or returns. Approved PPMPs are then visible to BAC for consolidation into the APP.
  * An approved PPMP is changed only through an amendment (new version).
  */
 class PpmpService
@@ -270,13 +270,13 @@ class PpmpService
         $approverId = $office->approverId();
 
         if (! $approverId) {
-            throw new ProcurementException('No division head is set for '.$office->name.'.');
+            throw new ProcurementException('No approving head is set above '.$office->name.'. Set the head in Offices.');
         }
 
         if ($approverId !== (int) $user->id) {
-            $division = $office->parent ?? $office;
+            $approver = User::find($approverId);
 
-            throw new ProcurementException('Only the head of '.$division->name.' can approve or return this PPMP.');
+            throw new ProcurementException('Only '.($approver?->fullname ?? 'the approving head').' can approve or return this PPMP.');
         }
     }
 }

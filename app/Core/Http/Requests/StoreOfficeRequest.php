@@ -33,11 +33,11 @@ class StoreOfficeRequest extends FormRequest
             'code'         => ['required', 'string', 'regex:/^\d{1,10}$/', Rule::unique('offices', 'code')->ignore($id)],
             'acronym'      => ['nullable', 'string', 'max:30'],
             'name'         => ['required', 'string', 'max:255'],
-            // A section's parent must be a division (a top-level office), never itself
+            // Never itself or one of its own sub-offices (that would make a loop)
             'parent_id'    => [
                 'nullable',
-                Rule::exists('offices', 'id')->whereNull('parent_id'),
-                Rule::notIn(array_filter([$id])),
+                Rule::exists('offices', 'id'),
+                Rule::notIn($id ? Office::withDescendantIds([$id])->all() : []),
             ],
             'head_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
@@ -48,20 +48,7 @@ class StoreOfficeRequest extends FormRequest
         return [
             'code.regex'       => 'The office number must contain digits only (e.g. 05000).',
             'code.unique'      => 'This office number is already used.',
-            'parent_id.exists' => 'The division must be a top-level office.',
-            'parent_id.not_in' => 'An office cannot be its own division.',
+            'parent_id.not_in' => 'The parent cannot be this office or one of its sub-offices.',
         ];
-    }
-
-    public function withValidator($validator): void
-    {
-        // Only two levels: a division that already has sections cannot become a section
-        $validator->after(function ($validator) {
-            $id = $this->input('id');
-
-            if ($id && $this->filled('parent_id') && Office::where('parent_id', $id)->exists()) {
-                $validator->errors()->add('parent_id', 'This office has sections under it, so it must stay a division.');
-            }
-        });
     }
 }

@@ -114,12 +114,12 @@
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-6">
-                            <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Office / Section</label>
+                            <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Home Office</label>
                             <select class="form-select form-select-sm rounded" id="office_id" name="office_id">
                                 <option value="">— No office —</option>
                                 @foreach ($offices as $office)
                                     <option value="{{ $office->id }}" {{ isset($user) && $user->office_id == $office->id ? 'selected' : '' }}>
-                                        {{ $office->parent ? $office->parent->shortName() . ' › ' : '' }}{{ $office->label() }}
+                                        {{ $office->label() }}
                                     </option>
                                 @endforeach
                             </select>
@@ -130,6 +130,30 @@
                             <input type="text" class="form-control form-control-sm rounded" id="designation" name="designation" placeholder="e.g. Senior Agriculturist" value="{{ $user->designation ?? '' }}">
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small fw-semibold text-muted mb-1">Additional PPMP Offices (optional)</label>
+                        <input type="text" class="form-control form-control-sm rounded mb-1" id="office_ids_filter" placeholder="Filter offices...">
+                        @php $extraIds = isset($user) ? $user->offices->pluck('id')->all() : []; @endphp
+                        <div class="border rounded px-2 py-1" style="max-height: 160px; overflow-y: auto;" id="office_ids_list">
+                            @foreach ($offices as $office)
+                                <div class="form-check small office-option">
+                                    <input class="form-check-input" type="checkbox" name="office_ids[]" value="{{ $office->id }}" id="office_ids_{{ $office->id }}"
+                                        {{ in_array($office->id, $extraIds) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="office_ids_{{ $office->id }}">{{ $office->label() }}</label>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="form-text">Other offices this user may prepare PPMPs for, e.g. SIDA-SCP and SIDA-HRD.</div>
+                        <script>
+                            document.getElementById('office_ids_filter').addEventListener('input', function () {
+                                const q = this.value.toLowerCase();
+                                document.querySelectorAll('#office_ids_list .office-option').forEach(function (el) {
+                                    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+                                });
+                            });
+                        </script>
                     </div>
 
                     <small class="text-uppercase fw-bold text-secondary tracking-wider d-block mb-3" style="font-size: 0.75rem;">

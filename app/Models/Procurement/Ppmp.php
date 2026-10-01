@@ -67,8 +67,9 @@ class Ppmp extends Model
     public const VIEW_ALL_PERMISSION = 'menu.ppmp-view-all';
 
     /**
-     * PPMPs a user may see: their own office's, the ones they approve as division
-     * head, or all of them with the view-all permission (Super Admin passes too).
+     * PPMPs a user may see: their own offices' (home + extra), everything at or
+     * below an office they head (to approve or monitor), or all of them with the
+     * view-all permission (BAC / consolidator; Super Admin passes too).
      */
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
@@ -76,10 +77,10 @@ class Ppmp extends Model
             return $query;
         }
 
-        return $query->whereHas('office', fn (Builder $q) => $q
-            ->where('id', $user->office_id)
-            ->orWhere(fn (Builder $q) => $q->whereNull('parent_id')->where('head_user_id', $user->id))
-            ->orWhereHas('parent', fn (Builder $q) => $q->where('head_user_id', $user->id)));
+        $headed = Office::where('head_user_id', $user->id)->pluck('id');
+        $officeIds = Office::withDescendantIds($headed)->merge($user->accessibleOfficeIds())->unique();
+
+        return $query->whereIn('office_id', $officeIds);
     }
 
     public function office(): BelongsTo

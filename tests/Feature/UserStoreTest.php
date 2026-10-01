@@ -18,6 +18,7 @@ class UserStoreTest extends TestCase
         $admin = User::factory()->create(['is_activated' => 1]);
         $admin->assignRole('Super Admin');
         $office = Office::create(['code' => '05001', 'acronym' => 'PPSPD-PS', 'name' => 'Planning Section']);
+        $extra = Office::create(['code' => '12000', 'name' => 'SIDA-HRD']);
 
         $this->actingAs($admin)->get(route('core.users.entry'))->assertOk()->assertSee('05001 · PPSPD-PS — Planning Section', false);
 
@@ -25,11 +26,14 @@ class UserStoreTest extends TestCase
             'fname' => 'Juan', 'lname' => 'Cruz', 'username' => 'jcruz', 'email' => 'jcruz@example.com',
             'password' => 'secret', 'password_confirmation' => 'secret', 'categories' => 1,
             'role' => 'User', 'office_id' => $office->id, 'designation' => 'Senior Agriculturist',
+            'office_ids' => [$office->id, $extra->id],
         ])->assertOk()->assertJson(['status' => 'success']);
 
         $user = User::where('username', 'jcruz')->sole();
         $this->assertSame($office->id, $user->office_id);
         $this->assertSame('Senior Agriculturist', $user->designation);
         $this->assertTrue($user->hasRole('User'));
+        // Home office is not duplicated as an extra office
+        $this->assertSame([$extra->id], $user->offices()->pluck('offices.id')->all());
     }
 }
