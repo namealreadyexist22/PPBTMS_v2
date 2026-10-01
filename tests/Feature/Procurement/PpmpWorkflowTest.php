@@ -46,7 +46,7 @@ class PpmpWorkflowTest extends TestCase
             'project_type'        => ProjectType::Goods,
             'quantity_size'       => '1 lot',
             'procurement_mode_id' => ProcurementMode::where('code', 'SVP')->value('id'),
-            'fund_source_id'      => FundSource::where('code', 'GAA')->value('id'),
+            'fund_source_id'      => FundSource::where('code', 'COB')->value('id'),
             'proc_start'          => '2027-01-01',
             'proc_end'            => '2027-02-01',
             'delivery_period'     => 'March 2027',

@@ -30,12 +30,12 @@ class ProcurementLookupSeeder extends Seeder
             'PS'   => 'Procurement Service (PS-DBM)',
         ]);
 
+        // Exclusive: fund sources not listed here are deactivated (hidden from
+        // dropdowns, kept for PPMP lines that already use them).
         $this->seed(FundSource::class, [
-            'GAA'   => 'General Appropriations Act',
-            'CONT'  => 'Continuing Appropriations',
-            'TF'    => 'Trust Fund',
-            'SAA'   => 'Sub-Allotment',
-        ]);
+            'COB'  => 'Corporate Operating Budget',
+            'SIDA' => 'Sugar Industry Development Act',
+        ], exclusive: true);
 
         $this->seed(Unit::class, [
             'pc'    => 'piece',
@@ -61,10 +61,15 @@ class ProcurementLookupSeeder extends Seeder
         ]);
     }
 
-    protected function seed(string $model, array $rows): void
+    protected function seed(string $model, array $rows, bool $exclusive = false): void
     {
         foreach ($rows as $code => $name) {
-            $model::firstOrCreate(['code' => $code], ['name' => $name]);
+            // Exclusive lists are authoritative, so listed rows are (re)activated too
+            $model::updateOrCreate(['code' => $code], $exclusive ? ['name' => $name, 'is_active' => true] : ['name' => $name]);
+        }
+
+        if ($exclusive) {
+            $model::whereNotIn('code', array_keys($rows))->update(['is_active' => false]);
         }
     }
 }
