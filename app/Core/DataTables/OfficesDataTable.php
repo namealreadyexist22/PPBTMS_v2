@@ -19,7 +19,7 @@ class OfficesDataTable extends DataTable
     public function dataTable(QueryBuilder $query): EloquentDataTable
     {
         return (new EloquentDataTable($query))
-            ->addColumn('division', fn ($row) => $row->parent?->code ?? '<span class="text-muted">— Division —</span>')
+            ->addColumn('division', fn ($row) => $row->parent?->shortName() ?? '<span class="text-muted">— Division —</span>')
             ->addColumn('head', fn ($row) => $row->head?->fullname ?? '<span class="text-muted">Not set</span>')
             ->addColumn('users_count', fn ($row) => $row->users_count)
             ->editColumn('is_active', fn ($row) => view('BackEnd.auth.extras.user_is_activated', ['is_activated' => $row->is_active])->render())
@@ -41,7 +41,8 @@ class OfficesDataTable extends DataTable
     public function getColumns(): array
     {
         return [
-            Column::make('code')->title('Code'),
+            Column::make('code')->title('Office No.'),
+            Column::make('acronym')->title('Acronym'),
             Column::make('name')->title('Office / Section Name'),
             Column::computed('division')->title('Division'),
             Column::computed('head')->title('Head'),

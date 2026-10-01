@@ -19,7 +19,7 @@ class PpmpDataTable extends DataTable
     public function dataTable(QueryBuilder $query): EloquentDataTable
     {
         return (new EloquentDataTable($query))
-            ->addColumn('office', fn ($row) => $row->office?->code)
+            ->addColumn('office', fn ($row) => $row->office?->shortName())
             ->editColumn('type', fn ($row) => $row->type->label())
             ->editColumn('total_budget', fn ($row) => number_format($row->total_budget, 2))
             ->editColumn('status', fn ($row) => view('procurement.ppmp.extras.ppmp_status', ['ppmp' => $row])->render())

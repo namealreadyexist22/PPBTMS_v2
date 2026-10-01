@@ -119,7 +119,7 @@
                                 <option value="">— No office —</option>
                                 @foreach ($offices as $office)
                                     <option value="{{ $office->id }}" {{ isset($user) && $user->office_id == $office->id ? 'selected' : '' }}>
-                                        {{ $office->parent ? $office->parent->code . ' › ' : '' }}{{ $office->code }} — {{ $office->name }}
+                                        {{ $office->parent ? $office->parent->shortName() . ' › ' : '' }}{{ $office->label() }}
                                     </option>
                                 @endforeach
                             </select>

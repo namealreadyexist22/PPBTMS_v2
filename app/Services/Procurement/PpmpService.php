@@ -22,7 +22,7 @@ class PpmpService
     public function create(Office $office, int $fiscalYear, User $user, PpmpType $type = PpmpType::Indicative, ?string $remarks = null): Ppmp
     {
         if (Ppmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->exists()) {
-            throw new ProcurementException("{$office->code} already has a PPMP for FY {$fiscalYear}. Amend it instead.");
+            throw new ProcurementException("{$office->shortName()} already has a PPMP for FY {$fiscalYear}. Amend it instead.");
         }
 
         return DB::transaction(function () use ($office, $fiscalYear, $user, $type, $remarks) {
@@ -234,7 +234,8 @@ class PpmpService
 
     protected function number(Office $office, int $fiscalYear, int $version): string
     {
-        return sprintf('PPMP-%d-%s-%02d', $fiscalYear, $office->code, $version);
+        // YY-office number-series, e.g. 27-05000-01 (series = version; amendments are 02, 03, ...)
+        return sprintf('%02d-%s-%02d', $fiscalYear % 100, $office->code, $version);
     }
 
     protected function assertItemData(array $data): void

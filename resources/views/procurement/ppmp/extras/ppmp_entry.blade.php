@@ -28,7 +28,7 @@
                             <label class="form-label small fw-semibold text-muted mb-1">Office / Section</label>
                             <select name="office_id" class="form-select form-select-sm" required>
                                 @foreach ($offices as $office)
-                                    <option value="{{ $office->id }}">{{ $office->code }} — {{ $office->name }}</option>
+                                    <option value="{{ $office->id }}">{{ $office->label() }}</option>
                                 @endforeach
                             </select>
                             <div class="invalid-feedback"></div>

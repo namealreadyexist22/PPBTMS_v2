@@ -17,9 +17,9 @@ class UserStoreTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
         $admin = User::factory()->create(['is_activated' => 1]);
         $admin->assignRole('Super Admin');
-        $office = Office::create(['code' => 'PPSPD-PS', 'name' => 'Planning Section']);
+        $office = Office::create(['code' => '05001', 'acronym' => 'PPSPD-PS', 'name' => 'Planning Section']);
 
-        $this->actingAs($admin)->get(route('core.users.entry'))->assertOk()->assertSee('PPSPD-PS');
+        $this->actingAs($admin)->get(route('core.users.entry'))->assertOk()->assertSee('05001 · PPSPD-PS — Planning Section', false);
 
         $this->postJson(route('core.users.store'), [
             'fname' => 'Juan', 'lname' => 'Cruz', 'username' => 'jcruz', 'email' => 'jcruz@example.com',

@@ -13,11 +13,23 @@ class Office extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['code', 'name', 'division', 'section', 'parent_id', 'head_user_id', 'is_active'];
+    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'head_user_id', 'is_active'];
 
     protected function casts(): array
     {
         return ['is_active' => 'boolean'];
+    }
+
+    /** Short name for lists: the acronym, or the office number if none. */
+    public function shortName(): string
+    {
+        return $this->acronym ?: $this->code;
+    }
+
+    /** e.g. "05000 · PPSPD — Planning and Special Projects Division" */
+    public function label(): string
+    {
+        return $this->code . ($this->acronym ? ' · ' . $this->acronym : '') . ' — ' . $this->name;
     }
 
     public function scopeActive(Builder $query): Builder

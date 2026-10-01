@@ -25,16 +25,23 @@
                     </div>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-4">
-                            <label class="form-label small fw-semibold text-muted mb-1">Code</label>
-                            <input type="text" name="code" class="form-control form-control-sm" value="{{ $office->code ?? '' }}" placeholder="e.g. PPSPD-PS" required>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Office No.</label>
+                            <input type="text" name="code" class="form-control form-control-sm" value="{{ $office->code ?? '' }}" placeholder="e.g. 05000" inputmode="numeric" required>
+                            <div class="invalid-feedback"></div>
+                            <div class="form-text">Used in the PPMP number, e.g. 27-<b>05000</b>-01.</div>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Acronym</label>
+                            <input type="text" name="acronym" class="form-control form-control-sm" value="{{ $office->acronym ?? '' }}" placeholder="e.g. PPSPD">
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-8">
-                            <label class="form-label small fw-semibold text-muted mb-1">Name</label>
-                            <input type="text" name="name" class="form-control form-control-sm" value="{{ $office->name ?? '' }}" placeholder="e.g. Planning Section" required>
-                            <div class="invalid-feedback"></div>
-                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1">Name</label>
+                        <input type="text" name="name" class="form-control form-control-sm" value="{{ $office->name ?? '' }}" placeholder="e.g. Planning Section" required>
+                        <div class="invalid-feedback"></div>
                     </div>
 
                     <div class="mb-3">
@@ -43,7 +50,7 @@
                             <option value="">— None (this office is a division) —</option>
                             @foreach ($divisions as $division)
                                 <option value="{{ $division->id }}" @selected(($office->parent_id ?? null) == $division->id)>
-                                    {{ $division->code }} — {{ $division->name }}
+                                    {{ $division->label() }}
                                 </option>
                             @endforeach
                         </select>

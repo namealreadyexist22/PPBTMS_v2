@@ -35,7 +35,7 @@ class PpmpWorkflowTest extends TestCase
         $this->budget = app(PpmpBudgetService::class);
 
         $this->head = User::factory()->create(['designation' => 'Regional Executive Director']);
-        $this->office = Office::create(['code' => 'ORED', 'name' => 'Office of the RED', 'head_user_id' => $this->head->id]);
+        $this->office = Office::create(['code' => '01000', 'acronym' => 'ORED', 'name' => 'Office of the RED', 'head_user_id' => $this->head->id]);
         $this->staff = User::factory()->create(['office_id' => $this->office->id, 'designation' => 'Senior Agriculturist']);
     }
 
@@ -69,7 +69,7 @@ class PpmpWorkflowTest extends TestCase
         $ppmp = $this->approvedPpmp();
 
         $this->assertSame(PpmpStatus::Approved, $ppmp->status);
-        $this->assertSame('PPMP-2027-ORED-01', $ppmp->ppmp_no);
+        $this->assertSame('27-01000-01', $ppmp->ppmp_no);
         $this->assertEquals('350000.00', $ppmp->fresh()->total_budget);
         $this->assertEqualsCanonicalizing(['prepared', 'submitted', 'approved'], $ppmp->signatories()->pluck('role')->all());
         $this->assertSame('Senior Agriculturist', $ppmp->latestSignatory('submitted')->designation_snapshot);
@@ -142,7 +142,7 @@ class PpmpWorkflowTest extends TestCase
         $this->budget->charge($oldLine, '30000');
 
         $v2 = $this->ppmps->amend($v1, $this->staff);
-        $this->assertSame('PPMP-2027-ORED-02', $v2->ppmp_no);
+        $this->assertSame('27-01000-02', $v2->ppmp_no);
 
         // Charge made while the amendment is still being prepared.
         $this->budget->charge($oldLine, '10000');
@@ -195,9 +195,9 @@ class PpmpWorkflowTest extends TestCase
     {
         $divisionHead = User::factory()->create(['designation' => 'Division Chief']);
         $sectionHead = User::factory()->create(['designation' => 'Section Chief']);
-        $division = Office::create(['code' => 'PPSPD', 'name' => 'Planning Division', 'head_user_id' => $divisionHead->id]);
-        $planning = Office::create(['code' => 'PPSPD-PS', 'name' => 'Planning Section', 'parent_id' => $division->id, 'head_user_id' => $sectionHead->id]);
-        $special = Office::create(['code' => 'PPSPD-SPS', 'name' => 'Special Project Section', 'parent_id' => $division->id]);
+        $division = Office::create(['code' => '05000', 'acronym' => 'PPSPD', 'name' => 'Planning Division', 'head_user_id' => $divisionHead->id]);
+        $planning = Office::create(['code' => '05001', 'acronym' => 'PPSPD-PS', 'name' => 'Planning Section', 'parent_id' => $division->id, 'head_user_id' => $sectionHead->id]);
+        $special = Office::create(['code' => '05002', 'acronym' => 'PPSPD-SPS', 'name' => 'Special Project Section', 'parent_id' => $division->id]);
 
         return [$divisionHead, $sectionHead, $planning, $special];
     }
@@ -245,7 +245,7 @@ class PpmpWorkflowTest extends TestCase
 
     public function test_user_can_only_create_for_own_office(): void
     {
-        Office::create(['code' => 'OTHER', 'name' => 'Other Office']);
+        Office::create(['code' => '09000', 'name' => 'Other Office']);
 
         $this->assertSame([$this->office->id], Office::assignableTo($this->staff)->pluck('id')->all());
         $this->assertSame([], Office::assignableTo(User::factory()->create())->pluck('id')->all());
