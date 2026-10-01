@@ -94,6 +94,23 @@ class PpmpController extends Controller
         ]);
     }
 
+    /** Printable PPMP in the GPPB revised format (browser Print / Save as PDF). */
+    public function print(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeView($request, $ppmp);
+
+        $ppmp->load(['office', 'items.procurementMode', 'items.fundSource', 'items.unit', 'signatories']);
+        $approverId = $ppmp->office->approverId();
+
+        return view('procurement.ppmp.print', [
+            'ppmp'      => $ppmp,
+            'prepared'  => $ppmp->latestSignatory('prepared'),
+            'submitted' => $ppmp->latestSignatory('submitted'),
+            'approved'  => $ppmp->latestSignatory('approved'),
+            'approver'  => $approverId ? \App\Models\User::find($approverId) : null,
+        ]);
+    }
+
     /** Add / edit procurement project modal. */
     public function itemEntry(Request $request, Ppmp $ppmp)
     {

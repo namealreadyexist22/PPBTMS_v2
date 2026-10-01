@@ -12,6 +12,8 @@ class SettingsSeeder extends Seeder
         Setting::firstOrCreate(['key' => 'app_name'], ['value' => 'Base Template']);
         Setting::firstOrCreate(['key' => 'app_version'], ['value' => '1.0.0']);
         Setting::firstOrCreate(['key' => 'app_logo'], ['value' => null]);
+        // Printed on procurement forms (PPMP, APP, ...)
+        Setting::firstOrCreate(['key' => 'agency_name'], ['value' => 'Sugar Regulatory Administration']);
         
         if (! Setting::where('key', 'default_avatar_data')->exists()) {
             $path = public_path('assets/img/userlogo.png');

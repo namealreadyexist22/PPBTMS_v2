@@ -149,4 +149,27 @@ class PpmpPageTest extends TestCase
         // Same office + year can start over with the same number
         $this->assertSame('27-05011-01', $service->create($this->section, 2027, $this->staff)->ppmp_no);
     }
+
+    public function test_print_shows_gppb_form_with_status_watermark(): void
+    {
+        $service = app(\App\Services\Procurement\PpmpService::class);
+        $ppmp = $service->create($this->section, 2027, $this->staff);
+        $service->addItem($ppmp, array_merge($this->project(), ['proc_start' => '2027-01-01', 'proc_end' => '2027-02-01', 'estimated_budget' => '150000']));
+
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.print', $ppmp))->assertOk()
+            ->assertSee('PROJECT PROCUREMENT MANAGEMENT PLAN (PPMP)')
+            ->assertSee('27-05011-01')
+            ->assertSee('01/2027')
+            ->assertSee('150,000.00')
+            ->assertSee('class="watermark">DRAFT', false);
+
+        $service->submit($ppmp, $this->staff);
+        $service->approve($ppmp->fresh(), $this->head);
+
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()
+            ->assertDontSee('class="watermark"', false)
+            ->assertSee('Division Chief');
+
+        $this->actingAs($this->outsider)->get(route('procurement.ppmp.print', $ppmp))->assertForbidden();
+    }
 }

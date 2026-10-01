@@ -29,6 +29,9 @@
             </div>
 
             <div class="d-flex flex-wrap gap-2">
+                <a href="{{ route('procurement.ppmp.print', $ppmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-print me-1"></i> Print
+                </a>
                 @if ($canEdit)
                     <button class="btn btn-sm btn-success" id="btn_add_item"><i class="fas fa-plus me-1"></i> Add Project</button>
                     <button class="btn btn-sm btn-primary" id="btn_submit"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>

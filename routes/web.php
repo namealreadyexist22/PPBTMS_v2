@@ -134,6 +134,7 @@ use Illuminate\Support\Facades\Route;
 
             // Details page and its actions ({ppmp} is the PPMP's uuid)
             Route::get('ppmp/{ppmp}', [PpmpController::class, 'show'])->name('ppmp.show');
+            Route::get('ppmp/{ppmp}/print', [PpmpController::class, 'print'])->name('ppmp.print');
             Route::get('ppmp/{ppmp}/items/entry', [PpmpController::class, 'itemEntry'])->name('ppmp.items.entry');
             Route::post('ppmp/{ppmp}/items/store', [PpmpController::class, 'itemStore'])->name('ppmp.items.store');
             Route::delete('ppmp/{ppmp}/items/destroy', [PpmpController::class, 'itemDestroy'])->name('ppmp.items.destroy');
