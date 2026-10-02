@@ -11,7 +11,7 @@ use Illuminate\Support\Str;
 class PpmpItem extends Model
 {
     protected $fillable = [
-        'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id',
+        'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id', 'unit_cost',
         'quantity_size', 'procurement_mode_id', 'pre_proc_conference', 'proc_start', 'proc_end',
         'delivery_period', 'fund_source_id', 'estimated_budget', 'committed_amount',
         'supporting_documents', 'remarks', 'sort_order',
@@ -22,6 +22,7 @@ class PpmpItem extends Model
         return [
             'project_type'        => ProjectType::class,
             'quantity'            => 'decimal:2',
+            'unit_cost'           => 'decimal:2',
             'pre_proc_conference' => 'boolean',
             'proc_start'          => 'date',
             'proc_end'            => 'date',
@@ -41,6 +42,16 @@ class PpmpItem extends Model
     public function availableBudget(): string
     {
         return Money::fromCents(Money::toCents($this->estimated_budget) - Money::toCents($this->committed_amount));
+    }
+
+    /** Quantity x unit cost in centavos, or null when either is missing (lot budgets). */
+    public static function computedBudgetCents($quantity, $unitCost): ?int
+    {
+        if ($quantity === null || $quantity === '' || $unitCost === null || $unitCost === '') {
+            return null;
+        }
+
+        return (int) round(((float) $quantity) * Money::toCents($unitCost));
     }
 
     public function ppmp(): BelongsTo

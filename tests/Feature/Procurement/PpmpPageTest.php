@@ -247,4 +247,39 @@ class PpmpPageTest extends TestCase
             ->assertSee('class="watermark">DRAFT', false)
             ->assertDontSee('(PPMP) NO.');
     }
+
+    public function test_unit_price_times_quantity_is_the_estimated_budget(): void
+    {
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($this->section, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, '27-05012-01', 'ICT Infrastructure Management');
+
+        // Typed budget is ignored when quantity and unit price are given
+        $this->actingAs($this->staff)->postJson(route('procurement.ppmp.items.store', $ppmp),
+            $this->project($pap->id, ['quantity' => 8, 'unit_cost' => '8,000.00', 'estimated_budget' => '1']))->assertOk();
+        $item = $ppmp->items()->sole();
+        $this->assertEquals('8000.00', $item->unit_cost);
+        $this->assertEquals('64000.00', $item->estimated_budget);
+
+        // Changing the quantity recomputes it (centavos stay exact)
+        $this->postJson(route('procurement.ppmp.items.store', $ppmp),
+            $this->project($pap->id, ['id' => $item->id, 'quantity' => 3, 'unit_cost' => '333.33']))->assertOk();
+        $this->assertEquals('999.99', $item->fresh()->estimated_budget);
+
+        // A lot without unit price keeps the typed budget; budget is required then
+        $this->postJson(route('procurement.ppmp.items.store', $ppmp),
+            $this->project($pap->id, ['description' => 'Consultancy', 'quantity' => null, 'unit_cost' => '', 'estimated_budget' => '2,500,000']))->assertOk();
+        $this->assertEquals('2500000.00', $ppmp->items()->where('description', 'Consultancy')->value('estimated_budget'));
+        $this->postJson(route('procurement.ppmp.items.store', $ppmp),
+            $this->project($pap->id, ['quantity' => 2, 'unit_cost' => '', 'estimated_budget' => '']))->assertStatus(422)->assertJsonValidationErrors('estimated_budget');
+
+        $this->get(route('procurement.ppmp.items.entry', [$ppmp, 'id' => $item->id]))->assertOk()->assertSee('value="333.33"', false);
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('@ ₱333.33');
+
+        // Amendments keep the unit price
+        $service->submit($ppmp->fresh(), $this->staff);
+        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, $this->head, $this->oic);
+        $copy = $service->amend($ppmp->fresh(), $this->staff);
+        $this->assertEquals('333.33', $copy->items()->where('description', '!=', 'Consultancy')->value('unit_cost'));
+    }
 }

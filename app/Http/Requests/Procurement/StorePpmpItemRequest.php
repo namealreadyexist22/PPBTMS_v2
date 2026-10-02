@@ -35,9 +35,19 @@ class StorePpmpItemRequest extends FormRequest
             }
         }
 
+        $unitCost = str_replace(',', '', (string) $this->input('unit_cost'));
+        $budget = str_replace(',', '', (string) $this->input('estimated_budget'));
+
+        // Quantity x unit price fills the budget (the service recomputes it too)
+        $cents = \App\Models\Procurement\PpmpItem::computedBudgetCents($this->input('quantity'), $unitCost === '' ? null : $unitCost);
+        if ($cents !== null && is_numeric($unitCost)) {
+            $budget = \App\Support\Money::fromCents($cents);
+        }
+
         $this->merge([
             'pre_proc_conference' => $this->boolean('pre_proc_conference'),
-            'estimated_budget'    => str_replace(',', '', (string) $this->input('estimated_budget')),
+            'unit_cost'           => $unitCost === '' ? null : $unitCost,
+            'estimated_budget'    => $budget,
         ]);
     }
 
@@ -51,6 +61,7 @@ class StorePpmpItemRequest extends FormRequest
             'project_type'         => ['required', Rule::enum(ProjectType::class)],
             'quantity'             => ['nullable', 'numeric', 'min:0'],
             'unit_id'              => ['nullable', 'integer', 'exists:units,id'],
+            'unit_cost'            => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'quantity_size'        => ['nullable', 'string', 'max:2000'],   // specifications
             'procurement_mode_id'  => ['required', 'integer', 'exists:procurement_modes,id'],
             'pre_proc_conference'  => ['boolean'],
@@ -68,6 +79,7 @@ class StorePpmpItemRequest extends FormRequest
     {
         return [
             'ppmp_pap_id'         => 'PAP',
+            'unit_cost'           => 'unit price',
             'quantity_size'       => 'specifications',
             'procurement_mode_id' => 'mode of procurement',
             'fund_source_id'      => 'source of funds',

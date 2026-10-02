@@ -164,6 +164,7 @@
                                 <td style="min-width: 120px;">
                                     @if ($item->quantity !== null)
                                         <span class="text-nowrap">QTY: {{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }} {{ $item->unit?->name }}</span>
+                                        @if ($item->unit_cost !== null)<span class="text-nowrap text-muted">@ ₱{{ number_format((float) $item->unit_cost, 2) }}</span>@endif
                                     @endif
                                     @if ($item->quantity_size)<div class="text-muted" style="white-space: pre-line;">{{ $item->quantity_size }}</div>@endif
                                 </td>

@@ -100,6 +100,7 @@ class PpmpService
     public function addItem(Ppmp $ppmp, array $data): PpmpItem
     {
         $this->assertEditable($ppmp);
+        $data = $this->applyUnitCost($data);
         $this->assertItemData($data);
         $this->assertPapBelongs($ppmp, $data['ppmp_pap_id'] ?? null);
 
@@ -119,6 +120,7 @@ class PpmpService
         $ppmp = $item->ppmp;
         $this->assertEditable($ppmp);
         unset($data['line_uuid'], $data['committed_amount'], $data['ppmp_id']);
+        $data = $this->applyUnitCost($data, $item);
         $this->assertItemData(array_merge($item->only(['proc_start', 'proc_end', 'estimated_budget']), $data));
 
         if (array_key_exists('ppmp_pap_id', $data)) {
@@ -340,6 +342,20 @@ class PpmpService
         if (! $papId || ! $ppmp->paps()->whereKey($papId)->exists()) {
             throw new ProcurementException('Choose the PAP this project belongs to.');
         }
+    }
+
+    /** With both quantity and unit cost, the estimated budget is quantity x unit cost. */
+    protected function applyUnitCost(array $data, ?PpmpItem $item = null): array
+    {
+        $quantity = array_key_exists('quantity', $data) ? $data['quantity'] : $item?->quantity;
+        $unitCost = array_key_exists('unit_cost', $data) ? $data['unit_cost'] : $item?->unit_cost;
+        $cents = PpmpItem::computedBudgetCents($quantity, $unitCost);
+
+        if ($cents !== null) {
+            $data['estimated_budget'] = Money::fromCents($cents);
+        }
+
+        return $data;
     }
 
     protected function assertItemData(array $data): void

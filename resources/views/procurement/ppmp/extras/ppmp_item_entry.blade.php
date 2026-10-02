@@ -68,12 +68,12 @@
                     {{-- 2. Quantity and size --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Quantity and Size (QTY and Specs)</small>
                     <div class="row g-3 mb-3">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label small fw-semibold text-muted mb-1">Quantity</label>
-                            <input type="number" step="0.01" min="0" name="quantity" class="form-control form-control-sm" value="{{ $item?->quantity !== null ? (float) $item->quantity : '' }}">
+                            <input type="number" step="0.01" min="0" name="quantity" class="form-control form-control-sm js-budget-calc" value="{{ $item?->quantity !== null ? (float) $item->quantity : '' }}">
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label small fw-semibold text-muted mb-1">Unit</label>
                             <select name="unit_id" class="form-select form-select-sm">
                                 <option value="">—</option>
@@ -83,7 +83,13 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold text-muted mb-1">Unit Price (PHP)</label>
+                            <input type="text" inputmode="decimal" name="unit_cost" class="form-control form-control-sm text-end js-budget-calc"
+                                value="{{ $item?->unit_cost !== null ? number_format((float) $item->unit_cost, 2, '.', '') : '' }}" placeholder="0.00">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-5">
                             <label class="form-label small fw-semibold text-muted mb-1">Specifications (optional)</label>
                             <textarea name="quantity_size" class="form-control form-control-sm" rows="2" placeholder="e.g. 3.5&quot; HDD, SATA, 7200 RPM">{{ $item->quantity_size ?? '' }}</textarea>
                             <div class="invalid-feedback"></div>
@@ -145,6 +151,7 @@
                             <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end" required
                                 value="{{ $item ? number_format((float) $item->estimated_budget, 2, '.', '') : '' }}" placeholder="0.00">
                             <div class="invalid-feedback"></div>
+                            <div class="form-text" id="budget_formula"></div>
                             @if ($item && (float) $item->committed_amount > 0)
                                 <div class="form-text text-warning">Already charged by PRs: {{ number_format((float) $item->committed_amount, 2) }}. The budget cannot go below this.</div>
                             @endif
@@ -176,3 +183,35 @@
         </div>
     </div>
 </div>
+
+<script>
+    // Estimated budget = quantity x unit price (locked while both are filled; type it for lot budgets)
+    (function () {
+        const form = document.getElementById('form_ppmp_item');
+        const qty = form.querySelector('[name="quantity"]');
+        const price = form.querySelector('[name="unit_cost"]');
+        const budget = form.querySelector('[name="estimated_budget"]');
+        const formula = document.getElementById('budget_formula');
+        const peso = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        function recalc() {
+            const q = parseFloat(qty.value);
+            const p = parseFloat(String(price.value).replace(/,/g, ''));
+
+            if (!isNaN(q) && !isNaN(p) && price.value !== '') {
+                const total = Math.round(q * Math.round(p * 100)) / 100;
+                budget.value = total.toFixed(2);
+                budget.readOnly = true;
+                budget.classList.add('bg-light');
+                formula.textContent = '= ' + q + ' × ₱' + peso(p) + ' = ₱' + peso(total);
+            } else {
+                budget.readOnly = false;
+                budget.classList.remove('bg-light');
+                formula.textContent = 'Enter quantity and unit price to compute, or type the budget (e.g. for a lot).';
+            }
+        }
+
+        form.querySelectorAll('.js-budget-calc').forEach((el) => el.addEventListener('input', recalc));
+        recalc();
+    })();
+</script>
