@@ -133,6 +133,7 @@ class PpmpController extends Controller
             'paps'         => $ppmp->paps,
             'selectedPap'  => $request->integer('pap_id') ?: null,
             'projectTypes' => ProjectType::cases(),
+            'allotments'   => \App\Enums\AllotmentClass::cases(),
             'modes'        => ProcurementMode::active()->orderBy('name')->get(),
             'fundSources'  => FundSource::active()->orderBy('name')->get(),
             'units'        => Unit::active()->orderBy('name')->get(),

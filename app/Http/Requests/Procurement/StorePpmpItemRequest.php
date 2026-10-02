@@ -69,6 +69,7 @@ class StorePpmpItemRequest extends FormRequest
             'proc_end'             => ['required', 'date', 'after_or_equal:proc_start'],
             'delivery_period'      => ['nullable', 'string', 'max:255'],
             'fund_source_id'       => ['required', 'integer', 'exists:fund_sources,id'],
+            'allotment_class'      => ['required', Rule::enum(\App\Enums\AllotmentClass::class)],
             'estimated_budget'     => ['required', 'numeric', 'gt:0', 'max:9999999999999.99'],
             'supporting_documents' => ['nullable', 'string', 'max:1000'],
             'remarks'              => ['nullable', 'string', 'max:1000'],

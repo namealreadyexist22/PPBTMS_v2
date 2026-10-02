@@ -85,8 +85,8 @@
                         </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-semibold text-muted mb-1">Unit Price (PHP)</label>
-                            <input type="text" inputmode="decimal" name="unit_cost" class="form-control form-control-sm text-end js-budget-calc"
-                                value="{{ $item?->unit_cost !== null ? number_format((float) $item->unit_cost, 2, '.', '') : '' }}" placeholder="0.00">
+                            <input type="text" inputmode="decimal" name="unit_cost" class="form-control form-control-sm text-end js-budget-calc js-money"
+                                value="{{ $item?->unit_cost !== null ? number_format((float) $item->unit_cost, 2) : '' }}" placeholder="0.00">
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-5">
@@ -136,7 +136,7 @@
                     {{-- 4. Funding --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Funding</small>
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <label class="form-label small fw-semibold text-muted mb-1">Source of Funds</label>
                             <select name="fund_source_id" class="form-select form-select-sm" required>
                                 <option value="">Choose...</option>
@@ -146,10 +146,19 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted mb-1">Estimated Budget / Authorized Budgetary Allocation (PHP)</label>
-                            <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end" required
-                                value="{{ $item ? number_format((float) $item->estimated_budget, 2, '.', '') : '' }}" placeholder="0.00">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-semibold text-muted mb-1">Allotment Class</label>
+                            <select name="allotment_class" class="form-select form-select-sm" required>
+                                @foreach ($allotments as $allotment)
+                                    <option value="{{ $allotment->value }}" @selected(($item?->allotment_class ?? \App\Enums\AllotmentClass::Mooe) === $allotment)>{{ $allotment->label() }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold text-muted mb-1">Estimated Budget / ABA (PHP)</label>
+                            <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end js-money" required
+                                value="{{ $item ? number_format((float) $item->estimated_budget, 2) : '' }}" placeholder="0.00">
                             <div class="invalid-feedback"></div>
                             <div class="form-text" id="budget_formula"></div>
                             @if ($item && (float) $item->committed_amount > 0)
@@ -185,7 +194,6 @@
 </div>
 
 <script>
-    // Estimated budget = quantity x unit price (locked while both are filled; type it for lot budgets)
     (function () {
         const form = document.getElementById('form_ppmp_item');
         const qty = form.querySelector('[name="quantity"]');
@@ -193,17 +201,48 @@
         const budget = form.querySelector('[name="estimated_budget"]');
         const formula = document.getElementById('budget_formula');
         const peso = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const toNumber = (value) => parseFloat(String(value).replace(/,/g, ''));
 
+        // Money fields: add thousands commas while typing (1234567.5 -> 1,234,567.5), keep the cursor in place
+        function formatMoney(el) {
+            const caret = el.selectionStart;
+            const digitsBeforeCaret = el.value.slice(0, caret).replace(/[^0-9.]/g, '').length;
+
+            let raw = el.value.replace(/[^0-9.]/g, '');
+            const dot = raw.indexOf('.');
+            if (dot !== -1) {
+                raw = raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, '').slice(0, 2);   // one dot, 2 decimals
+            }
+            const [whole, decimals] = raw.split('.');
+            const grouped = (whole || '').replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            el.value = grouped + (decimals !== undefined ? '.' + decimals : '');
+
+            let pos = 0, seen = 0;
+            while (pos < el.value.length && seen < digitsBeforeCaret) {
+                if (/[0-9.]/.test(el.value[pos])) seen++;
+                pos++;
+            }
+            el.setSelectionRange(pos, pos);
+        }
+
+        form.querySelectorAll('.js-money').forEach(function (el) {
+            el.addEventListener('input', function () { if (!el.readOnly) formatMoney(el); });
+            el.addEventListener('blur', function () {   // 1,234 -> 1,234.00
+                if (el.value !== '' && !isNaN(toNumber(el.value))) el.value = peso(toNumber(el.value));
+            });
+        });
+
+        // Estimated budget = quantity x unit price (locked while both are filled; type it for lot budgets)
         function recalc() {
             const q = parseFloat(qty.value);
-            const p = parseFloat(String(price.value).replace(/,/g, ''));
+            const p = toNumber(price.value);
 
             if (!isNaN(q) && !isNaN(p) && price.value !== '') {
                 const total = Math.round(q * Math.round(p * 100)) / 100;
-                budget.value = total.toFixed(2);
+                budget.value = peso(total);
                 budget.readOnly = true;
                 budget.classList.add('bg-light');
-                formula.textContent = '= ' + q + ' × ₱' + peso(p) + ' = ₱' + peso(total);
+                formula.textContent = '= ' + q.toLocaleString('en-PH') + ' × ₱' + peso(p) + ' = ₱' + peso(total);
             } else {
                 budget.readOnly = false;
                 budget.classList.remove('bg-light');

@@ -2,6 +2,7 @@
 
 namespace App\Models\Procurement;
 
+use App\Enums\AllotmentClass;
 use App\Enums\ProjectType;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ class PpmpItem extends Model
     protected $fillable = [
         'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id', 'unit_cost',
         'quantity_size', 'procurement_mode_id', 'pre_proc_conference', 'proc_start', 'proc_end',
-        'delivery_period', 'fund_source_id', 'estimated_budget', 'committed_amount',
+        'delivery_period', 'fund_source_id', 'allotment_class', 'estimated_budget', 'committed_amount',
         'supporting_documents', 'remarks', 'sort_order',
     ];
 
@@ -21,6 +22,7 @@ class PpmpItem extends Model
     {
         return [
             'project_type'        => ProjectType::class,
+            'allotment_class'     => AllotmentClass::class,
             'quantity'            => 'decimal:2',
             'unit_cost'           => 'decimal:2',
             'pre_proc_conference' => 'boolean',

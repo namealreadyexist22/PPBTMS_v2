@@ -178,7 +178,10 @@
                                     @endif
                                 </td>
                                 <td>{{ $item->delivery_period }}</td>
-                                <td class="text-nowrap" title="{{ $item->fundSource->name }}">{{ $item->fundSource->code }}</td>
+                                <td class="text-nowrap" title="{{ $item->fundSource->name }} · {{ $item->allotment_class->label() }}">
+                                    {{ $item->fundSource->code }}
+                                    <span class="badge {{ $item->allotment_class === \App\Enums\AllotmentClass::Co ? 'bg-warning-subtle text-warning-emphasis' : 'bg-light text-dark' }} border">{{ $item->allotment_class->short() }}</span>
+                                </td>
                                 <td class="text-end text-nowrap fw-semibold pe-4">
                                     {{ number_format((float) $item->estimated_budget, 2) }}
                                     @if ((float) $item->committed_amount > 0)

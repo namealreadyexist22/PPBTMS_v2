@@ -65,6 +65,7 @@ class PpmpPageTest extends TestCase
             'quantity_size'       => '3.5" HDD, SATA, 7200 RPM',
             'procurement_mode_id' => ProcurementMode::where('code', 'SVP')->value('id'),
             'fund_source_id'      => FundSource::where('code', 'COB')->value('id'),
+            'allotment_class'     => 'mooe',
             'proc_start'          => '2027-02',
             'proc_end'            => '2027-04',
             'delivery_period'     => 'June 2027',
@@ -281,5 +282,25 @@ class PpmpPageTest extends TestCase
         app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, $this->head, $this->oic);
         $copy = $service->amend($ppmp->fresh(), $this->staff);
         $this->assertEquals('333.33', $copy->items()->where('description', '!=', 'Consultancy')->value('unit_cost'));
+    }
+
+    public function test_allotment_class_is_required_and_shown(): void
+    {
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($this->section, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, '27-05012-02', 'ICT Infrastructure Management');
+
+        $this->actingAs($this->staff)->postJson(route('procurement.ppmp.items.store', $ppmp),
+            $this->project($pap->id, ['allotment_class' => 'xx']))->assertStatus(422)->assertJsonValidationErrors('allotment_class');
+
+        // MOOE and CO projects under the same PAP code; amounts with commas are accepted
+        $this->postJson(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, ['allotment_class' => 'mooe', 'quantity' => null, 'estimated_budget' => '1,250,000.50']))->assertOk();
+        $this->postJson(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, ['allotment_class' => 'co', 'description' => 'Computer Desktop with UPS', 'quantity' => 34, 'unit_cost' => '90,000.00']))->assertOk();
+
+        $this->assertEquals('1250000.50', $ppmp->items()->where('allotment_class', 'mooe')->value('estimated_budget'));
+        $this->assertEquals('3060000.00', $ppmp->items()->where('allotment_class', 'co')->value('estimated_budget'));
+        $this->get(route('procurement.ppmp.items.entry', [$ppmp, 'id' => $ppmp->items()->where('allotment_class', 'co')->value('id')]))
+            ->assertSee('value="90,000.00"', false)->assertSee('value="3,060,000.00"', false)->assertSee('<option value="co" selected', false);
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('>CO</span>', false);
     }
 }
