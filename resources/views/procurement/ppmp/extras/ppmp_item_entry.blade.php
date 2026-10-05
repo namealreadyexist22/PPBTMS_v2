@@ -141,7 +141,7 @@
                             <select name="fund_source_id" class="form-select form-select-sm" required>
                                 <option value="">Choose...</option>
                                 @foreach ($fundSources as $fund)
-                                    <option value="{{ $fund->id }}" @selected(($item->fund_source_id ?? null) == $fund->id)>{{ $fund->name }}</option>
+                                    <option value="{{ $fund->id }}" data-group="{{ $fund->fund_group?->value }}" @selected(($item->fund_source_id ?? null) == $fund->id)>{{ $fund->name }}</option>
                                 @endforeach
                             </select>
                             <div class="invalid-feedback"></div>
@@ -166,6 +166,9 @@
                             @endif
                         </div>
                     </div>
+
+                    {{-- Budget allocation left for this PPMP, before and after this project --}}
+                    <div id="budget_left" class="alert py-2 px-3 small mb-3 d-none"></div>
 
                     {{-- 5. Others --}}
                     <div class="row g-3">
@@ -250,7 +253,38 @@
             }
         }
 
+        // Budget left for this PPMP per fund (COB / SIDA), from the tightest allocation above the office
+        const budgetBase = @json($budgetBase);
+        const fundSelect = form.querySelector('[name="fund_source_id"]');
+        const fundLabels = @json(collect(\App\Enums\FundGroup::cases())->mapWithKeys(fn ($f) => [$f->value => $f->label()]));
+        const leftBox = document.getElementById('budget_left');
+
+        function showBudgetLeft() {
+            const group = fundSelect.selectedOptions[0]?.dataset.group || '';
+            if (!group) { leftBox.classList.add('d-none'); return; }
+
+            const label = fundLabels[group] || group;
+            leftBox.classList.remove('d-none', 'alert-success', 'alert-danger', 'alert-secondary');
+
+            if (!budgetBase[group]) {
+                leftBox.classList.add('alert-secondary');
+                leftBox.innerHTML = '<i class="fas fa-coins me-1"></i> No ' + label + ' budget allocation set for this office yet — not checked.';
+                return;
+            }
+
+            const before = budgetBase[group].left / 100;
+            const amount = toNumber(budget.value) || 0;
+            const after = Math.round((before - amount) * 100) / 100;
+
+            leftBox.classList.add(after < 0 ? 'alert-danger' : 'alert-success');
+            leftBox.innerHTML = '<i class="fas fa-coins me-1"></i> ' + label + ' budget left for this PPMP (' + budgetBase[group].office + '): <strong>₱' + peso(before) + '</strong>'
+                + ' → after this project: <strong>' + (after < 0 ? '−₱' + peso(-after) + ' (over budget; the PPMP cannot be submitted)' : '₱' + peso(after)) + '</strong>';
+        }
+
         form.querySelectorAll('.js-budget-calc').forEach((el) => el.addEventListener('input', recalc));
+        form.querySelectorAll('.js-budget-calc, [name="estimated_budget"]').forEach((el) => el.addEventListener('input', showBudgetLeft));
+        fundSelect.addEventListener('change', showBudgetLeft);
         recalc();
+        showBudgetLeft();
     })();
 </script>

@@ -8,6 +8,7 @@
         ? $ppmp->signatories->where('role', 'returned')->sortByDesc('signed_at')->first()
         : null;
     $budgetOver = $budgetRows->where('over', true)->isNotEmpty();
+    $pesoC = fn ($c) => number_format($c / 100, 2);
 @endphp
 
 <div class="mb-3">
@@ -115,6 +116,53 @@
         @endif
     </div>
 </div>
+
+{{-- Budget allocation: what this PPMP can still use, from its office up to the department --}}
+@if ($budgetRows->isNotEmpty() || $canEdit)
+    <div class="card border-0 shadow-sm mb-3 {{ $budgetOver ? 'border border-danger' : '' }}" style="border-radius: 12px; overflow: hidden;" id="budget_card">
+        <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
+            <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation — FY {{ $ppmp->fiscal_year }}</h6>
+            <div class="d-flex flex-wrap gap-2">
+                @foreach ($budgetLimits as $fundValue => $limit)
+                    @php $left = $limit['available'] - $limit['mine']; @endphp
+                    <span class="badge rounded-pill {{ $left < 0 ? 'bg-danger' : 'bg-success' }} px-3 py-2" style="font-size: .75rem;">
+                        {{ \App\Enums\FundGroup::from($fundValue)->label() }}:
+                        @if ($left < 0) over by ₱{{ $pesoC(-$left) }} @else ₱{{ $pesoC($left) }} left to plan @endif
+                    </span>
+                @endforeach
+            </div>
+        </div>
+        @if ($budgetRows->isEmpty())
+            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $ppmp->office->shortName() }} or the offices above it for FY {{ $ppmp->fiscal_year }}. The PPMP is not checked against a budget until the Budget officer sets one.</div>
+        @else
+            <div class="table-responsive">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead class="table-light"><tr class="text-nowrap"><th class="ps-4">Fund</th><th>Allocation of</th><th class="text-end">Allocated</th><th class="text-end">Used by other offices</th><th class="text-end">This PPMP</th><th class="text-end pe-4">Remaining</th></tr></thead>
+                    <tbody>
+                        @foreach ($budgetRows as $row)
+                            <tr class="{{ $row['over'] ? 'table-danger' : '' }}">
+                                <td class="ps-4 fw-semibold">{{ $row['fund']->label() }}</td>
+                                @if ($row['allocation'])
+                                    <td>{{ $row['allocation']->office->code }} {{ $row['allocation']->office->acronym ?: $row['allocation']->office->name }}</td>
+                                    <td class="text-end">{{ $pesoC($row['amount']) }}</td>
+                                    <td class="text-end">{{ $pesoC($row['others']) }}</td>
+                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                                    <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
+                                @else
+                                    <td class="text-muted">No allocation set</td>
+                                    <td></td><td></td>
+                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                                    <td class="text-muted pe-4 text-end">Not checked</td>
+                                @endif
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            <div class="small text-muted px-4 py-2">Allocated covers CO and MOOE together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget).</div>
+        @endif
+    </div>
+@endif
 
 {{-- Procurement projects, grouped by PAP --}}
 @php $colspan = $canEdit ? 11 : 10; $n = 0; @endphp
@@ -225,38 +273,6 @@
         </div>
     </div>
 </div>
-
-{{-- Budget allocation: CO first, then MOOE --}}
-@php $pesoC = fn ($c) => number_format($c / 100, 2); @endphp
-@if ($budgetRows->isNotEmpty())
-    <div class="card border-0 shadow-sm mb-3 {{ $budgetOver ? 'border border-danger' : '' }}" style="border-radius: 12px; overflow: hidden;" id="budget_card">
-        <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
-            <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation</h6>
-        </div>
-        <table class="table table-sm align-middle small mb-0">
-            <thead class="table-light"><tr><th class="ps-4">Fund</th><th>Class</th><th>Allocation of</th><th class="text-end">This PPMP</th><th class="text-end">Allocated</th><th class="text-end">Used (incl. this)</th><th class="text-end pe-4">Remaining</th></tr></thead>
-            <tbody>
-                @foreach ($budgetRows as $row)
-                    <tr class="{{ $row['over'] ? 'table-danger' : '' }}">
-                        <td class="ps-4">{{ $row['fund']->label() }}</td>
-                        <td class="fw-semibold">{{ $row['class']->short() }}</td>
-                        @if ($row['allocation'])
-                            <td>{{ $row['allocation']->office->code }} {{ $row['allocation']->office->acronym }}</td>
-                            <td class="text-end">{{ $pesoC($row['mine']) }}</td>
-                            <td class="text-end">{{ $pesoC($row['amount']) }}</td>
-                            <td class="text-end">{{ $pesoC($row['used']) }}</td>
-                            <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
-                        @else
-                            <td class="text-muted">No allocation set</td>
-                            <td class="text-end">{{ $pesoC($row['mine']) }}</td>
-                            <td colspan="3" class="text-muted pe-4">Not checked until the Budget officer sets this office's {{ $row['fund']->label() }} budget.</td>
-                        @endif
-                    </tr>
-                @endforeach
-            </tbody>
-        </table>
-    </div>
-@endif
 
 {{-- Signatories / history, opened from the History button --}}
 <div class="modal fade" id="PPMP_HISTORY_MODAL" tabindex="-1" aria-hidden="true">

@@ -6,7 +6,7 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <div>
         <h5 class="fw-bold mb-0"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation</h5>
-        <div class="text-muted small">Approved budget per office (MOOE and CO). An office's budget covers everything under it; offices below can be given their own share. PPMPs over budget cannot be submitted.</div>
+        <div class="text-muted small">Approved budget per office (CO and MOOE together). An office's budget covers everything under it; offices below can be given their own share. PPMPs over budget cannot be submitted.</div>
     </div>
     <form method="GET" class="d-flex align-items-center gap-2">
         <input type="hidden" name="fund" value="{{ $fund->value }}">
@@ -30,14 +30,9 @@
         <table class="table table-sm table-hover align-middle small mb-0">
             <thead class="table-light">
                 <tr class="text-nowrap">
-                    <th class="ps-4" rowspan="2">Office</th>
-                    <th class="text-center border-start" colspan="3">CO</th>
-                    <th class="text-center border-start" colspan="3">MOOE</th>
-                    <th rowspan="2"></th>
-                </tr>
-                <tr class="text-nowrap">
-                    <th class="text-end border-start">Allocated</th><th class="text-end">Used</th><th class="text-end">Remaining</th>
-                    <th class="text-end border-start">Allocated</th><th class="text-end">Used</th><th class="text-end">Remaining</th>
+                    <th class="ps-4">Office</th>
+                    <th class="text-end">Allocated</th><th class="text-end">Used</th><th class="text-end">Remaining</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -48,23 +43,20 @@
                             @if ($row['depth'])<i class="fas fa-level-up-alt fa-rotate-90 text-muted me-1"></i>@endif
                             <span class="fw-semibold">{{ $a->office->code }}</span> {{ $a->office->name }}
                         </td>
-                        @foreach (['co', 'mooe'] as $class)
-                            @php $c = $row[$class]; @endphp
-                            <td class="text-end border-start">
-                                {{ $peso($c['amount']) }}
-                                @if ($c['given'])<div class="text-muted" title="Given to offices below">↳ {{ $peso($c['given']) }}</div>@endif
-                            </td>
-                            <td class="text-end">{{ $peso($c['used']) }}</td>
-                            <td class="text-end fw-semibold {{ $c['remaining'] < 0 ? 'text-danger' : 'text-success' }}">{{ $peso($c['remaining']) }}</td>
-                        @endforeach
+                        <td class="text-end">
+                            {{ $peso($row['amount']) }}
+                            @if ($row['given'])<div class="text-muted text-nowrap" title="Given to offices below">↳ {{ $peso($row['given']) }}</div>@endif
+                        </td>
+                        <td class="text-end">{{ $peso($row['used']) }}</td>
+                        <td class="text-end fw-semibold {{ $row['remaining'] < 0 ? 'text-danger' : 'text-success' }}">{{ $peso($row['remaining']) }}</td>
                         <td class="pe-4 text-end text-nowrap">
                             <button class="btn btn-sm btn-link p-0 me-2 btn-edit" title="Edit / realign"
-                                data-office="{{ $a->office_id }}" data-mooe="{{ number_format((float) $a->mooe_amount, 2) }}" data-co="{{ number_format((float) $a->co_amount, 2) }}"><i class="fas fa-edit"></i></button>
+                                data-office="{{ $a->office_id }}" data-amount="{{ number_format((float) $a->amount, 2) }}"><i class="fas fa-edit"></i></button>
                             <button class="btn btn-sm btn-link p-0 btn-history" data-bs-toggle="modal" data-bs-target="#history-{{ $a->id }}" title="History"><i class="fas fa-history"></i></button>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center text-muted py-5"><i class="fas fa-coins fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} budget set for FY {{ $fiscalYear }} yet.</td></tr>
+                    <tr><td colspan="5" class="text-center text-muted py-5"><i class="fas fa-coins fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} budget set for FY {{ $fiscalYear }} yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -81,14 +73,13 @@
                 <div class="modal-header bg-light py-3"><h5 class="modal-title fw-bold"><i class="fas fa-history me-2"></i>{{ $a->office->code }} — {{ $fund->label() }} FY {{ $fiscalYear }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body p-0">
                     <table class="table table-sm small mb-0">
-                        <thead class="table-light"><tr><th class="ps-3">When</th><th>By</th><th class="text-end">CO</th><th class="text-end">MOOE</th><th class="pe-3">Reason</th></tr></thead>
+                        <thead class="table-light"><tr><th class="ps-3">When</th><th>By</th><th class="text-end">Budget</th><th class="pe-3">Reason</th></tr></thead>
                         <tbody>
                             @foreach ($a->history as $h)
                                 <tr>
                                     <td class="ps-3 text-nowrap">{{ $h->created_at->format('M d, Y h:i A') }}</td>
                                     <td>{{ $h->user?->fullname }}</td>
-                                    <td class="text-end text-nowrap">@if ($h->old_co !== null){{ number_format((float) $h->old_co, 2) }} → @endif{{ number_format((float) $h->new_co, 2) }}</td>
-                                    <td class="text-end text-nowrap">@if ($h->old_mooe !== null){{ number_format((float) $h->old_mooe, 2) }} → @endif{{ number_format((float) $h->new_mooe, 2) }}</td>
+                                    <td class="text-end text-nowrap">@if ($h->old_amount !== null){{ number_format((float) $h->old_amount, 2) }} → @endif{{ number_format((float) $h->new_amount, 2) }}</td>
                                     <td class="pe-3">{{ $h->reason ?? 'Initial allocation' }}</td>
                                 </tr>
                             @endforeach
@@ -115,17 +106,10 @@
                     </select>
                     <div class="invalid-feedback"></div>
                 </div>
-                <div class="row g-3 mb-3">
-                    <div class="col-6">
-                        <label class="form-label fw-semibold text-muted mb-1">CO (PHP)</label>
-                        <input type="text" inputmode="decimal" name="co_amount" class="form-control form-control-sm text-end js-money" placeholder="0.00">
-                        <div class="invalid-feedback"></div>
-                    </div>
-                    <div class="col-6">
-                        <label class="form-label fw-semibold text-muted mb-1">MOOE (PHP)</label>
-                        <input type="text" inputmode="decimal" name="mooe_amount" class="form-control form-control-sm text-end js-money" placeholder="0.00">
-                        <div class="invalid-feedback"></div>
-                    </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold text-muted mb-1">Approved Budget (PHP) <span class="text-muted fw-normal">— CO and MOOE together</span></label>
+                    <input type="text" inputmode="decimal" name="amount" class="form-control form-control-sm text-end js-money" placeholder="0.00">
+                    <div class="invalid-feedback"></div>
                 </div>
                 <div class="mb-0">
                     <label class="form-label fw-semibold text-muted mb-1">Reason <span class="text-muted fw-normal">(required when changing; e.g. realignment)</span></label>
@@ -151,8 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function open(data) {
         form.find('.is-invalid').removeClass('is-invalid');
         form.find('[name=office_id]').val(data.office || form.find('[name=office_id] option:first').val()).prop('disabled', !!data.office);
-        form.find('[name=co_amount]').val(data.co || '');
-        form.find('[name=mooe_amount]').val(data.mooe || '');
+        form.find('[name=amount]').val(data.amount || '');
         form.find('[name=reason]').val('');
         modal().show();
     }

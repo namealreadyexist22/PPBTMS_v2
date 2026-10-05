@@ -2,7 +2,6 @@
 
 namespace App\Services\Procurement;
 
-use App\Enums\AllotmentClass;
 use App\Enums\FundGroup;
 use App\Enums\PpmpStatus;
 use App\Exceptions\ProcurementException;
@@ -16,7 +15,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Budget allocations per office, year and fund (COB / SIDA), in MOOE and CO.
+ * Budget allocations per office, year and fund (COB / SIDA): one amount for CO and MOOE together.
  *
  * An allocation caps the PPMPs of its office and every office under it. Offices below
  * can get their own allocation out of it (a division's split), so a PPMP is checked
@@ -31,27 +30,22 @@ class BudgetAllocationService
         return BudgetAllocation::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->first();
     }
 
-    public function amount(BudgetAllocation $allocation, AllotmentClass $class): string
-    {
-        return $class === AllotmentClass::Co ? (string) $allocation->co_amount : (string) $allocation->mooe_amount;
-    }
-
-    /** Centavos used under an allocation's office for one class, optionally with $candidate replacing its office's version. */
-    public function usedCents(BudgetAllocation $allocation, AllotmentClass $class, ?Ppmp $candidate = null): int
+    /** Centavos used under an allocation's office, optionally with $candidate replacing its office's version. */
+    public function usedCents(BudgetAllocation $allocation, ?Ppmp $candidate = null): int
     {
         $officeIds = Office::withDescendantIds([$allocation->office_id])->all();
         $ppmpIds = $this->countedPpmpIds($allocation->fiscal_year, $officeIds, $candidate);
 
         return PpmpItem::whereIn('ppmp_id', $ppmpIds)
-            ->where('allotment_class', $class)
             ->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
             ->get(['estimated_budget'])
             ->sum(fn ($item) => Money::toCents($item->estimated_budget));
     }
 
     /**
-     * Budget rows for a PPMP's page and submit check: every allocation from its office up,
-     * for each fund it touches or that is allocated, CO first then MOOE.
+     * Budget rows for a PPMP: every allocation from its office up, per fund it touches or
+     * that is allocated. 'others' = used by the other offices under that allocation,
+     * 'available' = what this PPMP can use in total there (allocation - others).
      */
     public function checkPpmp(Ppmp $ppmp): Collection
     {
@@ -60,39 +54,54 @@ class BudgetAllocationService
 
         $funds = $ppmp->items->map(fn ($item) => $item->fundSource->fund_group ?? FundGroup::Regular)
             ->merge(BudgetAllocation::whereIn('office_id', $chain->pluck('id'))->where('fiscal_year', $ppmp->fiscal_year)->pluck('fund_group'))
-            ->unique(fn (FundGroup $fund) => $fund->value);
+            ->unique(fn (FundGroup $fund) => $fund->value)
+            ->sortBy(fn (FundGroup $fund) => array_search($fund, FundGroup::cases(), true));
 
         $rows = collect();
 
         foreach ($funds as $fund) {
+            $mine = $ppmp->items->filter(fn ($i) => ($i->fundSource->fund_group ?? FundGroup::Regular) === $fund)
+                ->sum(fn ($i) => Money::toCents($i->estimated_budget));
+
             $allocations = BudgetAllocation::with('office')->whereIn('office_id', $chain->pluck('id'))
                 ->where('fiscal_year', $ppmp->fiscal_year)->where('fund_group', $fund)->get()
                 ->sortBy(fn ($a) => $chain->search(fn ($o) => $o->id === $a->office_id));
 
-            foreach ([AllotmentClass::Co, AllotmentClass::Mooe] as $class) {
-                $mine = $ppmp->items->filter(fn ($i) => $i->allotment_class === $class && ($i->fundSource->fund_group ?? FundGroup::Regular) === $fund)
-                    ->sum(fn ($i) => Money::toCents($i->estimated_budget));
+            if ($allocations->isEmpty()) {
+                $rows->push(['fund' => $fund, 'allocation' => null, 'mine' => $mine, 'amount' => null, 'others' => null,
+                             'used' => null, 'available' => null, 'remaining' => null, 'over' => false]);
+                continue;
+            }
 
-                if ($allocations->isEmpty()) {
-                    if ($mine > 0) {
-                        $rows->push(['fund' => $fund, 'class' => $class, 'allocation' => null, 'mine' => $mine, 'amount' => null, 'used' => null, 'remaining' => null, 'over' => false]);
-                    }
-                    continue;
-                }
+            foreach ($allocations as $allocation) {
+                $amount = Money::toCents((string) $allocation->amount);
+                $used = $this->usedCents($allocation, $ppmp);
 
-                foreach ($allocations as $allocation) {
-                    $amount = Money::toCents($this->amount($allocation, $class));
-                    $used = $this->usedCents($allocation, $class, $ppmp);
-
-                    $rows->push([
-                        'fund' => $fund, 'class' => $class, 'allocation' => $allocation, 'mine' => $mine,
-                        'amount' => $amount, 'used' => $used, 'remaining' => $amount - $used, 'over' => $used > $amount,
-                    ]);
-                }
+                $rows->push([
+                    'fund' => $fund, 'allocation' => $allocation, 'mine' => $mine, 'amount' => $amount,
+                    'others' => $used - $mine, 'used' => $used, 'available' => $amount - ($used - $mine),
+                    'remaining' => $amount - $used, 'over' => $used > $amount,
+                ]);
             }
         }
 
         return $rows;
+    }
+
+    /**
+     * Per fund: the most this PPMP can total (the tightest allocation above it), what it has now,
+     * and which office's allocation is the tightest. Funds without an allocation are left out.
+     *
+     * @return array<string, array{available:int, mine:int, office:Office}>
+     */
+    public function limits(Ppmp $ppmp, ?Collection $rows = null): array
+    {
+        return ($rows ?? $this->checkPpmp($ppmp))->whereNotNull('allocation')->groupBy(fn ($r) => $r['fund']->value)
+            ->map(function ($group) {
+                $tightest = $group->sortBy('available')->first();
+
+                return ['available' => $tightest['available'], 'mine' => $tightest['mine'], 'office' => $tightest['allocation']->office];
+            })->all();
     }
 
     /** Block submitting a PPMP that would go over any allocation above it. */
@@ -101,8 +110,8 @@ class BudgetAllocationService
         $over = $this->checkPpmp($ppmp)->where('over', true);
 
         if ($over->isNotEmpty()) {
-            $lines = $over->map(fn ($r) => sprintf('%s %s of %s: ₱%s used of ₱%s (over by ₱%s)',
-                $r['fund']->label(), $r['class']->short(), $r['allocation']->office->shortName(),
+            $lines = $over->map(fn ($r) => sprintf('%s budget of %s: ₱%s used of ₱%s (over by ₱%s)',
+                $r['fund']->label(), $r['allocation']->office->shortName(),
                 Money::format(Money::fromCents($r['used'])), Money::format(Money::fromCents($r['amount'])),
                 Money::format(Money::fromCents($r['used'] - $r['amount']))));
 
@@ -115,7 +124,7 @@ class BudgetAllocationService
      * this one cannot exceed what is left of the allocation above it, and it cannot drop
      * below what submitted / approved PPMPs already use.
      */
-    public function save(Office $office, int $fiscalYear, FundGroup $fund, string $mooe, string $co, User $user, ?string $reason = null): BudgetAllocation
+    public function save(Office $office, int $fiscalYear, FundGroup $fund, string $amount, User $user, ?string $reason = null): BudgetAllocation
     {
         $existing = $this->find($office, $fiscalYear, $fund);
 
@@ -123,46 +132,35 @@ class BudgetAllocationService
             throw new ProcurementException('Please give the reason for changing this allocation (e.g. realignment).');
         }
 
-        $new = [AllotmentClass::Mooe->value => Money::toCents($mooe), AllotmentClass::Co->value => Money::toCents($co)];
+        $new = Money::toCents($amount);
 
-        return DB::transaction(function () use ($office, $fiscalYear, $fund, $mooe, $co, $user, $reason, $existing, $new) {
-            $parent = $this->parentAllocation($office, $fiscalYear, $fund);
+        return DB::transaction(function () use ($office, $fiscalYear, $fund, $user, $reason, $existing, $new) {
+            $children = $this->childAllocations($office, $fiscalYear, $fund)->sum(fn ($a) => Money::toCents((string) $a->amount));
 
-            foreach ([AllotmentClass::Mooe, AllotmentClass::Co] as $class) {
-                $children = $this->childAllocations($office, $fiscalYear, $fund)
-                    ->sum(fn ($a) => Money::toCents($this->amount($a, $class)));
+            if ($children > $new) {
+                throw new ProcurementException("The budget cannot be lower than what the offices under {$office->shortName()} were given (₱" . Money::format(Money::fromCents($children)) . ').');
+            }
 
-                if ($children > $new[$class->value]) {
-                    throw new ProcurementException("{$class->short()} cannot be lower than what the offices under {$office->shortName()} were given (₱" . Money::format(Money::fromCents($children)) . ').');
-                }
+            if ($parent = $this->parentAllocation($office, $fiscalYear, $fund)) {
+                $siblings = $this->childAllocations($parent->office, $fiscalYear, $fund)
+                    ->reject(fn ($a) => $a->office_id === $office->id)
+                    ->sum(fn ($a) => Money::toCents((string) $a->amount));
+                $room = Money::toCents((string) $parent->amount) - $siblings;
 
-                if ($parent) {
-                    $siblings = $this->childAllocations($parent->office, $fiscalYear, $fund)
-                        ->reject(fn ($a) => $a->office_id === $office->id)
-                        ->sum(fn ($a) => Money::toCents($this->amount($a, $class)));
-                    $room = Money::toCents($this->amount($parent, $class)) - $siblings;
-
-                    if ($new[$class->value] > $room) {
-                        throw new ProcurementException("{$class->short()} is more than what is left of {$parent->office->shortName()}'s allocation (₱" . Money::format(Money::fromCents(max($room, 0))) . ').');
-                    }
-                }
-
-                if ($existing) {
-                    $used = $this->usedCents($existing, $class);
-                    if ($new[$class->value] < $used) {
-                        throw new ProcurementException("{$class->short()} cannot go below what submitted / approved PPMPs already use (₱" . Money::format(Money::fromCents($used)) . '). Amend those PPMPs first.');
-                    }
+                if ($new > $room) {
+                    throw new ProcurementException("The budget is more than what is left of {$parent->office->shortName()}'s allocation (₱" . Money::format(Money::fromCents(max($room, 0))) . ').');
                 }
             }
 
-            $allocation = $existing ?? new BudgetAllocation(['fiscal_year' => $fiscalYear, 'office_id' => $office->id, 'fund_group' => $fund, 'created_by' => $user->id]);
-            $old = $existing ? [$existing->mooe_amount, $existing->co_amount] : [null, null];
+            if ($existing && $new < ($used = $this->usedCents($existing))) {
+                throw new ProcurementException('The budget cannot go below what submitted / approved PPMPs already use (₱' . Money::format(Money::fromCents($used)) . '). Amend those PPMPs first.');
+            }
 
-            $allocation->fill(['mooe_amount' => Money::fromCents($new['mooe']), 'co_amount' => Money::fromCents($new['co']), 'updated_by' => $user->id])->save();
-            $allocation->history()->create([
-                'user_id' => $user->id, 'old_mooe' => $old[0], 'old_co' => $old[1],
-                'new_mooe' => $allocation->mooe_amount, 'new_co' => $allocation->co_amount, 'reason' => $reason,
-            ]);
+            $allocation = $existing ?? new BudgetAllocation(['fiscal_year' => $fiscalYear, 'office_id' => $office->id, 'fund_group' => $fund, 'created_by' => $user->id]);
+            $old = $existing?->amount;
+
+            $allocation->fill(['amount' => Money::fromCents($new), 'updated_by' => $user->id])->save();
+            $allocation->history()->create(['user_id' => $user->id, 'old_amount' => $old, 'new_amount' => $allocation->amount, 'reason' => $reason]);
 
             return $allocation;
         });

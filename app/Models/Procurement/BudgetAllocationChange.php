@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BudgetAllocationChange extends Model
 {
-    protected $fillable = ['budget_allocation_id', 'user_id', 'old_mooe', 'old_co', 'new_mooe', 'new_co', 'reason'];
+    protected $fillable = ['budget_allocation_id', 'user_id', 'old_amount', 'new_amount', 'reason'];
 
     protected function casts(): array
     {
-        return ['old_mooe' => 'decimal:2', 'old_co' => 'decimal:2', 'new_mooe' => 'decimal:2', 'new_co' => 'decimal:2'];
+        return ['old_amount' => 'decimal:2', 'new_amount' => 'decimal:2'];
     }
 
     public function user(): BelongsTo

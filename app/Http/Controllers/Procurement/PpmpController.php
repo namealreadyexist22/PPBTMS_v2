@@ -16,6 +16,7 @@ use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\ProcurementMode;
 use App\Models\Procurement\Unit;
+use App\Services\Procurement\BudgetAllocationService;
 use App\Services\Procurement\PpmpService;
 use Closure;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -93,8 +94,9 @@ class PpmpController extends Controller
                             ->get(['uuid', 'ppmp_no', 'version', 'status']),
             'approver'   => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
             'division'   => $ppmp->office->consolidatingOffice(),
-            // Budget allocations from this office up (CO first, then MOOE)
-            'budgetRows' => app(\App\Services\Procurement\BudgetAllocationService::class)->checkPpmp($ppmp),
+            // Budget allocations from this office up, and what is left to plan per fund
+            'budgetRows'   => $budgetRows = app(BudgetAllocationService::class)->checkPpmp($ppmp),
+            'budgetLimits' => app(BudgetAllocationService::class)->limits($ppmp, $budgetRows),
         ]);
     }
 
@@ -145,6 +147,7 @@ class PpmpController extends Controller
             'fundSources'  => $activeOr(FundSource::class, $item?->fund_source_id),
             'units'        => $activeOr(Unit::class, $item?->unit_id),
             'catalog'      => Item::active()->orderBy('name')->get(),
+            'budgetBase'   => $this->budgetBase($ppmp, $item),
         ]);
     }
 
@@ -282,6 +285,21 @@ class PpmpController extends Controller
     }
 
     /** Run a service call; business-rule errors become a 422 message for the user. */
+    /**
+     * Per fund (COB / SIDA): centavos left for this PPMP before the project being edited,
+     * i.e. the tightest allocation minus the rest of the PPMP. No key = no allocation.
+     */
+    protected function budgetBase(Ppmp $ppmp, ?\App\Models\Procurement\PpmpItem $item): array
+    {
+        $itemFund = $item?->fundSource?->fund_group?->value;
+
+        return collect(app(BudgetAllocationService::class)->limits($ppmp))
+            ->map(fn ($limit, $fund) => [
+                'left'   => $limit['available'] - $limit['mine'] + ($fund === $itemFund ? \App\Support\Money::toCents($item->estimated_budget) : 0),
+                'office' => $limit['office']->code . ' ' . ($limit['office']->acronym ?: $limit['office']->name),
+            ])->all();
+    }
+
     protected function attempt(Closure $action): JsonResponse
     {
         try {

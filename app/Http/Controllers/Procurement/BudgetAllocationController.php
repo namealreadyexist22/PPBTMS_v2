@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Procurement;
 
-use App\Enums\AllotmentClass;
 use App\Enums\FundGroup;
 use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
@@ -15,7 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
-/** Budget officer's page: approved budget per office, year and fund (COB / SIDA), in MOOE and CO. */
+/** Budget officer's page: approved budget per office, year and fund (COB / SIDA), CO and MOOE together. */
 class BudgetAllocationController extends Controller
 {
     public function __construct(
@@ -32,18 +31,16 @@ class BudgetAllocationController extends Controller
             ->sortBy(fn ($a) => $a->office->code)
             ->map(function (BudgetAllocation $a) use ($fiscalYear, $fund) {
                 $children = $this->budget->childAllocations($a->office, $fiscalYear, $fund);
-                $row = ['allocation' => $a, 'depth' => $this->depth($a, $fiscalYear, $fund)];
-
-                foreach ([AllotmentClass::Co, AllotmentClass::Mooe] as $class) {
-                    $amount = Money::toCents($this->budget->amount($a, $class));
-                    $used = $this->budget->usedCents($a, $class);
-                    $row[$class->value] = [
-                        'amount'    => $amount,
-                        'given'     => $children->sum(fn ($c) => Money::toCents($this->budget->amount($c, $class))),
-                        'used'      => $used,
-                        'remaining' => $amount - $used,
-                    ];
-                }
+                $amount = Money::toCents((string) $a->amount);
+                $used = $this->budget->usedCents($a);
+                $row = [
+                    'allocation' => $a,
+                    'depth'      => $this->depth($a, $fiscalYear, $fund),
+                    'amount'     => $amount,
+                    'given'      => $children->sum(fn ($c) => Money::toCents((string) $c->amount)),
+                    'used'       => $used,
+                    'remaining'  => $amount - $used,
+                ];
 
                 return $row;
             })->values();
@@ -59,18 +56,15 @@ class BudgetAllocationController extends Controller
 
     public function store(Request $request)
     {
-        foreach (['mooe_amount', 'co_amount'] as $field) {
-            $request->merge([$field => str_replace(',', '', (string) $request->input($field))]);
-        }
+        $request->merge(['amount' => str_replace(',', '', (string) $request->input('amount'))]);
 
         $validator = Validator::make($request->all(), [
             'office_id'   => ['required', 'integer', 'exists:offices,id'],
             'fiscal_year' => ['required', 'integer', 'between:2000,2100'],
             'fund_group'  => ['required', Rule::enum(FundGroup::class)],
-            'mooe_amount' => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
-            'co_amount'   => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
+            'amount'      => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
             'reason'      => ['nullable', 'string', 'max:1000'],
-        ], [], ['mooe_amount' => 'MOOE', 'co_amount' => 'CO', 'office_id' => 'office']);
+        ], [], ['amount' => 'budget', 'office_id' => 'office']);
 
         if ($validator->fails()) {
             throw new HttpResponseException(response()->json(['status' => 'error', 'errors' => $validator->errors()], 422));
@@ -81,7 +75,7 @@ class BudgetAllocationController extends Controller
         try {
             $allocation = $this->budget->save(
                 Office::findOrFail($data['office_id']), (int) $data['fiscal_year'], FundGroup::from($data['fund_group']),
-                $data['mooe_amount'], $data['co_amount'], $request->user(), $data['reason'] ?? null,
+                $data['amount'], $request->user(), $data['reason'] ?? null,
             );
 
             activity()->causedBy($request->user())->performedOn($allocation)
