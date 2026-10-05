@@ -133,12 +133,15 @@ class AppController extends Controller
     {
         $this->authorizeManage($request, $app->region);
 
+        $line = $app->items()->with('ppmpItems.ppmp.office')->findOrFail($request->integer('id'));
+
+        // Active entries, plus the one already on the line even if it was deactivated since
         return view('procurement.app.extras.app_line_entry', [
             'modalName'   => 'APP_LINE_MODAL',
             'app'         => $app,
-            'line'        => $app->items()->with('ppmpItems.ppmp.office')->findOrFail($request->integer('id')),
-            'modes'       => ProcurementMode::active()->orderBy('name')->get(),
-            'fundSources' => FundSource::orderBy('name')->get(),
+            'line'        => $line,
+            'modes'       => ProcurementMode::where('is_active', true)->orWhereKey($line->procurement_mode_id)->orderBy('name')->get(),
+            'fundSources' => FundSource::where('is_active', true)->orWhereKey($line->fund_source_id)->orderBy('name')->get(),
         ]);
     }
 

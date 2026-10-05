@@ -125,18 +125,23 @@ class PpmpController extends Controller
     public function itemEntry(Request $request, Ppmp $ppmp)
     {
         $this->authorizeEdit($request, $ppmp);
+        $item = $request->filled('id') ? $ppmp->items()->findOrFail($request->id) : null;
+
+        // Active lookups, plus the ones already on the project even if deactivated since
+        $activeOr = fn (string $model, ?int $current) => $model::where('is_active', true)
+            ->when($current, fn ($q) => $q->orWhereKey($current))->orderBy('name')->get();
 
         return view('procurement.ppmp.extras.ppmp_item_entry', [
             'modalName'    => 'PPMP_ITEM_MODAL',
             'ppmp'         => $ppmp,
-            'item'         => $request->filled('id') ? $ppmp->items()->findOrFail($request->id) : null,
+            'item'         => $item,
             'paps'         => $ppmp->paps,
             'selectedPap'  => $request->integer('pap_id') ?: null,
             'projectTypes' => ProjectType::cases(),
             'allotments'   => \App\Enums\AllotmentClass::cases(),
-            'modes'        => ProcurementMode::active()->orderBy('name')->get(),
-            'fundSources'  => FundSource::active()->orderBy('name')->get(),
-            'units'        => Unit::active()->orderBy('name')->get(),
+            'modes'        => $activeOr(ProcurementMode::class, $item?->procurement_mode_id),
+            'fundSources'  => $activeOr(FundSource::class, $item?->fund_source_id),
+            'units'        => $activeOr(Unit::class, $item?->unit_id),
             'catalog'      => Item::active()->orderBy('name')->get(),
         ]);
     }

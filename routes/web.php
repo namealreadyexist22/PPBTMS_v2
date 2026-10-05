@@ -2,6 +2,7 @@
 
 use App\Core\Http\Controllers\AvatarController;
 use App\Core\Http\Controllers\LogController;
+use App\Core\Http\Controllers\LookupController;
 use App\Core\Http\Controllers\MenuController;
 use App\Core\Http\Controllers\NotificationController;
 use App\Core\Http\Controllers\OfficeController;
@@ -76,6 +77,12 @@ use Illuminate\Support\Facades\Route;
         Route::middleware('perm:manage access')->group(function () {
             Route::get('access', [UserAccessController::class, 'index'])->name('access.index');
             Route::put('users/{user}/access', [UserAccessController::class, 'update'])->name('access.update');
+        });
+
+        Route::middleware('perm:manage lookups')->group(function () {
+            Route::get('lookups', [LookupController::class, 'index'])->name('lookups.index');
+            Route::post('lookups/store', [LookupController::class, 'store'])->name('lookups.store');
+            Route::delete('lookups/destroy', [LookupController::class, 'destroy'])->name('lookups.destroy');
         });
 
         Route::middleware('perm:manage offices')->group(function () {

@@ -9,7 +9,8 @@ use App\Models\Procurement\Unit;
 use Illuminate\Database\Seeder;
 
 /**
- * Starter lookup values. Safe to re-run; edit names/codes to match your office.
+ * Starter lookup values. Safe to re-run: only missing codes are added. Manage them
+ * afterwards in Settings > Procurement Lookups.
  */
 class ProcurementLookupSeeder extends Seeder
 {
@@ -30,12 +31,12 @@ class ProcurementLookupSeeder extends Seeder
             'PS'   => 'Procurement Service (PS-DBM)',
         ]);
 
-        // Exclusive: fund sources not listed here are deactivated (hidden from
-        // dropdowns, kept for PPMP lines that already use them).
+        // Starter fund sources; add more (e.g. GAA 2017 - Continuing Appropriation)
+        // in Settings > Procurement Lookups. Re-seeding never disables those.
         $this->seed(FundSource::class, [
             'COB'  => 'Corporate Operating Budget',
             'SIDA' => 'Sugar Industry Development Act',
-        ], exclusive: true);
+        ]);
 
         $this->seed(Unit::class, [
             'pc'    => 'piece',
@@ -61,15 +62,11 @@ class ProcurementLookupSeeder extends Seeder
         ]);
     }
 
-    protected function seed(string $model, array $rows, bool $exclusive = false): void
+    /** Adds missing codes only; names and active flags edited in Settings are left alone. */
+    protected function seed(string $model, array $rows): void
     {
         foreach ($rows as $code => $name) {
-            // Exclusive lists are authoritative, so listed rows are (re)activated too
-            $model::updateOrCreate(['code' => $code], $exclusive ? ['name' => $name, 'is_active' => true] : ['name' => $name]);
-        }
-
-        if ($exclusive) {
-            $model::whereNotIn('code', array_keys($rows))->update(['is_active' => false]);
+            $model::firstOrCreate(['code' => $code], ['name' => $name]);
         }
     }
 }

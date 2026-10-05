@@ -55,6 +55,11 @@ class MenuSeeder extends Seeder
             ['icon' => 'fas fa-building', 'route' => 'core.offices.index', 'order' => 8]
         );
 
+        Menu::updateOrCreate(
+            ['name' => 'Procurement Lookups', 'parent_id' => $settings->id],
+            ['nav_name' => 'Procurement Lookups', 'icon' => 'fas fa-list-alt', 'route' => 'core.lookups.index', 'order' => 9]
+        );
+
         $procurement = Menu::updateOrCreate(
             ['name' => 'Procurement', 'parent_id' => null],
             ['icon' => 'fas fa-shopping-cart', 'order' => 10]

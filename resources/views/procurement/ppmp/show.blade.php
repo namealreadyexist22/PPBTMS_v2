@@ -32,6 +32,9 @@
                 <a href="{{ route('procurement.ppmp.print', $ppmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
                     <i class="fas fa-print me-1"></i> Print
                 </a>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#PPMP_HISTORY_MODAL">
+                    <i class="fas fa-history me-1"></i> History <span class="badge bg-secondary ms-1">{{ $ppmp->signatories->count() }}</span>
+                </button>
                 @if ($canEdit)
                     <button class="btn btn-sm btn-success" id="btn_add_pap"><i class="fas fa-folder-plus me-1"></i> Add PAP</button>
                     <button class="btn btn-sm btn-primary" id="btn_submit"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
@@ -215,22 +218,32 @@
     </div>
 </div>
 
-{{-- Signatories / history --}}
-<div class="card border-0 shadow-sm" style="border-radius: 12px;">
-    <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
-        <h6 class="m-0 fw-bold"><i class="fas fa-history text-muted me-2"></i>History</h6>
+{{-- Signatories / history, opened from the History button --}}
+<div class="modal fade" id="PPMP_HISTORY_MODAL" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light py-3">
+                <h5 class="modal-title fw-bold"><i class="fas fa-history text-muted me-2"></i>History — {{ $ppmp->ppmp_no }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <ul class="list-group list-group-flush small">
+                    @foreach ($ppmp->signatories->sortBy('signed_at') as $signatory)
+                        <li class="list-group-item px-4">
+                            <span class="badge bg-light text-dark border text-capitalize me-2">{{ $signatory->role }}</span>
+                            <strong>{{ $signatory->name_snapshot }}</strong>
+                            @if ($signatory->designation_snapshot)<span class="text-muted">, {{ $signatory->designation_snapshot }}</span>@endif
+                            <span class="text-muted ms-2">{{ $signatory->signed_at->format('M d, Y h:i A') }}</span>
+                            @if ($signatory->remarks)<div class="text-muted mt-1"><i class="fas fa-comment-alt me-1"></i>{{ $signatory->remarks }}</div>@endif
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
     </div>
-    <ul class="list-group list-group-flush small">
-        @foreach ($ppmp->signatories->sortBy('signed_at') as $signatory)
-            <li class="list-group-item px-4">
-                <span class="badge bg-light text-dark border text-capitalize me-2">{{ $signatory->role }}</span>
-                <strong>{{ $signatory->name_snapshot }}</strong>
-                @if ($signatory->designation_snapshot)<span class="text-muted">, {{ $signatory->designation_snapshot }}</span>@endif
-                <span class="text-muted ms-2">{{ $signatory->signed_at->format('M d, Y h:i A') }}</span>
-                @if ($signatory->remarks)<div class="text-muted mt-1"><i class="fas fa-comment-alt me-1"></i>{{ $signatory->remarks }}</div>@endif
-            </li>
-        @endforeach
-    </ul>
 </div>
 
 <div id="modal-body"></div>

@@ -349,4 +349,23 @@ class PpmpPageTest extends TestCase
             $this->addToAssertionCount(1);
         }
     }
+
+    public function test_history_is_in_a_modal_and_deactivated_fund_source_stays_on_its_project(): void
+    {
+        $ppmp = $this->submittedSectionPpmp($this->section, $this->staff, '64000');
+
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.show', $ppmp))->assertOk()
+            ->assertSee('data-bs-target="#PPMP_HISTORY_MODAL"', false)
+            ->assertSee('id="PPMP_HISTORY_MODAL"', false);
+
+        // COB deactivated later: still selected when the project is opened, not offered for new ones
+        $returned = app(PpmpService::class);
+        $this->actingAs($this->head)->postJson(route('procurement.ppmp.return', $ppmp), ['remarks' => 'fix'])->assertOk();
+        FundSource::where('code', 'COB')->update(['is_active' => false]);
+        $item = $ppmp->items()->first();
+
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.items.entry', [$ppmp, 'id' => $item->id]))
+            ->assertSee('selected>Corporate Operating Budget</option>', false);
+        $this->get(route('procurement.ppmp.items.entry', $ppmp))->assertDontSee('Corporate Operating Budget</option>', false);
+    }
 }
