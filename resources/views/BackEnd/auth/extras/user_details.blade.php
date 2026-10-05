@@ -21,7 +21,7 @@
 
         <div class="d-flex gap-1">
             <span class="badge bg-secondary bg-opacity-10 text-secondary px-2 py-1 rounded-pill border border-secondary border-opacity-25 text-uppercase" style="font-size: 0.7rem;">
-                <i class="fas fa-tags me-1"></i>Cat: {{ $user->categories }}
+                <i class="fas fa-map-marker-alt me-1"></i>{{ $user->region->short() }}
             </span>
             <span class="badge bg-primary bg-opacity-10 text-primary px-2 py-1 rounded-pill border border-primary border-opacity-25 text-uppercase" style="font-size: 0.7rem;">
                 <i class="fas fa-user-shield me-1"></i>Role: {{ $user->roles->pluck('name')->join(', ') ?: 'None' }}

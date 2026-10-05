@@ -11,6 +11,17 @@ enum Region: string
     case Lm = 'lm';
     case Vis = 'vis';
 
+    /** Stored in users.categories: 1 = Luzon/Mindanao, 2 = Visayas. */
+    public static function fromCategory(mixed $category): self
+    {
+        return (int) $category === 2 ? self::Vis : self::Lm;
+    }
+
+    public function category(): int
+    {
+        return $this === self::Vis ? 2 : 1;
+    }
+
     public function label(): string
     {
         return match ($this) {

@@ -48,12 +48,10 @@ class StoreUserRequest extends FormRequest
             // Password rules transition dynamically based on existence of creation vs update sequence state tracks
             'password'   => $isUpdate ? ['nullable', 'string', 'min:4', 'confirmed'] : ['required', 'string', 'min:4', 'confirmed'],
 
-            'categories' => ['required', 'in:1,2'],
+            'categories' => ['required', 'in:1,2'],   // region: 1 = Luzon/Mindanao, 2 = Visayas
             'role' => ['nullable', 'string', 'exists:roles,name'],
 
             'office_id'   => ['nullable', 'integer', 'exists:offices,id'],
-            // LM or Visayas: decides which Division PPMP / APP this user's PPMPs go to
-            'region'      => ['required', \Illuminate\Validation\Rule::enum(\App\Enums\Region::class)],
             'office_ids'  => ['nullable', 'array'],
             'office_ids.*'=> ['integer', 'exists:offices,id'],
             'designation' => ['nullable', 'string', 'max:255'],

@@ -17,7 +17,7 @@ use Spatie\Permission\Traits\HasRoles;
     'minitial',
     'designation',
     'office_id',
-    'region',
+    'region',      // virtual: stored in categories (see region())
     'username',
     'email',
     'email_verified_at',
@@ -47,8 +47,19 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
             'is_activated'      => 'boolean',
-            'region'            => \App\Enums\Region::class,
         ];
+    }
+
+    /**
+     * Region from users.categories (1 = Luzon/Mindanao, 2 = Visayas).
+     * Setting $user->region = 'vis' writes categories = 2.
+     */
+    protected function region(): \Illuminate\Database\Eloquent\Casts\Attribute
+    {
+        return \Illuminate\Database\Eloquent\Casts\Attribute::make(
+            get: fn ($value, array $attributes) => \App\Enums\Region::fromCategory($attributes['categories'] ?? 1),
+            set: fn ($value) => ['categories' => ($value instanceof \App\Enums\Region ? $value : \App\Enums\Region::from($value))->category()],
+        );
     }
 
     /** Home office. */

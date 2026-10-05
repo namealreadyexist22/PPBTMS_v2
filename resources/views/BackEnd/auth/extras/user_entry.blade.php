@@ -125,16 +125,7 @@
                             </select>
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
-                        <div class="col-md-3">
-                            <label for="region" class="form-label small fw-semibold text-muted mb-1">Region</label>
-                            <select class="form-select form-select-sm rounded" id="region" name="region" required>
-                                @foreach (\App\Enums\Region::cases() as $region)
-                                    <option value="{{ $region->value }}" {{ (isset($user) ? $user->region : \App\Enums\Region::Lm) === $region ? 'selected' : '' }}>{{ $region->label() }}</option>
-                                @endforeach
-                            </select>
-                            <div class="invalid-feedback small fw-medium"></div>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-7">
                             <label for="designation" class="form-label small fw-semibold text-muted mb-1">Designation</label>
                             <input type="text" class="form-control form-control-sm rounded" id="designation" name="designation" placeholder="e.g. Senior Agriculturist" value="{{ $user->designation ?? '' }}">
                             <div class="invalid-feedback small fw-medium"></div>
@@ -171,12 +162,14 @@
 
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label for="categories" class="form-label small fw-semibold text-muted mb-1">User Category Assignment</label>
+                            <label for="categories" class="form-label small fw-semibold text-muted mb-1">Region</label>
                             <select class="form-select form-select-sm rounded" id="categories" name="categories" required>
-                                <option value="" disabled {{ !isset($user) ? 'selected' : '' }}>Choose a classification...</option>
-                                <option value="1" {{ isset($user) && $user->categories == 1 ? 'selected' : '' }}>Category 1</option>
-                                <option value="2" {{ isset($user) && $user->categories == 2 ? 'selected' : '' }}>Category 2</option>
+                                <option value="" disabled {{ !isset($user) ? 'selected' : '' }}>Choose a region...</option>
+                                @foreach (\App\Enums\Region::cases() as $region)
+                                    <option value="{{ $region->category() }}" {{ isset($user) && (int) $user->categories === $region->category() ? 'selected' : '' }}>{{ $region->label() }}</option>
+                                @endforeach
                             </select>
+                            <div class="form-text">Decides which Division PPMP and APP this user's PPMPs go to (BAC or Regional BAC).</div>
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
                         <div class="col-md-6">

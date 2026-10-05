@@ -24,7 +24,7 @@ class UserStoreTest extends TestCase
 
         $this->postJson(route('core.users.store'), [
             'fname' => 'Juan', 'lname' => 'Cruz', 'username' => 'jcruz', 'email' => 'jcruz@example.com',
-            'password' => 'secret', 'password_confirmation' => 'secret', 'categories' => 1, 'region' => 'vis',
+            'password' => 'secret', 'password_confirmation' => 'secret', 'categories' => 2,   // Visayas
             'role' => 'User', 'office_id' => $office->id, 'designation' => 'Senior Agriculturist',
             'office_ids' => [$office->id, $extra->id],
         ])->assertOk()->assertJson(['status' => 'success']);
