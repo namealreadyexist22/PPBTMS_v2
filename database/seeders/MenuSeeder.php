@@ -65,6 +65,11 @@ class MenuSeeder extends Seeder
             ['icon' => 'fas fa-shopping-cart', 'order' => 10]
         );
 
+        Menu::updateOrCreate(
+            ['name' => 'Budget Allocation', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-coins', 'route' => 'procurement.budget.index', 'order' => 0]
+        );
+
         $ppmp = Menu::updateOrCreate(
             ['name' => 'PPMP', 'parent_id' => $procurement->id],
             ['icon' => 'fas fa-clipboard-list', 'route' => 'procurement.ppmp.index', 'order' => 1]

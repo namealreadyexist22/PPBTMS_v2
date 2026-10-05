@@ -33,6 +33,7 @@ class ActionPermissionSeeder extends Seeder
             'manage ppmp'     => 'PPMP',
             'manage app'      => 'APP',
             'manage lookups'  => 'Procurement Lookups',
+            'manage budget'   => 'Budget Allocation',
         ];
 
         foreach ($links as $permissionName => $menuName) {

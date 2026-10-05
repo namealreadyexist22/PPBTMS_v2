@@ -14,7 +14,7 @@ enum FundGroup: string
     public function label(): string
     {
         return match ($this) {
-            self::Regular => 'Regular',
+            self::Regular => 'COB',
             self::Sida    => 'SIDA',
         };
     }

@@ -168,6 +168,9 @@ class PpmpService
             throw new ProcurementException('Add at least one procurement project before submitting.');
         }
 
+        // Within the budget allocations from this office up (COB / SIDA, MOOE / CO)
+        app(BudgetAllocationService::class)->assertWithinBudget($ppmp->fresh());
+
         return DB::transaction(function () use ($ppmp, $user, $remarks) {
             $ppmp->update([
                 'status'       => PpmpStatus::Submitted,

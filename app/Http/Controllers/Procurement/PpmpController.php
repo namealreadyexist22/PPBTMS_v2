@@ -93,6 +93,8 @@ class PpmpController extends Controller
                             ->get(['uuid', 'ppmp_no', 'version', 'status']),
             'approver'   => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
             'division'   => $ppmp->office->consolidatingOffice(),
+            // Budget allocations from this office up (CO first, then MOOE)
+            'budgetRows' => app(\App\Services\Procurement\BudgetAllocationService::class)->checkPpmp($ppmp),
         ]);
     }
 

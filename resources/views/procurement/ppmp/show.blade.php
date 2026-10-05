@@ -7,6 +7,7 @@
     $returned = $ppmp->status === \App\Enums\PpmpStatus::Returned
         ? $ppmp->signatories->where('role', 'returned')->sortByDesc('signed_at')->first()
         : null;
+    $budgetOver = $budgetRows->where('over', true)->isNotEmpty();
 @endphp
 
 <div class="mb-3">
@@ -37,7 +38,7 @@
                 </button>
                 @if ($canEdit)
                     <button class="btn btn-sm btn-success" id="btn_add_pap"><i class="fas fa-folder-plus me-1"></i> Add PAP</button>
-                    <button class="btn btn-sm btn-primary" id="btn_submit"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
+                    <button class="btn btn-sm btn-primary" id="btn_submit" @disabled($budgetOver) title="{{ $budgetOver ? 'Over budget allocation' : '' }}"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
                 @endif
                 @if ($canReturn)
                     <a href="{{ route('procurement.division-ppmp.index', ['fy' => $ppmp->fiscal_year]) }}" class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Approve in Division PPMP</a>
@@ -93,6 +94,13 @@
             </div>
         </div>
 
+        @if ($budgetOver && $canEdit)
+            <div class="alert alert-danger small mt-3 mb-0">
+                <i class="fas fa-exclamation-triangle me-1"></i>
+                <strong>Over budget.</strong> This PPMP goes over its budget allocation, so it cannot be submitted.
+                <a href="#budget_card" class="alert-link">See the budget summary</a> and lower the estimated budgets.
+            </div>
+        @endif
         @if ($returned)
             <div class="alert alert-warning small mt-3 mb-0">
                 <i class="fas fa-undo me-1"></i>
@@ -217,6 +225,38 @@
         </div>
     </div>
 </div>
+
+{{-- Budget allocation: CO first, then MOOE --}}
+@php $pesoC = fn ($c) => number_format($c / 100, 2); @endphp
+@if ($budgetRows->isNotEmpty())
+    <div class="card border-0 shadow-sm mb-3 {{ $budgetOver ? 'border border-danger' : '' }}" style="border-radius: 12px; overflow: hidden;" id="budget_card">
+        <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
+            <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation</h6>
+        </div>
+        <table class="table table-sm align-middle small mb-0">
+            <thead class="table-light"><tr><th class="ps-4">Fund</th><th>Class</th><th>Allocation of</th><th class="text-end">This PPMP</th><th class="text-end">Allocated</th><th class="text-end">Used (incl. this)</th><th class="text-end pe-4">Remaining</th></tr></thead>
+            <tbody>
+                @foreach ($budgetRows as $row)
+                    <tr class="{{ $row['over'] ? 'table-danger' : '' }}">
+                        <td class="ps-4">{{ $row['fund']->label() }}</td>
+                        <td class="fw-semibold">{{ $row['class']->short() }}</td>
+                        @if ($row['allocation'])
+                            <td>{{ $row['allocation']->office->code }} {{ $row['allocation']->office->acronym }}</td>
+                            <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                            <td class="text-end">{{ $pesoC($row['amount']) }}</td>
+                            <td class="text-end">{{ $pesoC($row['used']) }}</td>
+                            <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
+                        @else
+                            <td class="text-muted">No allocation set</td>
+                            <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                            <td colspan="3" class="text-muted pe-4">Not checked until the Budget officer sets this office's {{ $row['fund']->label() }} budget.</td>
+                        @endif
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+@endif
 
 {{-- Signatories / history, opened from the History button --}}
 <div class="modal fade" id="PPMP_HISTORY_MODAL" tabindex="-1" aria-hidden="true">

@@ -70,7 +70,7 @@ class AppPageTest extends TestCase
     {
         // Signatories and creating the APP: BAC Secretariat of the region only
         $this->actingAs($this->bacSec)->get(route('procurement.app.index', ['fy' => 2026]))->assertOk()
-            ->assertSee('APP FY 2026 — Luzon/Mindanao')->assertSee('Create Regular APP')->assertSee('Create SIDA APP')->assertSee('Regional Bids and Awards Committee');
+            ->assertSee('APP FY 2026 — Luzon/Mindanao')->assertSee('Create COB APP')->assertSee('Create SIDA APP')->assertSee('Regional Bids and Awards Committee');
         $this->postJson(route('procurement.app.signatories'), ['region' => 'lm', 'prepared' => $this->bacSec->id, 'recommended' => $this->chair->id, 'approved' => $this->hope->id])->assertOk();
         $this->postJson(route('procurement.app.store'), ['fiscal_year' => 2026, 'region' => 'vis', 'fund_group' => 'regular', 'type' => 'final'])->assertForbidden();
         $this->postJson(route('procurement.app.store'), ['fiscal_year' => 2026, 'region' => 'lm', 'fund_group' => 'regular', 'type' => 'final'])->assertOk();

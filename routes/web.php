@@ -13,6 +13,7 @@ use App\Core\Http\Controllers\UserController;
 use App\Http\Controllers\BackEnd\LoginController;
 use App\Http\Controllers\BackEnd\MainController;
 use App\Http\Controllers\Procurement\AppController;
+use App\Http\Controllers\Procurement\BudgetAllocationController;
 use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use Illuminate\Support\Facades\Route;
@@ -135,6 +136,12 @@ use Illuminate\Support\Facades\Route;
         ->as('procurement.')
         ->middleware(['portal.auth'])
     ->group(function () {
+
+        // Budget allocation per office (Budget officer)
+        Route::middleware('perm:manage budget')->group(function () {
+            Route::get('budget', [BudgetAllocationController::class, 'index'])->name('budget.index');
+            Route::post('budget/store', [BudgetAllocationController::class, 'store'])->name('budget.store');
+        });
 
         // Annual Procurement Plan (per fiscal year and region)
         Route::middleware('perm:manage app')->group(function () {
