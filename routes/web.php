@@ -11,6 +11,7 @@ use App\Core\Http\Controllers\UserAccessController;
 use App\Core\Http\Controllers\UserController;
 use App\Http\Controllers\BackEnd\LoginController;
 use App\Http\Controllers\BackEnd\MainController;
+use App\Http\Controllers\Procurement\AppController;
 use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use Illuminate\Support\Facades\Route;
@@ -127,6 +128,26 @@ use Illuminate\Support\Facades\Route;
         ->as('procurement.')
         ->middleware(['portal.auth'])
     ->group(function () {
+
+        // Annual Procurement Plan (per fiscal year and region)
+        Route::middleware('perm:manage app')->group(function () {
+            Route::get('app', [AppController::class, 'index'])->name('app.index');
+            Route::post('app/store', [AppController::class, 'store'])->name('app.store');
+            Route::post('app/signatories', [AppController::class, 'signatories'])->name('app.signatories');
+            Route::get('app/{app}', [AppController::class, 'show'])->name('app.show');
+            Route::get('app/{app}/print', [AppController::class, 'print'])->name('app.print');
+            Route::post('app/{app}/generate', [AppController::class, 'generate'])->name('app.generate');
+            Route::post('app/{app}/group', [AppController::class, 'group'])->name('app.group');
+            Route::post('app/{app}/ungroup', [AppController::class, 'ungroup'])->name('app.ungroup');
+            Route::get('app/{app}/lines/entry', [AppController::class, 'lineEntry'])->name('app.lines.entry');
+            Route::post('app/{app}/lines/store', [AppController::class, 'lineStore'])->name('app.lines.store');
+            Route::delete('app/{app}/lines/destroy', [AppController::class, 'lineDestroy'])->name('app.lines.destroy');
+            Route::post('app/{app}/submit', [AppController::class, 'submit'])->name('app.submit');
+            Route::post('app/{app}/recommend', [AppController::class, 'recommend'])->name('app.recommend');
+            Route::post('app/{app}/approve', [AppController::class, 'approve'])->name('app.approve');
+            Route::post('app/{app}/return', [AppController::class, 'returnToSecretariat'])->name('app.return');
+            Route::post('app/{app}/update-version', [AppController::class, 'createUpdated'])->name('app.update-version');
+        });
 
         Route::middleware('perm:manage ppmp')->group(function () {
             Route::get('ppmp', [PpmpController::class, 'index'])->name('ppmp.index');

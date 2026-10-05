@@ -70,6 +70,17 @@ class MenuSeeder extends Seeder
             ['icon' => 'fas fa-layer-group', 'route' => 'procurement.division-ppmp.index', 'order' => 2]
         );
 
+        $app = Menu::updateOrCreate(
+            ['name' => 'APP', 'parent_id' => $procurement->id],
+            ['nav_name' => 'APP', 'icon' => 'fas fa-calendar-check', 'route' => 'procurement.app.index', 'order' => 3]
+        );
+
+        // Hidden gate: the BAC Secretariat prepares the APP of its own region (menu.app-manage)
+        Menu::firstOrCreate(
+            ['name' => 'APP Manage', 'parent_id' => $app->id],
+            ['nav_name' => 'Prepare APP (BAC Secretariat)', 'is_nav' => false, 'order' => 90, 'is_active' => true]
+        );
+
         // Hidden gate: BAC / consolidators see every office's PPMP (menu.ppmp-view-all)
         Menu::firstOrCreate(
             ['name' => 'PPMP View All', 'parent_id' => $ppmp->id],

@@ -31,6 +31,7 @@ class ActionPermissionSeeder extends Seeder
             'manage settings' => 'App Settings',
             'manage offices'  => 'Offices',
             'manage ppmp'     => 'PPMP',
+            'manage app'      => 'APP',
         ];
 
         foreach ($links as $permissionName => $menuName) {
