@@ -192,8 +192,18 @@ class BudgetAllocationTest extends TestCase
             ->assertSee('Over budget.')->assertSee('Budget Allocation')
             ->assertSee('id="btn_submit" disabled', false)
             ->assertSee('over by ₱500,000.00')
+            ->assertSee('05012 MIS')->assertDontSee('05000 PPSPD')   // only the section's own budget
             ->assertSee('-500,000.00');
         $this->postJson(route('procurement.ppmp.submit', $staffPpmp))->assertStatus(422);
+
+        // A division without its own budget sees the shared one above it (PPSPD's 15M; MIS's draft holds nothing)
+        $shared = $this->ppmp($this->sppdemd, [['mooe', '100000', 'COB']], false);
+        $sharedStaff = User::find($shared->created_by);
+        $sharedStaff->update(['is_activated' => 1]);
+        $sharedStaff->givePermissionTo('manage ppmp');
+        $this->actingAs($sharedStaff)->get(route('procurement.ppmp.show', $shared))->assertOk()
+            ->assertSee('05000 PPSPD')->assertSee('Used by other offices')->assertSee('₱14,900,000.00 left to plan');
+        $this->actingAs($staff);
 
         // Add-project modal: what is left for this PPMP before the new project (3M - 3.5M = -500k)
         $this->get(route('procurement.ppmp.items.entry', $staffPpmp))->assertOk()
