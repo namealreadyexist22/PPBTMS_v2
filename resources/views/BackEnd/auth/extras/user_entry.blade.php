@@ -113,7 +113,7 @@
                     </small>
 
                     <div class="row g-3 mb-4">
-                        <div class="col-md-6">
+                        <div class="col-md-5">
                             <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Home Office</label>
                             <select class="form-select form-select-sm rounded" id="office_id" name="office_id">
                                 <option value="">— No office —</option>
@@ -125,7 +125,16 @@
                             </select>
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-3">
+                            <label for="region" class="form-label small fw-semibold text-muted mb-1">Region</label>
+                            <select class="form-select form-select-sm rounded" id="region" name="region" required>
+                                @foreach (\App\Enums\Region::cases() as $region)
+                                    <option value="{{ $region->value }}" {{ (isset($user) ? $user->region : \App\Enums\Region::Lm) === $region ? 'selected' : '' }}>{{ $region->label() }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback small fw-medium"></div>
+                        </div>
+                        <div class="col-md-4">
                             <label for="designation" class="form-label small fw-semibold text-muted mb-1">Designation</label>
                             <input type="text" class="form-control form-control-sm rounded" id="designation" name="designation" placeholder="e.g. Senior Agriculturist" value="{{ $user->designation ?? '' }}">
                             <div class="invalid-feedback small fw-medium"></div>

@@ -52,6 +52,8 @@ class StoreUserRequest extends FormRequest
             'role' => ['nullable', 'string', 'exists:roles,name'],
 
             'office_id'   => ['nullable', 'integer', 'exists:offices,id'],
+            // LM or Visayas: decides which Division PPMP / APP this user's PPMPs go to
+            'region'      => ['required', \Illuminate\Validation\Rule::enum(\App\Enums\Region::class)],
             'office_ids'  => ['nullable', 'array'],
             'office_ids.*'=> ['integer', 'exists:offices,id'],
             'designation' => ['nullable', 'string', 'max:255'],

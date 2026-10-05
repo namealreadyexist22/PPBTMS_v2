@@ -4,6 +4,7 @@ namespace App\Services\Procurement;
 
 use App\Enums\PpmpStatus;
 use App\Enums\PpmpType;
+use App\Enums\Region;
 use App\Exceptions\ProcurementException;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
@@ -21,21 +22,25 @@ use Illuminate\Support\Facades\DB;
  */
 class PpmpService
 {
-    public function create(Office $office, int $fiscalYear, User $user, PpmpType $type = PpmpType::Final, ?string $remarks = null): Ppmp
+    public function create(Office $office, int $fiscalYear, User $user, PpmpType $type = PpmpType::Final, ?string $remarks = null, ?Region $region = null): Ppmp
     {
+        // The preparer's region (LM / VIS) decides which Division PPMP and APP this goes to
+        $region ??= $user->region ?? Region::Lm;
+
         if (! Office::assignableTo($user)->whereKey($office->id)->exists()) {
             throw new ProcurementException('You can only create a PPMP for your home office.');
         }
 
-        if (Ppmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->exists()) {
-            throw new ProcurementException("{$office->shortName()} already has a PPMP for FY {$fiscalYear}. Amend it instead.");
+        if (Ppmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->where('region', $region)->exists()) {
+            throw new ProcurementException("{$office->shortName()} already has a {$region->label()} PPMP for FY {$fiscalYear}. Amend it instead.");
         }
 
-        return DB::transaction(function () use ($office, $fiscalYear, $user, $type, $remarks) {
+        return DB::transaction(function () use ($office, $fiscalYear, $user, $type, $remarks, $region) {
             $ppmp = Ppmp::create([
-                'ppmp_no'     => $this->number($office, $fiscalYear, 1),
+                'ppmp_no'     => $this->number($office, $fiscalYear, 1, $region),
                 'fiscal_year' => $fiscalYear,
                 'office_id'   => $office->id,
+                'region'      => $region,
                 'type'        => $type,
                 'version'     => 1,
                 'status'      => PpmpStatus::Draft,
@@ -232,6 +237,7 @@ class PpmpService
 
         $openVersion = Ppmp::where('office_id', $ppmp->office_id)
             ->where('fiscal_year', $ppmp->fiscal_year)
+            ->where('region', $ppmp->region)
             ->whereIn('status', [PpmpStatus::Draft, PpmpStatus::Submitted, PpmpStatus::Returned])
             ->exists();
 
@@ -243,12 +249,14 @@ class PpmpService
             $version = (int) Ppmp::withTrashed()
                 ->where('office_id', $ppmp->office_id)
                 ->where('fiscal_year', $ppmp->fiscal_year)
+                ->where('region', $ppmp->region)
                 ->max('version') + 1;
 
             $copy = Ppmp::create([
-                'ppmp_no'         => $this->number($ppmp->office, $ppmp->fiscal_year, $version),
+                'ppmp_no'         => $this->number($ppmp->office, $ppmp->fiscal_year, $version, $ppmp->region),
                 'fiscal_year'     => $ppmp->fiscal_year,
                 'office_id'       => $ppmp->office_id,
+                'region'          => $ppmp->region,
                 'type'            => $type ?? $ppmp->type,
                 'version'         => $version,
                 'amended_from_id' => $ppmp->id,
@@ -316,12 +324,15 @@ class PpmpService
     }
 
     /**
-     * Section PPMP reference, e.g. 05012-2026-V1 (V2, V3 for amendments). The official
-     * "PPMP NO." belongs to the Division PPMP; YY-office number-NN codes are PAP codes.
+     * Section PPMP reference, e.g. 05012-2026-V1, or 05012-2026-VIS-V1 for Visayas
+     * (V2, V3 for amendments). The official "PPMP NO." belongs to the Division PPMP;
+     * YY-office number-NN codes are PAP codes.
      */
-    protected function number(Office $office, int $fiscalYear, int $version): string
+    protected function number(Office $office, int $fiscalYear, int $version, Region $region = Region::Lm): string
     {
-        return sprintf('%s-%d-V%d', $office->code, $fiscalYear, $version);
+        return $region === Region::Vis
+            ? sprintf('%s-%d-VIS-V%d', $office->code, $fiscalYear, $version)
+            : sprintf('%s-%d-V%d', $office->code, $fiscalYear, $version);
     }
 
     protected function assertPapCodeFree(Ppmp $ppmp, string $code, ?int $ignoreId = null): void

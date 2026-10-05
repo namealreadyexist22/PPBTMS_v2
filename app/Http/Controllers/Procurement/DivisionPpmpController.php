@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Procurement;
 
 use App\Enums\PpmpStatus;
 use App\Enums\PpmpType;
+use App\Enums\Region;
 use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\DivisionPpmp;
@@ -33,15 +34,29 @@ class DivisionPpmpController extends Controller
         $user = $request->user();
         $fiscalYear = (int) ($request->input('fy') ?: now()->year + 1);
 
-        $divisions = $this->divisionsFor($user, $fiscalYear)->map(fn (Office $office) => [
-            'office'   => $office,
-            'current'  => $this->divisionService->current($office, $fiscalYear),
-            'history'  => DivisionPpmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->orderByDesc('ppmp_number')->get(),
-            'sections' => $this->divisionService->sectionPpmps($office, $fiscalYear),
-            'pending'  => $this->divisionService->pending($office, $fiscalYear),
-            'isHead'   => (int) $office->head_user_id === (int) $user->id,
-            'members'  => User::whereIn('office_id', $office->consolidatedOfficeIds())->orWhere('id', $office->head_user_id)->orderBy('fname')->get(),
-        ]);
+        // One card per division and region (LM -> BAC, Visayas -> Regional BAC)
+        $divisions = $this->divisionsFor($user, $fiscalYear)->flatMap(function (Office $office) use ($user, $fiscalYear) {
+            $regions = Ppmp::whereIn('office_id', $office->consolidatedOfficeIds())->where('fiscal_year', $fiscalYear)
+                ->distinct()->pluck('region')
+                ->merge(DivisionPpmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->distinct()->pluck('region'))
+                ->map(fn ($region) => $region instanceof Region ? $region : Region::from($region))
+                ->unique(fn (Region $region) => $region->value);
+
+            if ($regions->isEmpty()) {
+                $regions = collect([$user->region ?? Region::Lm]);
+            }
+
+            return $regions->sortBy(fn (Region $region) => $region->value)->map(fn (Region $region) => [
+                'office'   => $office,
+                'region'   => $region,
+                'current'  => $this->divisionService->current($office, $fiscalYear, $region),
+                'history'  => DivisionPpmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->where('region', $region)->orderByDesc('ppmp_number')->get(),
+                'sections' => $this->divisionService->sectionPpmps($office, $fiscalYear, $region),
+                'pending'  => $this->divisionService->pending($office, $fiscalYear, $region),
+                'isHead'   => (int) $office->head_user_id === (int) $user->id,
+                'members'  => User::whereIn('office_id', $office->consolidatedOfficeIds())->orWhere('id', $office->head_user_id)->orderBy('fname')->get(),
+            ]);
+        })->values();
 
         return view('procurement.division_ppmp.index', [
             'divisions'  => $divisions,
@@ -59,7 +74,7 @@ class DivisionPpmpController extends Controller
         return view('procurement.division_ppmp.show', [
             'divisionPpmp' => $divisionPpmp,
             'paps'         => $this->papsOf($divisionPpmp->ppmps),
-            'history'      => DivisionPpmp::where('office_id', $divisionPpmp->office_id)->where('fiscal_year', $divisionPpmp->fiscal_year)->orderBy('ppmp_number')->get(),
+            'history'      => DivisionPpmp::where('office_id', $divisionPpmp->office_id)->where('fiscal_year', $divisionPpmp->fiscal_year)->where('region', $divisionPpmp->region)->orderBy('ppmp_number')->get(),
         ]);
     }
 
@@ -68,6 +83,7 @@ class DivisionPpmpController extends Controller
         $data = $this->validateJson($request, [
             'office_id'      => ['required', 'integer', 'exists:offices,id'],
             'fiscal_year'    => ['required', 'integer'],
+            'region'         => ['required', Rule::enum(Region::class)],
             'type'           => ['required', Rule::enum(PpmpType::class)],
             'prepared_by_id' => ['required', 'integer', 'exists:users,id'],
             'remarks'        => ['nullable', 'string', 'max:1000'],
@@ -77,6 +93,7 @@ class DivisionPpmpController extends Controller
             $divisionPpmp = $this->divisionService->approve(
                 Office::findOrFail($data['office_id']),
                 (int) $data['fiscal_year'],
+                Region::from($data['region']),
                 $request->user(),
                 User::findOrFail($data['prepared_by_id']),
                 PpmpType::from($data['type']),
@@ -107,7 +124,7 @@ class DivisionPpmpController extends Controller
             'number'     => $divisionPpmp->ppmp_number,
             'type'       => $divisionPpmp->type,
             'fiscalYear' => $divisionPpmp->fiscal_year,
-            'endUser'    => $divisionPpmp->office->name,
+            'endUser'    => $this->endUser($divisionPpmp->office, $divisionPpmp->region),
             'paps'       => $this->papsOf($divisionPpmp->ppmps),
             'total'      => $divisionPpmp->total_budget,
             'watermark'  => $divisionPpmp->isCurrent() ? null : 'SUPERSEDED',
@@ -121,18 +138,19 @@ class DivisionPpmpController extends Controller
     public function preview(Request $request, Office $office)
     {
         $fiscalYear = (int) $request->input('fy');
+        $region = Region::tryFrom((string) $request->input('region')) ?? Region::Lm;
         abort_unless($this->divisionsFor($request->user(), $fiscalYear)->contains('id', $office->id), 403);
 
-        $ppmps = $this->divisionService->preview($office, $fiscalYear);
+        $ppmps = $this->divisionService->preview($office, $fiscalYear, $region);
         $head = $office->head;
-        $next = ($this->divisionService->current($office, $fiscalYear)?->ppmp_number ?? 0) + 1;
+        $next = ($this->divisionService->current($office, $fiscalYear, $region)?->ppmp_number ?? 0) + 1;
 
         return view('procurement.ppmp.print', [
             'title'      => "PPMP No. {$next} (preview) - {$office->name}",
             'number'     => $next,
             'type'       => PpmpType::Final,
             'fiscalYear' => $fiscalYear,
-            'endUser'    => $office->name,
+            'endUser'    => $this->endUser($office, $region),
             'paps'       => $this->papsOf($ppmps),
             'total'      => $ppmps->sum(fn (Ppmp $ppmp) => (float) $ppmp->total_budget),
             'watermark'  => 'FOR APPROVAL',
@@ -140,6 +158,12 @@ class DivisionPpmpController extends Controller
             'submitted'  => ['name' => $head?->fullname, 'position' => $head?->designation, 'date' => null],
             'footer'     => "Preview of PPMP No. {$next} · not yet approved",
         ]);
+    }
+
+    /** Office name, marked VISAYAS for a Visayas Division PPMP. */
+    protected function endUser(Office $office, Region $region): string
+    {
+        return $region === Region::Vis ? "{$office->name} - VISAYAS" : $office->name;
     }
 
     /** PAP groups of the given section PPMPs, in section order, with their projects. */

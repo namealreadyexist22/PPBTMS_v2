@@ -47,6 +47,12 @@
 
                         </div>
 
+                        <div class="alert alert-light border small py-2 mb-3">
+                            <i class="fas fa-map-marker-alt me-1"></i>
+                            Region: <strong>{{ (auth()->user()->region ?? \App\Enums\Region::Lm)->label() }}</strong>
+                            — goes to the {{ (auth()->user()->region ?? \App\Enums\Region::Lm)->bac() }} APP. Change it on your user account if wrong.
+                        </div>
+
                         <div class="mb-0">
                             <label class="form-label small fw-semibold text-muted mb-1">Remarks (optional)</label>
                             <textarea name="remarks" class="form-control form-control-sm" rows="2"></textarea>

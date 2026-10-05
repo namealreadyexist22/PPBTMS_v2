@@ -335,7 +335,7 @@ class PpmpWorkflowTest extends TestCase
         $divisions = app(\App\Services\Procurement\DivisionPpmpService::class);
 
         try {
-            $divisions->approve($this->office, 2027, $this->head, $this->staff);
+            $divisions->approve($this->office, 2027, \App\Enums\Region::Lm, $this->head, $this->staff);
             $this->fail('Nothing submitted yet.');
         } catch (ProcurementException) {
         }
@@ -345,12 +345,12 @@ class PpmpWorkflowTest extends TestCase
         $this->ppmps->submit($ppmp, $this->staff);
 
         try {
-            $divisions->approve($this->office, 2027, $this->staff, $this->staff);
+            $divisions->approve($this->office, 2027, \App\Enums\Region::Lm, $this->staff, $this->staff);
             $this->fail('Only the head approves.');
         } catch (ProcurementException) {
         }
 
-        $no1 = $divisions->approve($this->office, 2027, $this->head, $this->staff);
+        $no1 = $divisions->approve($this->office, 2027, \App\Enums\Region::Lm, $this->head, $this->staff);
         $this->assertSame(1, $no1->ppmp_number);
         $this->assertSame(['prepared', 'submitted'], $no1->signatories()->orderBy('id')->pluck('role')->all());
     }

@@ -17,6 +17,7 @@ use Spatie\Permission\Traits\HasRoles;
     'minitial',
     'designation',
     'office_id',
+    'region',
     'username',
     'email',
     'email_verified_at',
@@ -46,6 +47,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
             'is_activated'      => 'boolean',
+            'region'            => \App\Enums\Region::class,
         ];
     }
 

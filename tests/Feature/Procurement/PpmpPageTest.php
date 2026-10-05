@@ -149,11 +149,11 @@ class PpmpPageTest extends TestCase
             ->assertSee('PROJECT PROCUREMENT MANAGEMENT PLAN (PPMP) NO. 1')->assertSee('FOR APPROVAL');
 
         $this->actingAs($this->staff)->postJson(route('procurement.division-ppmp.approve'), [
-            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'type' => 'final', 'prepared_by_id' => $this->oic->id,
+            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'region' => 'lm', 'type' => 'final', 'prepared_by_id' => $this->oic->id,
         ])->assertStatus(422);
 
         $response = $this->actingAs($this->head)->postJson(route('procurement.division-ppmp.approve'), [
-            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'type' => 'final', 'prepared_by_id' => $this->oic->id,
+            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'region' => 'lm', 'type' => 'final', 'prepared_by_id' => $this->oic->id,
         ])->assertOk();
         $no1 = DivisionPpmp::sole();
         $this->assertSame(route('procurement.division-ppmp.show', $no1), $response->json('url'));
@@ -190,7 +190,7 @@ class PpmpPageTest extends TestCase
         $service->submit($misV2->fresh(), $this->staff);
 
         $this->actingAs($this->head)->postJson(route('procurement.division-ppmp.approve'), [
-            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'type' => 'final', 'prepared_by_id' => $this->oic->id,
+            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'region' => 'lm', 'type' => 'final', 'prepared_by_id' => $this->oic->id,
         ])->assertOk();
 
         $no2 = DivisionPpmp::where('ppmp_number', 2)->sole();
@@ -214,7 +214,7 @@ class PpmpPageTest extends TestCase
         $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['code' => 'x', 'title' => 'y'])->assertForbidden();
         $this->get(route('procurement.ppmp.print', $ppmp))->assertForbidden();
 
-        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, $this->head, $this->oic);
+        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, \App\Enums\Region::Lm, $this->head, $this->oic);
         $this->get(route('procurement.division-ppmp.show', DivisionPpmp::sole()))->assertForbidden();
         $this->get(route('procurement.division-ppmp.index', ['fy' => 2027]))->assertOk()->assertDontSee('05012-2027-V1');
 
@@ -279,7 +279,7 @@ class PpmpPageTest extends TestCase
 
         // Amendments keep the unit price
         $service->submit($ppmp->fresh(), $this->staff);
-        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, $this->head, $this->oic);
+        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, \App\Enums\Region::Lm, $this->head, $this->oic);
         $copy = $service->amend($ppmp->fresh(), $this->staff);
         $this->assertEquals('333.33', $copy->items()->where('description', '!=', 'Consultancy')->value('unit_cost'));
     }
@@ -302,5 +302,51 @@ class PpmpPageTest extends TestCase
         $this->get(route('procurement.ppmp.items.entry', [$ppmp, 'id' => $ppmp->items()->where('allotment_class', 'co')->value('id')]))
             ->assertSee('value="90,000.00"', false)->assertSee('value="3,060,000.00"', false)->assertSee('<option value="co" selected', false);
         $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('>CO</span>', false);
+    }
+
+    public function test_lm_and_visayas_ppmps_are_separate_down_to_the_division_ppmp(): void
+    {
+        $visStaff = User::factory()->create(['is_activated' => 1, 'office_id' => $this->section->id, 'region' => 'vis']);
+        $visStaff->givePermissionTo('manage ppmp');
+
+        $lm = $this->submittedSectionPpmp($this->section, $this->staff, '64000');       // staff defaults to LM
+        $vis = $this->submittedSectionPpmp($this->section, $visStaff, '10000');
+
+        $this->assertSame(\App\Enums\Region::Vis, $vis->region);
+        $this->assertSame('05012-2027-VIS-V1', $vis->ppmp_no);
+        $this->assertSame('05012-2027-V1', $lm->ppmp_no);
+
+        // A second Visayas PPMP for the same office and year is refused
+        $this->expectsRefusal(fn () => app(PpmpService::class)->create($this->section, 2027, $visStaff));
+
+        // Division page shows one card per region; approving Visayas leaves LM pending
+        $this->actingAs($this->head)->get(route('procurement.division-ppmp.index', ['fy' => 2027]))->assertOk()
+            ->assertSee('Luzon/Mindanao')->assertSee('Visayas')->assertSee('05012-2027-VIS-V1');
+
+        $this->postJson(route('procurement.division-ppmp.approve'), [
+            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'region' => 'vis', 'type' => 'final', 'prepared_by_id' => $this->oic->id,
+        ])->assertOk();
+
+        $visNo1 = DivisionPpmp::where('region', 'vis')->sole();
+        $this->assertSame(1, $visNo1->ppmp_number);
+        $this->assertEquals('10000.00', $visNo1->total_budget);
+        $this->assertSame(PpmpStatus::Submitted, $lm->fresh()->status);
+
+        $this->postJson(route('procurement.division-ppmp.approve'), [
+            'office_id' => $this->division->id, 'fiscal_year' => 2027, 'region' => 'lm', 'type' => 'final', 'prepared_by_id' => $this->oic->id,
+        ])->assertOk();
+        $this->assertSame(1, DivisionPpmp::where('region', 'lm')->sole()->ppmp_number);   // each region has its own No. 1
+
+        $this->get(route('procurement.division-ppmp.print', $visNo1))->assertSee('PLANNING, POLICY AND PROGRAMMING DIVISION - VISAYAS');
+    }
+
+    protected function expectsRefusal(callable $action): void
+    {
+        try {
+            $action();
+            $this->fail('Expected a ProcurementException.');
+        } catch (\App\Exceptions\ProcurementException) {
+            $this->addToAssertionCount(1);
+        }
     }
 }

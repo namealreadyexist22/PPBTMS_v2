@@ -24,7 +24,7 @@ class UserStoreTest extends TestCase
 
         $this->postJson(route('core.users.store'), [
             'fname' => 'Juan', 'lname' => 'Cruz', 'username' => 'jcruz', 'email' => 'jcruz@example.com',
-            'password' => 'secret', 'password_confirmation' => 'secret', 'categories' => 1,
+            'password' => 'secret', 'password_confirmation' => 'secret', 'categories' => 1, 'region' => 'vis',
             'role' => 'User', 'office_id' => $office->id, 'designation' => 'Senior Agriculturist',
             'office_ids' => [$office->id, $extra->id],
         ])->assertOk()->assertJson(['status' => 'success']);
@@ -33,6 +33,7 @@ class UserStoreTest extends TestCase
         $this->assertSame($office->id, $user->office_id);
         $this->assertSame('Senior Agriculturist', $user->designation);
         $this->assertTrue($user->hasRole('User'));
+        $this->assertSame(\App\Enums\Region::Vis, $user->region);
         // Home office is not duplicated as an extra office
         $this->assertSame([$extra->id], $user->offices()->pluck('offices.id')->all());
     }

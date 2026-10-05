@@ -25,7 +25,7 @@
                     {{ $ppmp->ppmp_no }}
                     <span class="badge bg-{{ $statusColors[$ppmp->status->value] ?? 'secondary' }} align-middle ms-1" style="font-size: .7rem;">{{ $ppmp->status->label() }}</span>
                 </h4>
-                <div class="text-muted small">{{ $ppmp->office->label() }}</div>
+                <div class="text-muted small">{{ $ppmp->office->label() }} · {{ $ppmp->region->label() }}</div>
             </div>
 
             <div class="d-flex flex-wrap gap-2">

@@ -21,13 +21,16 @@
 </div>
 
 @forelse ($divisions as $d)
-    @php $office = $d['office']; $current = $d['current']; @endphp
+    @php $office = $d['office']; $current = $d['current']; $region = $d['region']; $key = $office->id . '-' . $region->value; @endphp
     <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
         <div class="card-body p-4">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
                 <div>
                     <div class="small text-muted">{{ $office->code }}{{ $office->acronym ? ' · ' . $office->acronym : '' }}</div>
-                    <h6 class="fw-bold mb-1">{{ $office->name }}</h6>
+                    <h6 class="fw-bold mb-1">
+                        {{ $office->name }}
+                        <span class="badge {{ $region === \App\Enums\Region::Vis ? 'bg-info' : 'bg-primary' }} align-middle ms-1" title="Goes to the {{ $region->bac() }}">{{ $region->label() }}</span>
+                    </h6>
                     <div class="small">
                         Head: <strong>{{ $office->head?->fullname ?? 'Not set' }}</strong>
                         <span class="mx-2 text-muted">|</span>
@@ -52,9 +55,9 @@
                         <a href="{{ route('procurement.division-ppmp.print', $current) }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Print No. {{ $current->ppmp_number }}</a>
                     @endif
                     @if ($d['pending']->isNotEmpty())
-                        <a href="{{ route('procurement.division-ppmp.preview', [$office, 'fy' => $fiscalYear]) }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye me-1"></i> Preview No. {{ ($current?->ppmp_number ?? 0) + 1 }}</a>
+                        <a href="{{ route('procurement.division-ppmp.preview', [$office, 'fy' => $fiscalYear, 'region' => $region->value]) }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="fas fa-eye me-1"></i> Preview No. {{ ($current?->ppmp_number ?? 0) + 1 }}</a>
                         @if ($d['isHead'])
-                            <button class="btn btn-sm btn-success btn-approve-division" data-office="{{ $office->id }}"><i class="fas fa-check me-1"></i> Approve {{ $d['pending']->count() }} submitted</button>
+                            <button class="btn btn-sm btn-success btn-approve-division" data-target="{{ $key }}"><i class="fas fa-check me-1"></i> Approve {{ $d['pending']->count() }} submitted</button>
                         @endif
                     @endif
                 </div>
@@ -85,13 +88,14 @@
 
     {{-- Approve modal for this division --}}
     @if ($d['isHead'] && $d['pending']->isNotEmpty())
-        <div class="modal fade" id="approve-modal-{{ $office->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal fade" id="approve-modal-{{ $key }}" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-dialog-centered">
                 <form class="modal-content border-0 shadow form-approve-division">
                     <input type="hidden" name="office_id" value="{{ $office->id }}">
                     <input type="hidden" name="fiscal_year" value="{{ $fiscalYear }}">
+                    <input type="hidden" name="region" value="{{ $region->value }}">
                     <div class="modal-header bg-light py-3">
-                        <h5 class="modal-title fw-bold"><i class="fas fa-check text-success me-2"></i>Approve PPMP No. {{ ($current?->ppmp_number ?? 0) + 1 }}</h5>
+                        <h5 class="modal-title fw-bold"><i class="fas fa-check text-success me-2"></i>Approve PPMP No. {{ ($current?->ppmp_number ?? 0) + 1 }} ({{ $region->short() }})</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                     </div>
                     <div class="modal-body p-4 small">
@@ -151,7 +155,7 @@
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
     $(document).on('click', '.btn-approve-division', function () {
-        new bootstrap.Modal(document.getElementById('approve-modal-' + $(this).data('office'))).show();
+        new bootstrap.Modal(document.getElementById('approve-modal-' + $(this).data('target'))).show();
     });
 
     $(document).on('submit', '.form-approve-division', function (e) {

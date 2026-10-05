@@ -18,7 +18,7 @@
                     PPMP No. {{ $divisionPpmp->ppmp_number }}
                     <span class="badge {{ $divisionPpmp->isCurrent() ? 'bg-success' : 'bg-dark' }} align-middle ms-1" style="font-size: .7rem;">{{ $divisionPpmp->isCurrent() ? 'Current' : 'Superseded' }}</span>
                 </h4>
-                <div class="text-muted small">{{ $divisionPpmp->office->label() }}</div>
+                <div class="text-muted small">{{ $divisionPpmp->office->label() }} · {{ $divisionPpmp->region->label() }} ({{ $divisionPpmp->region->bac() }})</div>
             </div>
             <a href="{{ route('procurement.division-ppmp.print', $divisionPpmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Print</a>
         </div>

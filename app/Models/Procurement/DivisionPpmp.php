@@ -26,7 +26,7 @@ class DivisionPpmp extends Model
     public const STATUS_SUPERSEDED = 'superseded';
 
     protected $fillable = [
-        'uuid', 'office_id', 'fiscal_year', 'ppmp_number', 'type', 'status',
+        'uuid', 'office_id', 'region', 'fiscal_year', 'ppmp_number', 'type', 'status',
         'total_budget', 'remarks', 'approved_at', 'created_by',
     ];
 
@@ -36,6 +36,7 @@ class DivisionPpmp extends Model
             'fiscal_year'  => 'integer',
             'ppmp_number'  => 'integer',
             'type'         => PpmpType::class,
+            'region'       => \App\Enums\Region::class,
             'total_budget' => 'decimal:2',
             'approved_at'  => 'datetime',
         ];

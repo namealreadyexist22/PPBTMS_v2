@@ -20,7 +20,7 @@ class Ppmp extends Model
     use HasSignatories, LogsActivity, SoftDeletes;
 
     protected $fillable = [
-        'uuid', 'ppmp_no', 'fiscal_year', 'office_id', 'type', 'version', 'amended_from_id',
+        'uuid', 'ppmp_no', 'fiscal_year', 'office_id', 'region', 'type', 'version', 'amended_from_id',
         'status', 'total_budget', 'remarks', 'submitted_at', 'approved_at', 'created_by', 'updated_by',
     ];
 
@@ -30,6 +30,7 @@ class Ppmp extends Model
             'fiscal_year'  => 'integer',
             'version'      => 'integer',
             'type'         => PpmpType::class,
+            'region'       => \App\Enums\Region::class,
             'status'       => PpmpStatus::class,
             'total_budget' => 'decimal:2',
             'submitted_at' => 'datetime',
