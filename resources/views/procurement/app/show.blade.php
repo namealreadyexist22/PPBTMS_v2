@@ -21,6 +21,7 @@
                 <div class="small text-muted text-uppercase fw-semibold">Annual Procurement Plan · {{ $app->region->bac() }}</div>
                 <h4 class="fw-bold mb-1">
                     FY {{ $app->fiscal_year }} — {{ $app->region->label() }}
+                    @if ($app->fund_group === \App\Enums\FundGroup::Sida)<span class="badge bg-warning text-dark align-middle" style="font-size: .7rem;">SIDA</span>@endif
                     <span class="badge bg-{{ $app->status->color() }} align-middle ms-1" style="font-size: .7rem;">{{ $app->status->label() }}</span>
                 </h4>
                 <div class="small text-muted">

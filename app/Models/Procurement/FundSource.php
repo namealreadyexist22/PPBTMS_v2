@@ -7,11 +7,11 @@ use Illuminate\Database\Eloquent\Model;
 
 class FundSource extends Model
 {
-    protected $fillable = ['code', 'name', 'is_active'];
+    protected $fillable = ['code', 'name', 'fund_group', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'fund_group' => \App\Enums\FundGroup::class];
     }
 
     public function scopeActive(Builder $query): Builder

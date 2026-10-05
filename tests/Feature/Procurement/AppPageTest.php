@@ -70,10 +70,10 @@ class AppPageTest extends TestCase
     {
         // Signatories and creating the APP: BAC Secretariat of the region only
         $this->actingAs($this->bacSec)->get(route('procurement.app.index', ['fy' => 2026]))->assertOk()
-            ->assertSee('APP FY 2026 — Luzon/Mindanao')->assertSee('Create APP')->assertSee('Regional Bids and Awards Committee');
+            ->assertSee('APP FY 2026 — Luzon/Mindanao')->assertSee('Create Regular APP')->assertSee('Create SIDA APP')->assertSee('Regional Bids and Awards Committee');
         $this->postJson(route('procurement.app.signatories'), ['region' => 'lm', 'prepared' => $this->bacSec->id, 'recommended' => $this->chair->id, 'approved' => $this->hope->id])->assertOk();
-        $this->postJson(route('procurement.app.store'), ['fiscal_year' => 2026, 'region' => 'vis', 'type' => 'final'])->assertForbidden();
-        $this->postJson(route('procurement.app.store'), ['fiscal_year' => 2026, 'region' => 'lm', 'type' => 'final'])->assertOk();
+        $this->postJson(route('procurement.app.store'), ['fiscal_year' => 2026, 'region' => 'vis', 'fund_group' => 'regular', 'type' => 'final'])->assertForbidden();
+        $this->postJson(route('procurement.app.store'), ['fiscal_year' => 2026, 'region' => 'lm', 'fund_group' => 'regular', 'type' => 'final'])->assertOk();
         $app = AnnualProcurementPlan::sole();
 
         // Workspace: unassigned projects -> lines
@@ -117,7 +117,7 @@ class AppPageTest extends TestCase
             ->assertSee('UPDATED [Version No.', false)
             ->assertSee('26-06030-01: Management and supervision of the BTDs operations')
             ->assertSee('Refreshments and tarpaulin printing')
-            ->assertSee('1/2026')
+            ->assertSee('January 2026')->assertSee('December 2026')
             ->assertSee('Corporate Operating Budget')
             ->assertSee('₱12,600.00')
             ->assertSee('Total Amount of Estimated Budget for EPA Projects:')

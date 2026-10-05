@@ -53,9 +53,11 @@ class LookupController extends Controller
         $id = $request->input('id');
 
         $validator = Validator::make($request->all(), [
-            'id'   => ['nullable', 'integer', Rule::exists($table, 'id')],
-            'code' => ['required', 'string', 'max:30', Rule::unique($table, 'code')->ignore($id)],
-            'name' => ['required', 'string', 'max:255'],
+            'id'         => ['nullable', 'integer', Rule::exists($table, 'id')],
+            'code'       => ['required', 'string', 'max:30', Rule::unique($table, 'code')->ignore($id)],
+            'name'       => ['required', 'string', 'max:255'],
+            // Fund sources only: which APP their projects go to
+            'fund_group' => [$type === 'fund-sources' ? 'required' : 'nullable', Rule::enum(\App\Enums\FundGroup::class)],
         ], ['code.unique' => 'This code is already used.']);
 
         if ($validator->fails()) {
@@ -63,7 +65,8 @@ class LookupController extends Controller
         }
 
         $row = $id ? $model::findOrFail($id) : new $model;
-        $row->fill($validator->safe()->only(['code', 'name']) + ['is_active' => $request->boolean('is_active', true)])->save();
+        $fields = $type === 'fund-sources' ? ['code', 'name', 'fund_group'] : ['code', 'name'];
+        $row->fill($validator->safe()->only($fields) + ['is_active' => $request->boolean('is_active', true)])->save();
 
         activity()->causedBy($request->user())->performedOn($row)->log(($id ? 'updated' : 'added') . " {$type} \"{$row->name}\"");
 

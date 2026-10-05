@@ -19,23 +19,26 @@
     </div>
     <div class="card-body p-0">
         <table class="table table-sm table-hover align-middle small mb-0">
-            <thead class="table-light"><tr><th class="ps-4">Code</th><th>Name</th><th class="text-center">Status</th><th class="text-center">Used by</th><th class="pe-4"></th></tr></thead>
+            <thead class="table-light"><tr><th class="ps-4">Code</th><th>Name</th>@if ($type === 'fund-sources')<th>APP</th>@endif<th class="text-center">Status</th><th class="text-center">Used by</th><th class="pe-4"></th></tr></thead>
             <tbody>
                 @forelse ($rows as $row)
                     <tr class="{{ $row->is_active ? '' : 'text-muted' }}">
                         <td class="ps-4 fw-semibold">{{ $row->code }}</td>
                         <td>{{ $row->name }}</td>
+                        @if ($type === 'fund-sources')
+                            <td><span class="badge {{ $row->fund_group === \App\Enums\FundGroup::Sida ? 'bg-warning text-dark' : 'bg-light text-dark border' }}">{{ $row->fund_group->label() }}</span></td>
+                        @endif
                         <td class="text-center"><span class="badge {{ $row->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $row->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td class="text-center">{{ $row->used_count }}</td>
                         <td class="pe-4 text-end text-nowrap">
-                            <button class="btn btn-sm btn-link p-0 me-2 btn-edit" data-id="{{ $row->id }}" data-code="{{ $row->code }}" data-name="{{ $row->name }}" data-active="{{ $row->is_active ? 1 : 0 }}" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-link p-0 me-2 btn-edit" data-id="{{ $row->id }}" data-code="{{ $row->code }}" data-name="{{ $row->name }}" data-active="{{ $row->is_active ? 1 : 0 }}" @if ($type === 'fund-sources') data-fund="{{ $row->fund_group->value }}" @endif title="Edit"><i class="fas fa-edit"></i></button>
                             @if ($row->used_count === 0)
                                 <button class="btn btn-sm btn-link p-0 text-danger btn-delete" data-id="{{ $row->id }}" data-name="{{ $row->name }}" title="Delete"><i class="fas fa-trash-alt"></i></button>
                             @endif
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="text-center text-muted py-4">Nothing yet.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-4">Nothing yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -63,6 +66,18 @@
                     <input type="text" name="name" class="form-control form-control-sm" placeholder="e.g. GAA 2017 - Continuing Appropriation" required>
                     <div class="invalid-feedback"></div>
                 </div>
+                @if ($type === 'fund-sources')
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted mb-1">APP</label>
+                        <select name="fund_group" class="form-select form-select-sm">
+                            @foreach (\App\Enums\FundGroup::cases() as $fund)
+                                <option value="{{ $fund->value }}">{{ $fund->label() }} APP</option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">PPMP projects with this fund source go to the Regular or the SIDA APP.</div>
+                    </div>
+                @endif
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" name="is_active" value="1" id="lookup_active">
                     <label class="form-check-label" for="lookup_active">Active</label>
@@ -90,6 +105,7 @@ document.addEventListener('DOMContentLoaded', function () {
         form.find('[name=code]').val(data.code || '');
         form.find('[name=name]').val(data.name || '');
         form.find('[name=is_active]').prop('checked', data.active === undefined ? true : data.active == 1);
+        form.find('[name=fund_group]').val(data.fund || 'regular');
         $('#lookup_title').text(data.id ? 'Edit {{ \Illuminate\Support\Str::singular($label) }}' : 'Add {{ \Illuminate\Support\Str::singular($label) }}');
         modal().show();
     }

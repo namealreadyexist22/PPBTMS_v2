@@ -191,4 +191,33 @@ class AppServiceTest extends TestCase
         $this->assertFalse($this->apps->canManage($lmSec, Region::Vis));
         $this->assertFalse($this->apps->canManage(User::factory()->create(), Region::Lm));
     }
+
+    public function test_sida_funded_projects_have_their_own_app(): void
+    {
+        FundSource::create(['code' => 'GAA2017-CA', 'name' => 'GAA 2017 - Continuing Appropriation', 'fund_group' => 'sida']);
+        $ppmp = $this->approvedPpmp($this->mis, [['Office supplies', '10000', 'SVP']]);
+
+        // A SIDA-funded project in the same PPMP (added through an amendment)
+        $staff = User::factory()->create(['office_id' => $this->mis->id]);
+        $v2 = $this->ppmps->amend($ppmp, $staff);
+        $this->ppmps->addItem($v2, ['ppmp_pap_id' => $v2->paps()->first()->id, 'description' => 'Training Box', 'project_type' => 'goods',
+            'procurement_mode_id' => ProcurementMode::where('code', 'DAS')->value('id'), 'fund_source_id' => FundSource::where('code', 'GAA2017-CA')->value('id'),
+            'proc_start' => '2027-01-01', 'proc_end' => '2027-12-01', 'estimated_budget' => '2000']);
+        $this->ppmps->submit($v2->fresh(), $staff);
+        app(DivisionPpmpService::class)->approve($this->division, 2027, Region::Lm, $this->head, $this->head);
+
+        $regular = $this->apps->create(2027, Region::Lm, $this->bacSec);
+        $sida = $this->apps->create(2027, Region::Lm, $this->bacSec, AppType::Final, \App\Enums\FundGroup::Sida);
+
+        $this->assertSame(['Office supplies'], $this->apps->pool($regular)->pluck('description')->all());
+        $this->assertSame(['Training Box'], $this->apps->pool($sida)->pluck('description')->all());
+        $this->assertStringContainsString('SIDA', $sida->title());
+
+        try {
+            $this->apps->create(2027, Region::Lm, $this->bacSec, AppType::Final, \App\Enums\FundGroup::Sida);
+            $this->fail('One SIDA APP per year and region.');
+        } catch (ProcurementException) {
+            $this->addToAssertionCount(1);
+        }
+    }
 }

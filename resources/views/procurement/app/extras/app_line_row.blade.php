@@ -17,7 +17,7 @@
     <td title="{{ $line->procurementMode->name }}">{{ $line->procurementMode->code }}</td>
     <td class="text-center">{{ $line->early_procurement ? 'Yes' : 'No' }}</td>
     <td>{{ $line->bid_criteria }}</td>
-    <td class="text-nowrap">{{ $line->proc_start->format('n/Y') }} – {{ $line->proc_end->format('n/Y') }}</td>
+    <td class="text-nowrap">{{ $line->proc_start->format('M Y') }} – {{ $line->proc_end->format('M Y') }}</td>
     <td>{{ $line->fundSource->code }}</td>
     <td class="text-end text-nowrap fw-semibold">{{ number_format((float) $line->estimated_budget, 2) }}</td>
     <td class="text-center">{{ $line->ppmpItems->count() }}</td>

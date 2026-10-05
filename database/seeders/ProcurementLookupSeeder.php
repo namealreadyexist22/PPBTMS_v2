@@ -35,7 +35,7 @@ class ProcurementLookupSeeder extends Seeder
         // in Settings > Procurement Lookups. Re-seeding never disables those.
         $this->seed(FundSource::class, [
             'COB'  => 'Corporate Operating Budget',
-            'SIDA' => 'Sugar Industry Development Act',
+            'SIDA' => ['name' => 'Sugar Industry Development Act', 'fund_group' => 'sida'],   // own APP
         ]);
 
         $this->seed(Unit::class, [
@@ -65,8 +65,8 @@ class ProcurementLookupSeeder extends Seeder
     /** Adds missing codes only; names and active flags edited in Settings are left alone. */
     protected function seed(string $model, array $rows): void
     {
-        foreach ($rows as $code => $name) {
-            $model::firstOrCreate(['code' => $code], ['name' => $name]);
+        foreach ($rows as $code => $values) {
+            $model::firstOrCreate(['code' => $code], is_array($values) ? $values : ['name' => $values]);
         }
     }
 }

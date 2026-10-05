@@ -5,8 +5,9 @@
     <td class="c">{{ $line->procurementMode->name }}</td>
     <td class="c">{{ $line->is_cse ? 'N/A' : ($line->early_procurement ? 'Yes' : 'No') }}</td>
     <td class="c">{{ $line->bid_criteria }}</td>
-    <td class="c">{{ $line->proc_start->format('n/Y') }}</td>
-    <td class="c">{{ $line->proc_end->format('n/Y') }}</td>
+    {{-- stored as 01/2026, shown as January 2026 --}}
+    <td class="c">{{ $line->proc_start->format('F Y') }}</td>
+    <td class="c">{{ $line->proc_end->format('F Y') }}</td>
     <td>{{ $line->fundSource->name }}</td>
     <td class="r">₱{{ number_format((float) $line->estimated_budget, 2) }}</td>
     <td class="c">{{ $line->procurement_strategy }}</td>

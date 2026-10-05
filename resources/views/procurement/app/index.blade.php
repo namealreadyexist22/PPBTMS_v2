@@ -4,7 +4,7 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <div>
         <h5 class="fw-bold mb-0"><i class="fas fa-calendar-check text-muted me-2"></i>Annual Procurement Plan</h5>
-        <div class="text-muted small">One APP per region: Luzon/Mindanao by the BAC, Visayas by the Regional BAC. BAC Secretariat prepares, BAC Chair recommends, HOPE approves.</div>
+        <div class="text-muted small">Luzon/Mindanao by the BAC, Visayas by the Regional BAC; SIDA-funded projects have their own APP. BAC Secretariat prepares, BAC Chair recommends, HOPE approves.</div>
     </div>
     <form method="GET" class="d-flex align-items-center gap-2">
         <label class="small text-muted">Fiscal Year</label>
@@ -18,7 +18,7 @@
 
 <div class="row g-3">
     @foreach ($regions as $r)
-        @php $region = $r['region']; $latest = $r['versions']->first(); @endphp
+        @php $region = $r['region']; @endphp
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm h-100" style="border-radius: 12px;">
                 <div class="card-body p-4">
@@ -32,36 +32,46 @@
                         @endif
                     </div>
 
-                    @if ($r['versions']->isEmpty())
-                        <p class="text-muted small my-3">No APP yet for FY {{ $fiscalYear }}.</p>
-                        @if ($r['canManage'])
-                            <form class="d-flex gap-2 align-items-center form-create-app">
-                                <input type="hidden" name="fiscal_year" value="{{ $fiscalYear }}">
-                                <input type="hidden" name="region" value="{{ $region->value }}">
-                                <select name="type" class="form-select form-select-sm" style="width: 140px;">
-                                    @foreach ($types as $type)
-                                        <option value="{{ $type->value }}" @selected($type === \App\Enums\AppType::Final)>{{ $type->label() }}</option>
-                                    @endforeach
-                                </select>
-                                <button class="btn btn-sm btn-success"><i class="fas fa-plus me-1"></i> Create APP</button>
-                            </form>
-                        @endif
-                    @else
-                        <table class="table table-sm small align-middle mt-3 mb-0">
-                            <thead class="table-light"><tr><th>Version</th><th>Type</th><th class="text-center">Status</th><th class="text-end">Total Budget</th><th></th></tr></thead>
-                            <tbody>
-                                @foreach ($r['versions'] as $v)
-                                    <tr>
-                                        <td>{{ $v->version }}</td>
-                                        <td>{{ $v->type->label() }}</td>
-                                        <td class="text-center"><span class="badge bg-{{ $v->status->color() }}">{{ $v->status->label() }}</span></td>
-                                        <td class="text-end">₱ {{ number_format((float) $v->total_budget, 2) }}</td>
-                                        <td class="text-end"><a href="{{ route('procurement.app.show', $v) }}">Open</a></td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    @endif
+                    @foreach ($r['funds'] as $f)
+                        @php $fund = $f['fund']; @endphp
+                        <div class="border rounded p-3 mt-3">
+                            <div class="fw-semibold mb-2">
+                                <span class="badge {{ $fund === \App\Enums\FundGroup::Sida ? 'bg-warning text-dark' : 'bg-secondary' }}">{{ $fund->label() }}</span>
+                                {{ $fund->label() }} APP
+                            </div>
+                            @if ($f['versions']->isEmpty())
+                                <p class="text-muted small mb-2">No {{ $fund->label() }} APP yet for FY {{ $fiscalYear }}.</p>
+                                @if ($r['canManage'])
+                                    <form class="d-flex gap-2 align-items-center form-create-app">
+                                        <input type="hidden" name="fiscal_year" value="{{ $fiscalYear }}">
+                                        <input type="hidden" name="region" value="{{ $region->value }}">
+                                        <input type="hidden" name="fund_group" value="{{ $fund->value }}">
+                                        <select name="type" class="form-select form-select-sm" style="width: 140px;">
+                                            @foreach ($types as $type)
+                                                <option value="{{ $type->value }}" @selected($type === \App\Enums\AppType::Final)>{{ $type->label() }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button class="btn btn-sm btn-success"><i class="fas fa-plus me-1"></i> Create {{ $fund->label() }} APP</button>
+                                    </form>
+                                @endif
+                            @else
+                                <table class="table table-sm small align-middle mb-0">
+                                    <thead class="table-light"><tr><th>Version</th><th>Type</th><th class="text-center">Status</th><th class="text-end">Total Budget</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach ($f['versions'] as $v)
+                                            <tr>
+                                                <td>{{ $v->version }}</td>
+                                                <td>{{ $v->type->label() }}</td>
+                                                <td class="text-center"><span class="badge bg-{{ $v->status->color() }}">{{ $v->status->label() }}</span></td>
+                                                <td class="text-end">₱ {{ number_format((float) $v->total_budget, 2) }}</td>
+                                                <td class="text-end"><a href="{{ route('procurement.app.show', $v) }}">Open</a></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            @endif
+                        </div>
+                    @endforeach
 
                     <div class="small text-muted mt-3">
                         @foreach ($roles as $role => $label)

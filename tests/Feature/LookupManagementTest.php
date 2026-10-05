@@ -27,12 +27,14 @@ class LookupManagementTest extends TestCase
     {
         $this->get(route('core.lookups.index'))->assertOk()->assertSee('Fund Sources')->assertSee('Corporate Operating Budget');
 
-        $this->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'code' => 'GAA2017-CA', 'name' => 'GAA 2017 - Continuing Appropriation'])->assertOk();
-        $this->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'code' => 'GAA2017-CA', 'name' => 'Duplicate'])->assertStatus(422)->assertJsonValidationErrors('code');
+        $this->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'code' => 'GAA2017-CA', 'name' => 'GAA 2017 - Continuing Appropriation', 'fund_group' => 'sida'])->assertOk();
+        $this->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'code' => 'GAA2017-CA', 'name' => 'Duplicate', 'fund_group' => 'regular'])->assertStatus(422)->assertJsonValidationErrors('code');
         $gaa = FundSource::where('code', 'GAA2017-CA')->sole();
         $this->assertTrue($gaa->is_active);
+        $this->assertSame(\App\Enums\FundGroup::Sida, $gaa->fund_group);
+        $this->get(route('core.lookups.index'))->assertSee('SIDA</span>', false);
 
-        $this->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'id' => $gaa->id, 'code' => 'GAA2017-CA', 'name' => 'GAA 2017 - Continuing Appropriation', 'is_active' => 0])->assertOk();
+        $this->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'id' => $gaa->id, 'code' => 'GAA2017-CA', 'name' => 'GAA 2017 - Continuing Appropriation', 'fund_group' => 'sida', 'is_active' => 0])->assertOk();
         $this->assertFalse($gaa->fresh()->is_active);
 
         $this->deleteJson(route('core.lookups.destroy'), ['type' => 'fund-sources', 'id' => $gaa->id])->assertOk();

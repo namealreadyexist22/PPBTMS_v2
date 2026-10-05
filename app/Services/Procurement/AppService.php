@@ -5,6 +5,7 @@ namespace App\Services\Procurement;
 use App\Core\Models\Setting;
 use App\Enums\AppStatus;
 use App\Enums\AppType;
+use App\Enums\FundGroup;
 use App\Enums\PpmpStatus;
 use App\Enums\Region;
 use App\Exceptions\ProcurementException;
@@ -58,15 +59,16 @@ class AppService
             || ($user->canAccessPermission(self::MANAGE_PERMISSION) && ($user->region ?? Region::Lm) === $region);
     }
 
-    public function create(int $fiscalYear, Region $region, User $user, AppType $type = AppType::Final): AnnualProcurementPlan
+    public function create(int $fiscalYear, Region $region, User $user, AppType $type = AppType::Final, FundGroup $fund = FundGroup::Regular): AnnualProcurementPlan
     {
-        if (AnnualProcurementPlan::where('fiscal_year', $fiscalYear)->where('region', $region)->exists()) {
-            throw new ProcurementException("There is already a {$region->label()} APP for FY {$fiscalYear}. Open it, or create an updated version.");
+        if (AnnualProcurementPlan::where('fiscal_year', $fiscalYear)->where('region', $region)->where('fund_group', $fund)->exists()) {
+            throw new ProcurementException("There is already a {$region->label()} {$fund->label()} APP for FY {$fiscalYear}. Open it, or create an updated version.");
         }
 
         return AnnualProcurementPlan::create([
             'fiscal_year' => $fiscalYear,
             'region'      => $region,
+            'fund_group'  => $fund,
             'version'     => 1,
             'type'        => $type === AppType::Updated ? AppType::Final : $type,
             'status'      => AppStatus::Draft,
@@ -74,7 +76,7 @@ class AppService
         ]);
     }
 
-    /** Projects of the region's current approved Division PPMPs. */
+    /** Projects of the region's current approved Division PPMPs whose fund source belongs to this APP (Regular / SIDA). */
     public function sourceItems(AnnualProcurementPlan $app): Collection
     {
         return DivisionPpmp::with(['ppmps.items.pap', 'ppmps.items.procurementMode', 'ppmps.items.fundSource', 'ppmps.office'])
@@ -85,6 +87,7 @@ class AppService
             ->flatMap(fn (DivisionPpmp $division) => $division->ppmps->flatMap(
                 fn ($ppmp) => $ppmp->items->each(fn (PpmpItem $item) => $item->setRelation('ppmp', $ppmp))
             ))
+            ->filter(fn (PpmpItem $item) => ($item->fundSource->fund_group ?? FundGroup::Regular) === $app->fund_group)
             ->values();
     }
 
@@ -292,7 +295,7 @@ class AppService
     {
         $this->assertStatus($app, AppStatus::Approved);
 
-        $open = AnnualProcurementPlan::where('fiscal_year', $app->fiscal_year)->where('region', $app->region)
+        $open = AnnualProcurementPlan::where('fiscal_year', $app->fiscal_year)->where('region', $app->region)->where('fund_group', $app->fund_group)
             ->whereIn('status', [AppStatus::Draft, AppStatus::Submitted, AppStatus::Recommended])->exists();
 
         if ($open) {
@@ -303,7 +306,8 @@ class AppService
             $copy = AnnualProcurementPlan::create([
                 'fiscal_year'     => $app->fiscal_year,
                 'region'          => $app->region,
-                'version'         => (int) AnnualProcurementPlan::where('fiscal_year', $app->fiscal_year)->where('region', $app->region)->max('version') + 1,
+                'fund_group'      => $app->fund_group,
+                'version'         => (int) AnnualProcurementPlan::where('fiscal_year', $app->fiscal_year)->where('region', $app->region)->where('fund_group', $app->fund_group)->max('version') + 1,
                 'type'            => AppType::Updated,
                 'status'          => AppStatus::Draft,
                 'updated_from_id' => $app->id,

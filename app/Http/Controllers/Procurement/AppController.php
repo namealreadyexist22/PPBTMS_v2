@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Procurement;
 
 use App\Enums\AppStatus;
 use App\Enums\AppType;
+use App\Enums\FundGroup;
 use App\Enums\Region;
 use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
@@ -37,11 +38,15 @@ class AppController extends Controller
         $user = $request->user();
         $fiscalYear = (int) ($request->input('fy') ?: now()->year + 1);
 
+        // One APP per region and fund group (Regular / SIDA)
         $regions = collect(Region::cases())->map(fn (Region $region) => [
             'region'      => $region,
-            'versions'    => AnnualProcurementPlan::where('fiscal_year', $fiscalYear)->where('region', $region)->orderByDesc('version')->get(),
             'canManage'   => $this->appService->canManage($user, $region),
             'signatories' => collect(AppService::ROLES)->map(fn ($label, $role) => $this->appService->signatory($region, $role)),
+            'funds'       => collect(FundGroup::cases())->map(fn (FundGroup $fund) => [
+                'fund'     => $fund,
+                'versions' => AnnualProcurementPlan::where('fiscal_year', $fiscalYear)->where('region', $region)->where('fund_group', $fund)->orderByDesc('version')->get(),
+            ]),
         ]);
 
         return view('procurement.app.index', [
@@ -59,13 +64,14 @@ class AppController extends Controller
         $data = $this->validateJson($request, [
             'fiscal_year' => ['required', 'integer', 'between:2000,2100'],
             'region'      => ['required', Rule::enum(Region::class)],
+            'fund_group'  => ['required', Rule::enum(FundGroup::class)],
             'type'        => ['required', Rule::in([AppType::Indicative->value, AppType::Final->value])],
         ]);
         $region = Region::from($data['region']);
         $this->authorizeManage($request, $region);
 
         try {
-            $app = $this->appService->create((int) $data['fiscal_year'], $region, $request->user(), AppType::from($data['type']));
+            $app = $this->appService->create((int) $data['fiscal_year'], $region, $request->user(), AppType::from($data['type']), FundGroup::from($data['fund_group']));
 
             return response()->json(['status' => 'success', 'message' => "{$app->title()} created.", 'url' => route('procurement.app.show', $app)]);
         } catch (ProcurementException $e) {
@@ -92,7 +98,7 @@ class AppController extends Controller
             'canRecommend' => $app->status === AppStatus::Submitted && $chair?->id === $user->id,
             'canApprove'   => $app->status === AppStatus::Recommended && $hope?->id === $user->id,
             'canUpdate'    => $canManage && $app->status === AppStatus::Approved,
-            'versions'     => AnnualProcurementPlan::where('fiscal_year', $app->fiscal_year)->where('region', $app->region)->orderBy('version')->get(),
+            'versions'     => AnnualProcurementPlan::where('fiscal_year', $app->fiscal_year)->where('region', $app->region)->where('fund_group', $app->fund_group)->orderBy('version')->get(),
             'chair'        => $chair,
             'hope'         => $hope,
         ]);

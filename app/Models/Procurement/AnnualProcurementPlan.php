@@ -24,7 +24,7 @@ class AnnualProcurementPlan extends Model
     use HasSignatories, LogsActivity;
 
     protected $fillable = [
-        'uuid', 'fiscal_year', 'region', 'version', 'type', 'status', 'updated_from_id',
+        'uuid', 'fiscal_year', 'region', 'fund_group', 'version', 'type', 'status', 'updated_from_id',
         'total_budget', 'remarks', 'approved_at', 'created_by',
     ];
 
@@ -34,6 +34,7 @@ class AnnualProcurementPlan extends Model
             'fiscal_year'  => 'integer',
             'version'      => 'integer',
             'region'       => Region::class,
+            'fund_group'   => \App\Enums\FundGroup::class,
             'type'         => AppType::class,
             'status'       => AppStatus::class,
             'total_budget' => 'decimal:2',
@@ -60,7 +61,9 @@ class AnnualProcurementPlan extends Model
 
     public function title(): string
     {
-        return "APP FY {$this->fiscal_year} - {$this->region->label()}" . ($this->version > 1 ? " (Version {$this->version})" : '');
+        return "APP FY {$this->fiscal_year} - {$this->region->label()}"
+            . ($this->fund_group === \App\Enums\FundGroup::Sida ? ' - SIDA' : '')
+            . ($this->version > 1 ? " (Version {$this->version})" : '');
     }
 
     public function items(): HasMany
