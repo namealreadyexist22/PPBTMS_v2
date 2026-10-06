@@ -67,7 +67,8 @@ class BudgetAllocationService
                 ->each(fn ($a) => $a->setRelation('department', $department))->keyBy(fn ($a) => $a->fund_group->value)
             : collect();
 
-        return $ppmp->items->map(fn ($item) => $item->fundSource->fund_group ?? FundGroup::Regular)
+        // toBase(): an empty item list stays an Eloquent collection, whose merge() expects models
+        return $ppmp->items->toBase()->map(fn ($item) => $item->fundSource->fund_group ?? FundGroup::Regular)
             ->merge($allocations->map->fund_group)
             ->unique(fn (FundGroup $fund) => $fund->value)
             ->sortBy(fn (FundGroup $fund) => array_search($fund, FundGroup::cases(), true))

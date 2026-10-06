@@ -153,6 +153,17 @@ class BudgetAllocationTest extends TestCase
         $this->assertSame(3000000000, $limit['available'] - $limit['mine']);   // 30M left of 50M
     }
 
+    public function test_a_ppmp_created_before_the_budget_and_still_empty_shows_the_budget(): void
+    {
+        $draft = $this->ppmp($this->mis, [], false);   // no projects yet
+        $this->budget->save($this->dept, 2027, FundGroup::Regular, '5000000', $this->officer);
+
+        $rows = $this->budget->checkPpmp($draft->fresh());
+        $this->assertCount(1, $rows);
+        $this->assertSame(0, $rows->first()['mine']);
+        $this->assertSame(500000000, $this->budget->limits($draft->fresh())['regular']['available']);
+    }
+
     public function test_amendment_replaces_its_earlier_version_when_counting(): void
     {
         $this->budget->save($this->dept, 2027, FundGroup::Regular, '1000000', $this->officer);
