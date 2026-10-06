@@ -197,22 +197,24 @@
                                 <div class="col-md-4 small text-muted d-flex align-items-end">Agency, end-user, project name, budget and delivery are taken from this project.</div>
                             </div>
 
-                            <div class="small fw-semibold text-muted mb-1">Market scoping activities conducted</div>
-                            @foreach (config('market_scoping.activities') as $key => $label)
-                                <div class="form-check small">
+                            <div class="small fw-semibold text-muted mb-1">Market scoping activity/ies conducted <span class="fw-normal">(check all that apply)</span></div>
+                            @foreach (config('market_scoping.activities') as $key => [$label, $docs])
+                                <div class="form-check small mb-1">
                                     <input class="form-check-input" type="checkbox" name="market_scoping[activities][]" value="{{ $key }}" id="ms_act_{{ $key }}" @checked(in_array($key, $ms['activities'] ?? []))>
-                                    <label class="form-check-label" for="ms_act_{{ $key }}">{{ $label }}</label>
+                                    <label class="form-check-label" for="ms_act_{{ $key }}">{{ $label }}
+                                        <span class="d-block text-muted" style="font-size: .72rem;">Documentation: {{ $docs }}</span>
+                                    </label>
                                 </div>
                             @endforeach
-                            <input type="text" name="market_scoping[activity_other]" class="form-control form-control-sm mt-1 mb-3" value="{{ $ms['activity_other'] ?? '' }}" placeholder="Others (specify)">
+                            <input type="text" name="market_scoping[activity_other]" class="form-control form-control-sm mt-1 mb-3" value="{{ $ms['activity_other'] ?? '' }}" placeholder="Other analogous market scoping activity/ies undertaken (specify)">
 
                             <div class="table-responsive">
                                 <table class="table table-sm align-middle small mb-0">
-                                    <thead class="table-light"><tr><th>Parameter</th><th style="width: 110px;">Yes / No / N/A</th><th>Recommendation based on the market scoping</th></tr></thead>
+                                    <thead class="table-light"><tr><th>Parameter</th><th style="width: 130px;">Considered?</th><th>Recommendations based on the market scoping</th></tr></thead>
                                     <tbody>
-                                        @foreach (config('market_scoping.parameters') as $key => $label)
+                                        @foreach (config('market_scoping.parameters') as $key => [$label, $question])
                                             <tr>
-                                                <td>{{ $label }}</td>
+                                                <td><span class="fw-semibold">{{ $label }}</span><span class="d-block text-muted" style="font-size: .72rem;">{{ $question }}</span></td>
                                                 <td>
                                                     <select name="market_scoping[parameters][{{ $key }}][answer]" class="form-select form-select-sm">
                                                         <option value="">—</option>

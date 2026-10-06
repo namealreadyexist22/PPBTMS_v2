@@ -229,11 +229,11 @@ class PpmpPageTest extends TestCase
         $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'ICT');
         $this->actingAs($this->staff);
 
-        $parameters = collect(config('market_scoping.parameters'))->map(fn ($l, $k) => ['answer' => $k === 'liability' ? 'na' : 'yes', 'recommendation' => "ok {$k}"])->all();
+        $parameters = collect(config('market_scoping.parameters'))->map(fn ($l, $k) => ['answer' => $k === 'storage' ? 'na' : 'yes', 'recommendation' => "ok {$k}"])->all();
 
         // Project with the checklist and a market survey PDF, sent as multipart form data
         $this->post(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, [
-            'market_scoping' => ['period_from' => '2026-08', 'period_to' => '2026-09', 'activities' => ['consultations', 'brochures'], 'parameters' => $parameters],
+            'market_scoping' => ['period_from' => '2026-08', 'period_to' => '2026-09', 'activities' => ['consultations', 'price_sourcing', 'philgeps'], 'parameters' => $parameters],
             'attachments' => [\Illuminate\Http\UploadedFile::fake()->create('canvass.pdf', 120, 'application/pdf')],
             'attachment_kinds' => ['market_survey'],
         ]), ['Accept' => 'application/json'])->assertOk();
@@ -248,7 +248,8 @@ class PpmpPageTest extends TestCase
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Market scoping complete')->assertSee('canvass.pdf');
         $this->get(route('procurement.ppmp.attachments.show', [$ppmp, $attachment]))->assertOk();
         $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertOk()
-            ->assertSee('MARKET SCOPING CHECKLIST')->assertSee('From 08/2026 To 09/2026')->assertSee('ok cost')->assertSee('canvass.pdf');
+            ->assertSee('MARKET SCOPING CHECKLIST')->assertSee('From 08/2026 To 09/2026')->assertSee('ok cost')->assertSee('canvass.pdf')
+            ->assertSee('Use of data from PhilGEPS or agency websites')->assertSee('f. Identified Risk/s')->assertSee('Approved by:');
         $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Market Scoping Checklist')->assertSee('Market survey / price quotations');
 
         // Wrong file type and a period ending before it starts are refused
