@@ -4,6 +4,7 @@ namespace App\Models\Procurement;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -19,11 +20,11 @@ class Office extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'department_id', 'head_user_id', 'is_consolidating', 'is_active'];
+    protected $fillable = ['code', 'acronym', 'name', 'type', 'parent_id', 'head_user_id', 'is_consolidating', 'budget_fund', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean'];
+        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean', 'budget_fund' => \App\Enums\FundGroup::class];
     }
 
     /** Short name for lists: the acronym, or the office number if none. */
@@ -76,6 +77,67 @@ class Office extends Model
         return $this->parent_id ? null : $this;
     }
 
+    /** Where the unit sits, e.g. "05012 · PPSPD › PPPD › MIS — MIS SECTION". */
+    public function pathLabel(): string
+    {
+        $path = [];
+        for ($office = $this; $office; $office = $office->parent) {
+            array_unshift($path, $office->shortName());
+        }
+
+        return "{$this->code} · " . implode(' › ', $path) . " — {$this->name}";
+    }
+
+    /** Unit types of the organization tree, top down. */
+    public const TYPES = ['department' => 'Department', 'division' => 'Division', 'section' => 'Section'];
+
+    public function typeLabel(): string
+    {
+        return self::TYPES[$this->type] ?? ucfirst((string) $this->type);
+    }
+
+    public function isDepartment(): bool
+    {
+        return $this->type === 'department';
+    }
+
+    /** The department whose budget this unit shares: itself, or the nearest department above it. */
+    protected function department(): Attribute
+    {
+        return Attribute::get(function (): ?Office {
+            for ($office = $this; $office; $office = $office->parent) {
+                if ($office->isDepartment()) {
+                    return $office;
+                }
+            }
+
+            return null;
+        });
+    }
+
+    /**
+     * Units that share this department's budget: itself and everything below it,
+     * except units under another department further down (e.g. AFD-LM under ODA-AF).
+     */
+    public function departmentOfficeIds(): array
+    {
+        $childrenOf = static::query()->whereNotNull('parent_id')->get(['id', 'parent_id', 'type'])->groupBy('parent_id');
+
+        $result = [$this->id];
+        $queue = [$this->id];
+
+        while ($queue) {
+            foreach ($childrenOf->get(array_shift($queue), collect()) as $child) {
+                if ($child->type !== 'department') {
+                    $result[] = (int) $child->id;
+                    $queue[] = $child->id;
+                }
+            }
+        }
+
+        return $result;
+    }
+
     /** Who approves this office's PPMP: the head of its consolidating office. */
     public function approverId(): ?int
     {
@@ -117,12 +179,6 @@ class Office extends Model
         }
 
         return $result->values();
-    }
-
-    /** The department whose budget this office shares. */
-    public function department(): BelongsTo
-    {
-        return $this->belongsTo(Department::class);
     }
 
     public function parent(): BelongsTo

@@ -78,9 +78,9 @@ class ProcurementNotifier
     public function budgetChanged(BudgetAllocation $allocation, ?string $old, User $actor, ?string $reason): void
     {
         $department = $allocation->department;
-        $heads = User::whereIn('id', $department->offices()->whereNotNull('head_user_id')->pluck('head_user_id'))->get();
+        $heads = User::whereIn('id', \App\Models\Procurement\Office::whereIn('id', $department->departmentOfficeIds())->whereNotNull('head_user_id')->pluck('head_user_id'))->get();
 
-        $this->send($heads, $actor, "{$department->code} budget changed",
+        $this->send($heads, $actor, "{$department->shortName()} budget changed",
             "{$allocation->fund_group->label()} FY {$allocation->fiscal_year}: ₱" . Money::format($old) . ' → ₱' . Money::format($allocation->amount)
                 . ($reason ? " ({$reason})" : '') . '.',
             route('procurement.ppmp.index'), 'fas fa-coins');

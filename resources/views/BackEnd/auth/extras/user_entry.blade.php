@@ -114,12 +114,12 @@
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-5">
-                            <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Home Office</label>
+                            <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Unit (Department / Division / Section)</label>
                             <select class="form-select form-select-sm rounded" id="office_id" name="office_id">
                                 <option value="">— No office —</option>
                                 @foreach ($offices as $office)
                                     <option value="{{ $office->id }}" {{ isset($user) && $user->office_id == $office->id ? 'selected' : '' }}>
-                                        {{ $office->label() }}
+                                        {{ $office->pathLabel() }}
                                     </option>
                                 @endforeach
                             </select>
@@ -141,7 +141,7 @@
                                 <div class="form-check small office-option">
                                     <input class="form-check-input" type="checkbox" name="office_ids[]" value="{{ $office->id }}" id="office_ids_{{ $office->id }}"
                                         {{ in_array($office->id, $extraIds) ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="office_ids_{{ $office->id }}">{{ $office->label() }}</label>
+                                    <label class="form-check-label" for="office_ids_{{ $office->id }}">{{ $office->pathLabel() }}</label>
                                 </div>
                             @endforeach
                         </div>

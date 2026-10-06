@@ -6,7 +6,6 @@ use App\Enums\FundGroup;
 use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\BudgetAllocation;
-use App\Models\Procurement\Department;
 use App\Models\Procurement\Office;
 use App\Services\Procurement\BudgetAllocationService;
 use App\Support\Money;
@@ -30,10 +29,11 @@ class BudgetAllocationController extends Controller
         $allocations = BudgetAllocation::with('history.user')->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->get()->keyBy('department_id');
 
         // One row per department of this fund (in office-number order), with what each of its offices uses
-        $rows = Department::active()->where('fund_group', $fund)
-            ->with(['offices' => fn ($q) => $q->orderBy('code')])->get()
-            ->sortBy(fn (Department $d) => $d->offices->first()?->code ?? 'zzz')->values()
-            ->map(function (Department $department) use ($allocations) {
+        $offices = Office::active()->get()->keyBy('id');
+        $rows = Office::active()->where('type', 'department')
+            ->where(fn ($q) => $fund === FundGroup::Regular ? $q->where('budget_fund', $fund)->orWhereNull('budget_fund') : $q->where('budget_fund', $fund))
+            ->orderBy('code')->get()
+            ->map(function (Office $department) use ($allocations, $offices) {
                 $allocation = $allocations->get($department->id)?->setRelation('department', $department);
                 $usedBy = $allocation ? $this->budget->usedByOffice($allocation) : [];
                 $amount = $allocation ? Money::toCents((string) $allocation->amount) : null;
@@ -45,7 +45,8 @@ class BudgetAllocationController extends Controller
                     'amount'     => $amount,
                     'used'       => $used,
                     'remaining'  => $amount === null ? null : $amount - $used,
-                    'offices'    => $department->offices->map(fn (Office $o) => ['office' => $o, 'used' => $usedBy[$o->id] ?? 0]),
+                    'offices'    => collect($department->departmentOfficeIds())->map(fn ($id) => $offices->get($id))->filter()->sortBy('code')
+                                    ->map(fn (Office $o) => ['office' => $o, 'used' => $usedBy[$o->id] ?? 0])->values(),
                 ];
             });
 
@@ -63,7 +64,7 @@ class BudgetAllocationController extends Controller
         $request->merge(['amount' => str_replace(',', '', (string) $request->input('amount'))]);
 
         $validator = Validator::make($request->all(), [
-            'department_id' => ['required', 'integer', 'exists:departments,id'],
+            'department_id' => ['required', 'integer', 'exists:offices,id'],
             'fiscal_year'   => ['required', 'integer', 'between:2000,2100'],
             'fund_group'    => ['required', Rule::enum(FundGroup::class)],
             'amount'        => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
@@ -78,14 +79,14 @@ class BudgetAllocationController extends Controller
 
         try {
             $allocation = $this->budget->save(
-                Department::findOrFail($data['department_id']), (int) $data['fiscal_year'], FundGroup::from($data['fund_group']),
+                Office::findOrFail($data['department_id']), (int) $data['fiscal_year'], FundGroup::from($data['fund_group']),
                 $data['amount'], $request->user(), $data['reason'] ?? null,
             );
 
             activity()->causedBy($request->user())->performedOn($allocation)
-                ->log("set {$allocation->fund_group->label()} budget of {$allocation->department->code} for FY {$allocation->fiscal_year}");
+                ->log("set {$allocation->fund_group->label()} budget of {$allocation->department->shortName()} for FY {$allocation->fiscal_year}");
 
-            return response()->json(['status' => 'success', 'message' => "Budget of {$allocation->department->code} saved."]);
+            return response()->json(['status' => 'success', 'message' => "Budget of {$allocation->department->shortName()} saved."]);
         } catch (ProcurementException $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
         }

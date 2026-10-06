@@ -5,7 +5,6 @@ namespace Tests\Feature\Procurement;
 use App\Enums\FundGroup;
 use App\Enums\PpmpStatus;
 use App\Exceptions\ProcurementException;
-use App\Models\Procurement\Department;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
@@ -29,7 +28,7 @@ class BudgetAllocationTest extends TestCase
     protected Office $research;
     protected Office $mis;
     protected Office $sppdemd;
-    protected Department $dept;
+    protected Office $dept;
 
     protected function setUp(): void
     {
@@ -40,14 +39,13 @@ class BudgetAllocationTest extends TestCase
         $this->officer = User::factory()->create();
 
         $head = User::factory()->create();
-        // PPSPD the department; 05000 (Manager III) is one of its offices with its own PPMP
-        $this->dept = Department::updateOrCreate(['code' => 'PPSPD'], ['name' => 'PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT', 'fund_group' => 'regular']);
-        $d = $this->dept->id;
-        $this->ppspd = Office::create(['code' => '05000', 'name' => 'PPSPD - MANAGER III', 'head_user_id' => $head->id, 'is_consolidating' => true, 'department_id' => $d]);
-        $this->pppd = Office::create(['code' => '05010', 'name' => 'PPPD', 'parent_id' => $this->ppspd->id, 'department_id' => $d]);
-        $this->research = Office::create(['code' => '05011', 'name' => 'PPRS', 'parent_id' => $this->pppd->id, 'department_id' => $d]);
-        $this->mis = Office::create(['code' => '05012', 'name' => 'MIS', 'parent_id' => $this->pppd->id, 'department_id' => $d]);
-        $this->sppdemd = Office::create(['code' => '05020', 'name' => 'SPPDEMD', 'parent_id' => $this->ppspd->id, 'department_id' => $d]);
+        // PPSPD the department (it also prepares its own PPMP), PPPD and SPPDEM its divisions, PPRS and MIS PPPD's sections
+        $this->ppspd = Office::create(['code' => '05000', 'acronym' => 'PPSPD', 'name' => 'PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT', 'type' => 'department', 'budget_fund' => 'regular', 'head_user_id' => $head->id, 'is_consolidating' => true]);
+        $this->dept = $this->ppspd;
+        $this->pppd = Office::create(['code' => '05010', 'acronym' => 'PPPD', 'name' => 'PLANNING, POLICY AND PROGRAMMING DIVISION', 'type' => 'division', 'parent_id' => $this->ppspd->id]);
+        $this->research = Office::create(['code' => '05011', 'acronym' => 'PPRS', 'name' => 'PLANNING AND POLICY RESEARCH SECTION', 'type' => 'section', 'parent_id' => $this->pppd->id]);
+        $this->mis = Office::create(['code' => '05012', 'acronym' => 'MIS', 'name' => 'MIS SECTION', 'type' => 'section', 'parent_id' => $this->pppd->id]);
+        $this->sppdemd = Office::create(['code' => '05020', 'acronym' => 'SPPDEM', 'name' => 'SPECIAL PROJECTS DIVISION', 'type' => 'division', 'parent_id' => $this->ppspd->id]);
     }
 
     /** A PPMP with projects [[class, budget, fund code]], optionally submitted. */
@@ -111,9 +109,13 @@ class BudgetAllocationTest extends TestCase
 
     public function test_offices_of_another_department_or_none_do_not_share(): void
     {
-        $other = Department::updateOrCreate(['code' => 'LEGAL'], ['name' => 'LEGAL DEPARTMENT', 'fund_group' => 'regular']);
-        $legal = Office::create(['code' => '04000', 'name' => 'LEGAL', 'department_id' => $other->id]);
-        $loose = Office::create(['code' => '99000', 'name' => 'NO DEPARTMENT']);
+        $other = Office::create(['code' => '04000', 'acronym' => 'LEGAL', 'name' => 'LEGAL DEPARTMENT', 'type' => 'department', 'budget_fund' => 'regular']);
+        $legal = $other;
+        $loose = Office::create(['code' => '99000', 'name' => 'NO DEPARTMENT', 'type' => 'section']);
+        // A department further down keeps its own budget (e.g. AFD-LM under ODA-AF)
+        $sub = Office::create(['code' => '05030', 'acronym' => 'SUB', 'name' => 'SUB DEPARTMENT', 'type' => 'department', 'budget_fund' => 'regular', 'parent_id' => $this->ppspd->id]);
+        Office::create(['code' => '05031', 'name' => 'SUB SECTION', 'type' => 'section', 'parent_id' => $sub->id]);
+        $this->assertEqualsCanonicalizing([$this->ppspd->id, $this->pppd->id, $this->research->id, $this->mis->id, $this->sppdemd->id], $this->ppspd->departmentOfficeIds());
 
         $this->budget->save($this->dept, 2027, FundGroup::Regular, '1000000', $this->officer);
         $this->budget->save($other, 2027, FundGroup::Regular, '3000000', $this->officer);
@@ -130,8 +132,8 @@ class BudgetAllocationTest extends TestCase
 
     public function test_sida_departments_get_sida_budgets_and_others_cob(): void
     {
-        $sidaDept = Department::updateOrCreate(['code' => 'SIDA-SCP'], ['name' => 'SIDA-SCP', 'fund_group' => 'sida']);
-        $sida = Office::create(['code' => '11000', 'name' => 'SIDA-SCP', 'department_id' => $sidaDept->id]);
+        $sidaDept = Office::create(['code' => '11000', 'acronym' => 'SIDA-SCP', 'name' => 'SIDA-SCP', 'type' => 'department', 'budget_fund' => 'sida']);
+        $sida = $sidaDept;
 
         // Each department only takes a budget in its own fund
         $this->refused(fn () => $this->budget->save($this->dept, 2027, FundGroup::Sida, '1000000', $this->officer), 'budgeted under COB, not SIDA');
@@ -169,7 +171,7 @@ class BudgetAllocationTest extends TestCase
 
     public function test_realignment_between_departments_with_reason_and_history(): void
     {
-        $other = Department::updateOrCreate(['code' => 'RDE-LM'], ['name' => 'RDE-LM', 'fund_group' => 'regular']);
+        $other = Office::create(['code' => '07020', 'acronym' => 'RDE-LM', 'name' => 'RDE-LM', 'type' => 'department', 'budget_fund' => 'regular']);
         $this->budget->save($this->dept, 2027, FundGroup::Regular, '5000000', $this->officer);
         $this->budget->save($other, 2027, FundGroup::Regular, '3000000', $this->officer);
 
@@ -195,7 +197,7 @@ class BudgetAllocationTest extends TestCase
         $this->seed(\Database\Seeders\RolePermissionSeeder::class);
         $this->officer->update(['is_activated' => 1]);
         $this->officer->givePermissionTo('manage budget');
-        Department::updateOrCreate(['code' => 'SIDA-HRD'], ['name' => 'SIDA-HRD', 'fund_group' => 'sida']);
+        Office::create(['code' => '12000', 'acronym' => 'SIDA-HRD', 'name' => 'SIDA-HRD', 'type' => 'department', 'budget_fund' => 'sida']);
 
         $this->actingAs($this->officer)->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
             ->assertSee('PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT')->assertSee('5 offices')->assertSee('Not set')->assertDontSee('SIDA-HRD');
@@ -205,9 +207,11 @@ class BudgetAllocationTest extends TestCase
         $this->postJson(route('procurement.budget.store'), ['department_id' => $this->dept->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '3,000,000.00'])->assertOk();
         $this->postJson(route('procurement.budget.store'), ['department_id' => $this->dept->id, 'fiscal_year' => 2027, 'fund_group' => 'sida', 'amount' => '1,000,000'])
             ->assertStatus(422)->assertJson(['status' => 'error']);   // PPSPD is COB
+        $this->postJson(route('procurement.budget.store'), ['department_id' => $this->pppd->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '1,000,000'])
+            ->assertStatus(422)->assertJson(['message' => 'Budgets are allocated per department. PPPD is a Division.']);
 
         $this->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
-            ->assertSee('3,000,000.00')->assertSee('PPSPD - MANAGER III')->assertSee('Initial allocation');
+            ->assertSee('3,000,000.00')->assertSee('05012 MIS SECTION')->assertSee('Initial allocation');
 
         // PPMP page: department budget at the top, warning and disabled submit while over budget
         $staffPpmp = $this->ppmp($this->mis, [['co', '3500000', 'COB']], false);
@@ -215,7 +219,7 @@ class BudgetAllocationTest extends TestCase
         $staff->update(['is_activated' => 1]);
         $staff->givePermissionTo('manage ppmp');
         $this->actingAs($staff)->get(route('procurement.ppmp.show', $staffPpmp))->assertOk()
-            ->assertSee('Over budget.')->assertSee('PPSPD — PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT budget, shared by its offices')
+            ->assertSee('Over budget.')->assertSee('PPSPD — PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT budget, shared by its units')
             ->assertSee('id="btn_submit" disabled', false)
             ->assertSee('over by ₱500,000.00')
             ->assertSee('-500,000.00');

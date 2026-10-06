@@ -5,9 +5,9 @@
             <div class="modal-header bg-light py-3 border-bottom border-light">
                 <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
                     @if ($office)
-                        <i class="fas fa-edit text-warning me-2"></i> Update Office
+                        <i class="fas fa-edit text-warning me-2"></i> Update {{ $office->typeLabel() }}
                     @else
-                        <i class="fas fa-building text-primary me-2"></i> Add New Office
+                        <i class="fas fa-sitemap text-primary me-2"></i> Add {{ \App\Models\Procurement\Office::TYPES[$type] }}
                     @endif
                 </h5>
                 <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -22,6 +22,27 @@
                 <div class="modal-body p-4">
                     <div id="modal_error_summary" class="alert alert-danger d-none py-2 px-3 small rounded mb-3 shadow-sm">
                         <i class="fas fa-exclamation-triangle me-1"></i> <span>Please correct the highlighted errors below.</span>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-semibold text-muted mb-1">Type</label>
+                            <select name="type" class="form-select form-select-sm" id="office_type">
+                                @foreach (\App\Models\Procurement\Office::TYPES as $value => $label)
+                                    <option value="{{ $value }}" @selected($type === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-6" id="office_budget_fund_wrap" style="{{ $type === 'department' ? '' : 'display: none;' }}">
+                            <label class="form-label small fw-semibold text-muted mb-1">Budget fund</label>
+                            <select name="budget_fund" class="form-select form-select-sm">
+                                @foreach (\App\Enums\FundGroup::cases() as $fund)
+                                    <option value="{{ $fund->value }}" @selected(($office->budget_fund ?? \App\Enums\FundGroup::Regular) === $fund)>{{ $fund->label() }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -45,12 +66,12 @@
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted mb-1">Under (Parent Office)</label>
+                        <label class="form-label small fw-semibold text-muted mb-1">Under</label>
                         <select name="parent_id" class="form-select form-select-sm">
-                            <option value="">— None (top-level office) —</option>
+                            <option value="">— None (top-level department) —</option>
                             @foreach ($parents as $parent)
-                                <option value="{{ $parent->id }}" @selected(($office->parent_id ?? null) == $parent->id)>
-                                    {{ $parent->label() }}
+                                <option value="{{ $parent->id }}" @selected($parentId == $parent->id)>
+                                    {{ $parent->typeLabel() }}: {{ $parent->label() }}
                                 </option>
                             @endforeach
                         </select>
@@ -58,17 +79,6 @@
                         <div class="form-text">This office's PPMP is approved by the nearest head above it. A top-level office's head approves its own.</div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted mb-1">Department (budget)</label>
-                        <select name="department_id" class="form-select form-select-sm">
-                            <option value="">— None —</option>
-                            @foreach ($departments as $department)
-                                <option value="{{ $department->id }}" @selected(($office->department_id ?? null) == $department->id)>{{ $department->label() }} ({{ $department->fund_group->label() }})</option>
-                            @endforeach
-                        </select>
-                        <div class="invalid-feedback"></div>
-                        <div class="form-text">The office's PPMPs use this department's budget, shared with its other offices.</div>
-                    </div>
 
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-muted mb-1">Head</label>
@@ -87,7 +97,7 @@
                         <input class="form-check-input" type="checkbox" name="is_consolidating" value="1" id="office_is_consolidating"
                             @checked($office->is_consolidating ?? false)>
                         <label class="form-check-label small" for="office_is_consolidating">
-                            Consolidates PPMPs <span class="text-muted">— the section PPMPs under this office are combined into its Division PPMP, which its head approves and submits to BAC</span>
+                            Approves PPMPs <span class="text-muted">— the PPMPs of the units under it are combined into its Division PPMP, which its head approves and submits to BAC (usually divisions)</span>
                         </label>
                     </div>
 
@@ -110,3 +120,9 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById('office_type').addEventListener('change', function () {
+        document.getElementById('office_budget_fund_wrap').style.display = this.value === 'department' ? '' : 'none';
+    });
+</script>

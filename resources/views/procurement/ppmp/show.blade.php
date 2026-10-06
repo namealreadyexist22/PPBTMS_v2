@@ -99,7 +99,7 @@
             <div class="alert alert-danger small mt-3 mb-0">
                 <i class="fas fa-exclamation-triangle me-1"></i>
                 @foreach ($budgetRows->where('over', true)->where('wrong_fund', true) as $row)
-                    <strong>No {{ $row['fund']->label() }} budget.</strong> {{ $row['department']->code }} is budgeted under {{ $row['department']->fund_group->label() }};
+                    <strong>No {{ $row['fund']->label() }} budget.</strong> {{ $row['department']->shortName() }} is budgeted under {{ $row['department']->budget_fund?->label() }};
                     change the source of funds of its {{ $row['fund']->label() }} projects.
                 @endforeach
                 @if ($budgetRows->where('over', true)->where('wrong_fund', false)->isNotEmpty())
@@ -130,7 +130,7 @@
         <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
             <div>
                 <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation — FY {{ $ppmp->fiscal_year }}</h6>
-                @if ($department)<div class="small text-muted">{{ $department->label() }} budget, shared by its offices</div>@endif
+                @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif
             </div>
             <div class="d-flex flex-wrap gap-2">
                 @foreach ($budgetLimits as $fundValue => $limit)
@@ -143,9 +143,9 @@
             </div>
         </div>
         @if (! $department)
-            <div class="small text-muted px-4 py-3">{{ $ppmp->office->shortName() }} is not assigned to a department, so it has no budget allocation. Set its department in Settings → Offices.</div>
+            <div class="small text-muted px-4 py-3">{{ $ppmp->office->shortName() }} is not under a department, so it has no budget allocation. Fix it in Settings → Organization.</div>
         @elseif ($budgetRows->isEmpty())
-            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $department->code }} for FY {{ $ppmp->fiscal_year }} yet. The PPMP is not checked against a budget until the Budget officer sets one.</div>
+            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $department->shortName() }} for FY {{ $ppmp->fiscal_year }} yet. The PPMP is not checked against a budget until the Budget officer sets one.</div>
         @else
             <div class="table-responsive">
                 <table class="table table-sm align-middle small mb-0">
@@ -160,7 +160,7 @@
                                     <td class="text-end">{{ $pesoC($row['mine']) }}</td>
                                     <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
                                 @elseif ($row['wrong_fund'])
-                                    <td class="text-end text-danger" colspan="2">No {{ $row['fund']->label() }} budget (department is {{ $department->fund_group->label() }})</td>
+                                    <td class="text-end text-danger" colspan="2">No {{ $row['fund']->label() }} budget (department is {{ $department->budget_fund?->label() }})</td>
                                     <td class="text-end">{{ $pesoC($row['mine']) }}</td>
                                     <td class="text-danger pe-4 text-end fw-semibold">Not allowed</td>
                                 @else

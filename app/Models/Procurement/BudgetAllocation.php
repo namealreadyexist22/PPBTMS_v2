@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Approved budget of a department for a fiscal year and fund (COB / SIDA), CO and MOOE together.
- * Every office in the department shares it.
+ * Approved budget of a department (a unit of type department in the organization tree) for a
+ * fiscal year and fund (COB / SIDA), CO and MOOE together. Every unit under it shares it.
  */
 class BudgetAllocation extends Model
 {
@@ -26,7 +26,7 @@ class BudgetAllocation extends Model
 
     public function department(): BelongsTo
     {
-        return $this->belongsTo(Department::class);
+        return $this->belongsTo(Office::class, 'department_id');
     }
 
     public function history(): HasMany

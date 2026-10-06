@@ -3,27 +3,29 @@
 @section('content')
 <div class="row">
     <div class="col-12">
-        <div class="card dt-modern-card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
-
-            <div class="card-header bg-white pt-4 pb-3 px-4 d-flex align-items-center justify-content-between w-100"
-                style="border-bottom: 1px solid #f1f5f9;">
-
-                <h5 class="m-0 fw-bold text-dark d-flex align-items-center" style="font-size: 1.05rem;">
-                    <i class="fas fa-building text-muted me-2"></i>Offices
-                </h5>
-
-                <button id="btn_add" class="btn btn-sm px-3 ms-auto text-white fw-medium shadow-sm"
-                        style="background-color: #10b981; border: 1px solid #10b981; font-size: 0.85rem; padding: 0.45rem 1.1rem; border-radius: 6px; white-space: nowrap;"
-                        onmouseover="this.style.backgroundColor='#059669'"
-                        onmouseout="this.style.backgroundColor='#10b981'">
-                    <i class="fas fa-plus me-1"></i>Add New Office
-                </button>
-            </div>
-
-            <div class="card-body px-4 pb-4 pt-3 overflow-hidden">
-                <div class="table-responsive">
-                    {{ $dataTable->table(['class' => 'table align-middle border-0 w-100 mb-0']) }}
+        <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
+            <div class="card-header bg-white pt-4 pb-3 px-4 d-flex flex-wrap align-items-center justify-content-between gap-2" style="border-bottom: 1px solid #f1f5f9;">
+                <div>
+                    <h5 class="m-0 fw-bold text-dark d-flex align-items-center" style="font-size: 1.05rem;">
+                        <i class="fas fa-sitemap text-muted me-2"></i>Organization
+                    </h5>
+                    <div class="small text-muted">Departments, their divisions and sections. Users belong to a unit; a department receives the budget and every unit under it shares it.</div>
                 </div>
+                <div class="d-flex gap-2">
+                    <input type="search" id="org_search" class="form-control form-control-sm" placeholder="Search units…" style="width: 200px;">
+                    <button class="btn btn-sm btn-success text-nowrap btn-add-unit" data-type="department"><i class="fas fa-plus me-1"></i> Add Department</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                @forelse ($roots as $root)
+                    @include('BackEnd.offices.extras.office_node', ['office' => $root, 'depth' => 0])
+                @empty
+                    <div class="text-center text-muted py-5"><i class="fas fa-sitemap fa-2x mb-2 d-block opacity-50"></i>No units yet. Start with Add Department.</div>
+                @endforelse
+            </div>
+            <div class="small text-muted px-4 py-2 border-top">
+                <span class="badge bg-primary-subtle text-primary border me-1">Approves PPMPs</span> the head approves the PPMPs of the units below it (Division PPMP).
+                Office No. is used in PPMP numbers (e.g. 05012-2027-V1).
             </div>
         </div>
     </div>
@@ -33,7 +35,6 @@
 @endsection
 
 @push('script')
-    {{ $dataTable->scripts() }}
 
     <script type="text/javascript">
     document.addEventListener('DOMContentLoaded', function () {
@@ -41,18 +42,18 @@
         const modalName = 'OFFICE_ENTRY_MODAL';
 
         function reloadTable() {
-            window.LaravelDataTables['tblOffices'].ajax.reload(null, false);
+            window.location.reload();
         }
 
         // Open Add / Edit modal
-        function loadOfficeModal(officeId = null) {
+        function loadOfficeModal(officeId = null, extra = {}) {
             if (isModalOpen) return;
             isModalOpen = true;
 
             $.ajax({
                 url: '{{ route("core.offices.entry") }}',
                 type: 'GET',
-                data: officeId ? { id: officeId } : {},
+                data: officeId ? { id: officeId } : extra,
                 success: function (html) {
                     $('#modal-body').html(html);
                     const modalElement = document.getElementById(modalName);
@@ -70,9 +71,19 @@
             });
         }
 
-        $('#btn_add').on('click', function (e) {
+        // Add a department, or a division / section under a unit
+        $(document).on('click', '.btn-add-unit', function (e) {
             e.preventDefault();
-            loadOfficeModal();
+            loadOfficeModal(null, { type: $(this).data('type'), parent_id: $(this).data('parent') || '' });
+        });
+
+        // Search: show matching units and the branches they sit in
+        $('#org_search').on('input', function () {
+            const q = this.value.trim().toLowerCase();
+            $('.org-node').each(function () {
+                const own = $(this).children('.org-row').text().toLowerCase();
+                $(this).toggle(!q || own.includes(q) || $(this).find('.org-row').text().toLowerCase().includes(q));
+            });
         });
 
         $(document).on('click', '.btn-edit-office', function (e) {
@@ -127,8 +138,8 @@
             const officeId = $(this).data('id');
 
             Swal.fire({
-                title: 'Delete this office?',
-                text: 'Only offices with no sections, users or PPMPs can be deleted.',
+                title: 'Delete this unit?',
+                text: 'Only units with nothing under them, no users and no PPMPs can be deleted.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',

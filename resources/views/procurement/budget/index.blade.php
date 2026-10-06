@@ -41,7 +41,7 @@
                     <tr>
                         <td class="ps-4">
                             <button class="btn btn-sm btn-link p-0 me-1 text-muted" data-bs-toggle="collapse" data-bs-target=".dept-{{ $d->id }}" title="Show offices"><i class="fas fa-chevron-right"></i></button>
-                            <span class="fw-semibold">{{ $d->code }}</span>@if ($d->name !== $d->code) <span class="text-muted">—</span> {{ $d->name }}@endif
+                            <span class="fw-semibold">{{ $d->acronym ?: $d->code }}</span>@if ($d->acronym) <span class="text-muted">—</span> {{ $d->name }}@endif
                             <span class="text-muted">· {{ $row['offices']->count() }} {{ Str::plural('office', $row['offices']->count()) }}</span>
                         </td>
                         @if ($a)
@@ -76,7 +76,7 @@
                         </tr>
                     @endforeach
                 @empty
-                    <tr><td colspan="6" class="text-center text-muted py-5"><i class="fas fa-building fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} departments yet. Add them in Settings → Procurement Lookups → Departments, then assign their offices in Settings → Offices.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-5"><i class="fas fa-building fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} departments yet. Add them in Settings → Organization.</td></tr>
                 @endforelse
             </tbody>
             @if ($rows->isNotEmpty())
@@ -101,7 +101,7 @@
     <div class="modal fade" id="history-{{ $a->id }}" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
             <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-light py-3"><h5 class="modal-title fw-bold"><i class="fas fa-history me-2"></i>{{ $row['department']->code }} — {{ $fund->label() }} FY {{ $fiscalYear }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-header bg-light py-3"><h5 class="modal-title fw-bold"><i class="fas fa-history me-2"></i>{{ $row['department']->shortName() }} — {{ $fund->label() }} FY {{ $fiscalYear }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
                 <div class="modal-body p-0">
                     <table class="table table-sm small mb-0">
                         <thead class="table-light"><tr><th class="ps-3">When</th><th>By</th><th class="text-end">Budget</th><th class="pe-3">Reason</th></tr></thead>

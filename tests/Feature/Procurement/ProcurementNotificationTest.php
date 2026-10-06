@@ -4,7 +4,6 @@ namespace Tests\Feature\Procurement;
 
 use App\Enums\FundGroup;
 use App\Enums\Region;
-use App\Models\Procurement\Department;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
@@ -126,9 +125,8 @@ class ProcurementNotificationTest extends TestCase
     {
         $budget = app(BudgetAllocationService::class);
         $officer = User::factory()->create();
-        $dept = Department::where('code', 'PPSPD')->firstOrFail();
-        $this->division->update(['department_id' => $dept->id]);
-        $this->mis->update(['department_id' => $dept->id]);
+        $dept = Office::create(['code' => '05000', 'acronym' => 'PPSPD', 'name' => 'PPSPD', 'type' => 'department', 'budget_fund' => 'regular']);
+        $this->division->update(['parent_id' => $dept->id]);
 
         $budget->save($dept, 2027, FundGroup::Regular, '15000000', $officer);
         $this->assertCount(0, $this->head->fresh()->notifications);

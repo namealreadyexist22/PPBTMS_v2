@@ -6,7 +6,7 @@ use App\Enums\FundGroup;
 use App\Enums\PpmpStatus;
 use App\Exceptions\ProcurementException;
 use App\Models\Procurement\BudgetAllocation;
-use App\Models\Procurement\Department;
+use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpItem;
 use App\Models\User;
@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  */
 class BudgetAllocationService
 {
-    public function find(Department $department, int $fiscalYear, FundGroup $fund): ?BudgetAllocation
+    public function find(Office $department, int $fiscalYear, FundGroup $fund): ?BudgetAllocation
     {
         return BudgetAllocation::where('department_id', $department->id)->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->first();
     }
@@ -40,7 +40,7 @@ class BudgetAllocationService
     /** Centavos used per office of the department: [office_id => cents]. */
     public function usedByOffice(BudgetAllocation $allocation, ?Ppmp $candidate = null): array
     {
-        $officeIds = $allocation->department->offices()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $officeIds = $allocation->department->departmentOfficeIds();
         $ppmpIds = $this->countedPpmpIds($allocation->fiscal_year, $officeIds, $candidate);
 
         return PpmpItem::whereIn('ppmp_id', $ppmpIds)
@@ -59,7 +59,7 @@ class BudgetAllocationService
      */
     public function checkPpmp(Ppmp $ppmp): Collection
     {
-        $ppmp->loadMissing('items.fundSource', 'office.department');
+        $ppmp->loadMissing('items.fundSource', 'office.parent');
         $department = $ppmp->office->department;
 
         $allocations = $department
@@ -77,7 +77,7 @@ class BudgetAllocationService
                 $allocation = $allocations->get($fund->value);
 
                 // Projects charged to a fund the department is not budgeted under
-                $wrongFund = $department && $department->fund_group !== $fund;
+                $wrongFund = $department && $department->budget_fund && $department->budget_fund !== $fund;
 
                 if (! $allocation || $wrongFund) {
                     return ['fund' => $fund, 'department' => $department, 'allocation' => null, 'mine' => $mine, 'amount' => null,
@@ -99,7 +99,7 @@ class BudgetAllocationService
     /**
      * Per fund with an allocation: the most this PPMP can total, what it has now, and the department.
      *
-     * @return array<string, array{available:int, mine:int, department:Department}>
+     * @return array<string, array{available:int, mine:int, department:Office}>
      */
     public function limits(Ppmp $ppmp, ?Collection $rows = null): array
     {
@@ -116,9 +116,9 @@ class BudgetAllocationService
         if ($over->isNotEmpty()) {
             $lines = $over->map(fn ($r) => $r['wrong_fund']
                 ? sprintf('%s has no %s budget (it is budgeted under %s); change the source of funds of its %s projects',
-                    $r['department']->code, $r['fund']->label(), $r['department']->fund_group->label(), $r['fund']->label())
+                    $r['department']->shortName(), $r['fund']->label(), $r['department']->budget_fund->label(), $r['fund']->label())
                 : sprintf('%s budget of %s: ₱%s used of ₱%s (over by ₱%s)',
-                    $r['fund']->label(), $r['department']->code,
+                    $r['fund']->label(), $r['department']->shortName(),
                     Money::format(Money::fromCents($r['used'])), Money::format(Money::fromCents($r['amount'])),
                     Money::format(Money::fromCents($r['used'] - $r['amount']))));
 
@@ -130,10 +130,14 @@ class BudgetAllocationService
      * Set or realign a department's allocation. It cannot drop below what its offices'
      * submitted / approved PPMPs already use; a change needs a reason.
      */
-    public function save(Department $department, int $fiscalYear, FundGroup $fund, string $amount, User $user, ?string $reason = null): BudgetAllocation
+    public function save(Office $department, int $fiscalYear, FundGroup $fund, string $amount, User $user, ?string $reason = null): BudgetAllocation
     {
-        if ($department->fund_group !== $fund) {
-            throw new ProcurementException("{$department->code} is budgeted under {$department->fund_group->label()}, not {$fund->label()}.");
+        if (! $department->isDepartment()) {
+            throw new ProcurementException("Budgets are allocated per department. {$department->shortName()} is a {$department->typeLabel()}.");
+        }
+
+        if (($department->budget_fund ?? FundGroup::Regular) !== $fund) {
+            throw new ProcurementException("{$department->shortName()} is budgeted under {$department->budget_fund?->label()}, not {$fund->label()}.");
         }
 
         $existing = $this->find($department, $fiscalYear, $fund);
