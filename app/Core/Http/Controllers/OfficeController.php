@@ -37,6 +37,7 @@ class OfficeController extends Controller
         $data = $request->safe()->except('id');
         $data['is_active'] = $request->boolean('is_active');
         $data['is_consolidating'] = $request->boolean('is_consolidating');
+        $data['is_department'] = $request->boolean('is_department');
 
         $office = $request->filled('id') ? Office::findOrFail($request->id) : new Office();
         $isNew = ! $office->exists;

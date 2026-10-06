@@ -15,13 +15,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Budget allocations per office, year and fund (COB / SIDA): one amount for CO and MOOE together.
+ * Budget allocations per department, year and fund (COB / SIDA): one amount for CO and MOOE together.
  *
- * An allocation caps the PPMPs of its office and every office under it. Offices below
- * can get their own allocation out of it (a division's split), so a PPMP is checked
- * against every allocation from its office up. What counts as used: each office's
- * latest submitted or approved PPMP (drafts do not hold budget), with the PPMP being
- * checked in place of its own office's earlier version.
+ * The Budget officer allocates to departments only. Every office under a department shares
+ * its budget, first come, first served, until the full allocation is used. What counts as
+ * used: each office's latest submitted or approved PPMP (drafts do not hold budget), with the
+ * PPMP being checked in place of its own office's earlier version.
  */
 class BudgetAllocationService
 {
@@ -30,88 +29,87 @@ class BudgetAllocationService
         return BudgetAllocation::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->first();
     }
 
-    /** Centavos used under an allocation's office, optionally with $candidate replacing its office's version. */
+    /** Centavos used by the department's offices, optionally with $candidate replacing its office's version. */
     public function usedCents(BudgetAllocation $allocation, ?Ppmp $candidate = null): int
     {
-        $officeIds = Office::withDescendantIds([$allocation->office_id])->all();
+        return array_sum($this->usedByOffice($allocation, $candidate));
+    }
+
+    /** Centavos used per office of the department: [office_id => cents]. */
+    public function usedByOffice(BudgetAllocation $allocation, ?Ppmp $candidate = null): array
+    {
+        $officeIds = $allocation->office->departmentOfficeIds();
         $ppmpIds = $this->countedPpmpIds($allocation->fiscal_year, $officeIds, $candidate);
 
         return PpmpItem::whereIn('ppmp_id', $ppmpIds)
             ->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
-            ->get(['estimated_budget'])
-            ->sum(fn ($item) => Money::toCents($item->estimated_budget));
+            ->with('ppmp:id,office_id')
+            ->get(['id', 'ppmp_id', 'estimated_budget'])
+            ->groupBy(fn ($item) => $item->ppmp->office_id)
+            ->map(fn ($items) => $items->sum(fn ($item) => Money::toCents($item->estimated_budget)))
+            ->all();
     }
 
     /**
-     * Budget rows for a PPMP: every allocation from its office up, per fund it touches or
-     * that is allocated. 'others' = used by the other offices under that allocation,
-     * 'available' = what this PPMP can use in total there (allocation - others).
+     * Budget rows for a PPMP: its department's allocation per fund it touches or that is
+     * allocated. 'others' = used by the department's other offices, 'available' = what this
+     * PPMP can total (allocation - others).
      */
     public function checkPpmp(Ppmp $ppmp): Collection
     {
         $ppmp->loadMissing('items.fundSource', 'office.parent');
-        $chain = $this->chain($ppmp->office);
+        $department = $ppmp->office->department();
 
-        $funds = $ppmp->items->map(fn ($item) => $item->fundSource->fund_group ?? FundGroup::Regular)
-            ->merge(BudgetAllocation::whereIn('office_id', $chain->pluck('id'))->where('fiscal_year', $ppmp->fiscal_year)->pluck('fund_group'))
+        $allocations = $department
+            ? BudgetAllocation::where('office_id', $department->id)->where('fiscal_year', $ppmp->fiscal_year)->get()
+                ->each(fn ($a) => $a->setRelation('office', $department))->keyBy(fn ($a) => $a->fund_group->value)
+            : collect();
+
+        return $ppmp->items->map(fn ($item) => $item->fundSource->fund_group ?? FundGroup::Regular)
+            ->merge($allocations->map->fund_group)
             ->unique(fn (FundGroup $fund) => $fund->value)
-            ->sortBy(fn (FundGroup $fund) => array_search($fund, FundGroup::cases(), true));
+            ->sortBy(fn (FundGroup $fund) => array_search($fund, FundGroup::cases(), true))
+            ->map(function (FundGroup $fund) use ($ppmp, $department, $allocations) {
+                $mine = $ppmp->items->filter(fn ($i) => ($i->fundSource->fund_group ?? FundGroup::Regular) === $fund)
+                    ->sum(fn ($i) => Money::toCents($i->estimated_budget));
+                $allocation = $allocations->get($fund->value);
 
-        $rows = collect();
+                if (! $allocation) {
+                    return ['fund' => $fund, 'department' => $department, 'allocation' => null, 'mine' => $mine, 'amount' => null,
+                            'others' => null, 'used' => null, 'available' => null, 'remaining' => null, 'over' => false];
+                }
 
-        foreach ($funds as $fund) {
-            $mine = $ppmp->items->filter(fn ($i) => ($i->fundSource->fund_group ?? FundGroup::Regular) === $fund)
-                ->sum(fn ($i) => Money::toCents($i->estimated_budget));
-
-            $allocations = BudgetAllocation::with('office')->whereIn('office_id', $chain->pluck('id'))
-                ->where('fiscal_year', $ppmp->fiscal_year)->where('fund_group', $fund)->get()
-                ->sortBy(fn ($a) => $chain->search(fn ($o) => $o->id === $a->office_id));
-
-            if ($allocations->isEmpty()) {
-                $rows->push(['fund' => $fund, 'allocation' => null, 'mine' => $mine, 'amount' => null, 'others' => null,
-                             'used' => null, 'available' => null, 'remaining' => null, 'over' => false]);
-                continue;
-            }
-
-            foreach ($allocations as $allocation) {
                 $amount = Money::toCents((string) $allocation->amount);
                 $used = $this->usedCents($allocation, $ppmp);
 
-                $rows->push([
-                    'fund' => $fund, 'allocation' => $allocation, 'mine' => $mine, 'amount' => $amount,
+                return [
+                    'fund' => $fund, 'department' => $department, 'allocation' => $allocation, 'mine' => $mine, 'amount' => $amount,
                     'others' => $used - $mine, 'used' => $used, 'available' => $amount - ($used - $mine),
                     'remaining' => $amount - $used, 'over' => $used > $amount,
-                ]);
-            }
-        }
-
-        return $rows;
+                ];
+            })->values();
     }
 
     /**
-     * Per fund: the most this PPMP can total (the tightest allocation above it), what it has now,
-     * and which office's allocation is the tightest. Funds without an allocation are left out.
+     * Per fund with an allocation: the most this PPMP can total, what it has now, and the department.
      *
      * @return array<string, array{available:int, mine:int, office:Office}>
      */
     public function limits(Ppmp $ppmp, ?Collection $rows = null): array
     {
-        return ($rows ?? $this->checkPpmp($ppmp))->whereNotNull('allocation')->groupBy(fn ($r) => $r['fund']->value)
-            ->map(function ($group) {
-                $tightest = $group->sortBy('available')->first();
-
-                return ['available' => $tightest['available'], 'mine' => $tightest['mine'], 'office' => $tightest['allocation']->office];
-            })->all();
+        return ($rows ?? $this->checkPpmp($ppmp))->whereNotNull('allocation')
+            ->mapWithKeys(fn ($r) => [$r['fund']->value => ['available' => $r['available'], 'mine' => $r['mine'], 'office' => $r['department']]])
+            ->all();
     }
 
-    /** Block submitting a PPMP that would go over any allocation above it. */
+    /** Block submitting a PPMP that would take its department over budget. */
     public function assertWithinBudget(Ppmp $ppmp): void
     {
         $over = $this->checkPpmp($ppmp)->where('over', true);
 
         if ($over->isNotEmpty()) {
             $lines = $over->map(fn ($r) => sprintf('%s budget of %s: ₱%s used of ₱%s (over by ₱%s)',
-                $r['fund']->label(), $r['allocation']->office->shortName(),
+                $r['fund']->label(), $r['department']->shortName(),
                 Money::format(Money::fromCents($r['used'])), Money::format(Money::fromCents($r['amount'])),
                 Money::format(Money::fromCents($r['used'] - $r['amount']))));
 
@@ -120,12 +118,15 @@ class BudgetAllocationService
     }
 
     /**
-     * Set or realign an allocation. Offices below cannot together get more than this one,
-     * this one cannot exceed what is left of the allocation above it, and it cannot drop
-     * below what submitted / approved PPMPs already use.
+     * Set or realign a department's allocation. It cannot drop below what its offices'
+     * submitted / approved PPMPs already use; a change needs a reason.
      */
     public function save(Office $office, int $fiscalYear, FundGroup $fund, string $amount, User $user, ?string $reason = null): BudgetAllocation
     {
+        if (! $office->is_department) {
+            throw new ProcurementException("Budgets are allocated per department. {$office->shortName()} is not marked as a department in Offices.");
+        }
+
         $existing = $this->find($office, $fiscalYear, $fund);
 
         if ($existing && trim((string) $reason) === '') {
@@ -135,24 +136,7 @@ class BudgetAllocationService
         $new = Money::toCents($amount);
 
         return DB::transaction(function () use ($office, $fiscalYear, $fund, $user, $reason, $existing, $new) {
-            $children = $this->childAllocations($office, $fiscalYear, $fund)->sum(fn ($a) => Money::toCents((string) $a->amount));
-
-            if ($children > $new) {
-                throw new ProcurementException("The budget cannot be lower than what the offices under {$office->shortName()} were given (₱" . Money::format(Money::fromCents($children)) . ').');
-            }
-
-            if ($parent = $this->parentAllocation($office, $fiscalYear, $fund)) {
-                $siblings = $this->childAllocations($parent->office, $fiscalYear, $fund)
-                    ->reject(fn ($a) => $a->office_id === $office->id)
-                    ->sum(fn ($a) => Money::toCents((string) $a->amount));
-                $room = Money::toCents((string) $parent->amount) - $siblings;
-
-                if ($new > $room) {
-                    throw new ProcurementException("The budget is more than what is left of {$parent->office->shortName()}'s allocation (₱" . Money::format(Money::fromCents(max($room, 0))) . ').');
-                }
-            }
-
-            if ($existing && $new < ($used = $this->usedCents($existing))) {
+            if ($existing && $new < ($used = $this->usedCents($existing->setRelation('office', $office)))) {
                 throw new ProcurementException('The budget cannot go below what submitted / approved PPMPs already use (₱' . Money::format(Money::fromCents($used)) . '). Amend those PPMPs first.');
             }
 
@@ -162,42 +146,8 @@ class BudgetAllocationService
             $allocation->fill(['amount' => Money::fromCents($new), 'updated_by' => $user->id])->save();
             $allocation->history()->create(['user_id' => $user->id, 'old_amount' => $old, 'new_amount' => $allocation->amount, 'reason' => $reason]);
 
-            return $allocation;
+            return $allocation->setRelation('office', $office);
         });
-    }
-
-    /** The nearest allocation above this office (same year and fund). */
-    public function parentAllocation(Office $office, int $fiscalYear, FundGroup $fund): ?BudgetAllocation
-    {
-        for ($o = $office->parent; $o; $o = $o->parent) {
-            if ($allocation = $this->find($o, $fiscalYear, $fund)) {
-                return $allocation->setRelation('office', $o);
-            }
-        }
-
-        return null;
-    }
-
-    /** Allocations directly under this one: offices below whose nearest allocated office above is this office. */
-    public function childAllocations(Office $office, int $fiscalYear, FundGroup $fund): Collection
-    {
-        $below = Office::withDescendantIds([$office->id])->reject(fn ($id) => $id === $office->id);
-
-        return BudgetAllocation::with('office.parent')->whereIn('office_id', $below)
-            ->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->get()
-            ->filter(fn ($a) => $this->parentAllocation($a->office, $fiscalYear, $fund)?->office_id === $office->id)
-            ->values();
-    }
-
-    /** The office and every office above it, nearest first. */
-    protected function chain(Office $office): Collection
-    {
-        $chain = collect();
-        for ($o = $office; $o; $o = $o->parent) {
-            $chain->push($o);
-        }
-
-        return $chain;
     }
 
     /** Latest submitted / approved PPMP per office and region; the candidate replaces its own office's. */

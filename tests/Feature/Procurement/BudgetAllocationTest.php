@@ -38,7 +38,7 @@ class BudgetAllocationTest extends TestCase
         $this->officer = User::factory()->create();
 
         $head = User::factory()->create();
-        $this->ppspd = Office::create(['code' => '05000', 'name' => 'PPSPD', 'head_user_id' => $head->id, 'is_consolidating' => true]);
+        $this->ppspd = Office::create(['code' => '05000', 'name' => 'PPSPD', 'head_user_id' => $head->id, 'is_consolidating' => true, 'is_department' => true]);
         $this->pppd = Office::create(['code' => '05010', 'name' => 'PPPD', 'parent_id' => $this->ppspd->id]);
         $this->research = Office::create(['code' => '05011', 'name' => 'PPRS', 'parent_id' => $this->pppd->id]);
         $this->mis = Office::create(['code' => '05012', 'name' => 'MIS', 'parent_id' => $this->pppd->id]);
@@ -78,46 +78,45 @@ class BudgetAllocationTest extends TestCase
         }
     }
 
-    public function test_section_cap_blocks_submit_and_shows_the_remaining_budget(): void
+    public function test_department_budget_is_shared_first_come_and_blocks_submit(): void
     {
-        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '15000000', $this->officer);   // PPSPD 15M (CO + MOOE)
-        $this->budget->save($this->mis, 2027, FundGroup::Regular, '4000000', $this->officer);      // MIS 4M
+        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '5000000', $this->officer);   // PPSPD 5M (CO + MOOE)
 
-        $draft = $this->ppmp($this->mis, [['co', '3500000', 'COB'], ['mooe', '1000000', 'COB']], false);   // 4.5M
+        $this->ppmp($this->research, [['co', '2500000', 'COB'], ['mooe', '500000', 'COB']]);   // first: 3M fits
+        $late = $this->ppmp($this->mis, [['co', '1500000', 'COB'], ['mooe', '1000000', 'COB']], false);   // 3M + 2.5M > 5M
 
-        // CO and MOOE count together against MIS's 4M; PPSPD's row is shown too
-        $rows = $this->budget->checkPpmp($draft);
-        $misRow = $rows->first(fn ($r) => $r['allocation']->office_id === $this->mis->id);
-        $this->assertTrue($misRow['over']);
-        $this->assertSame(-50000000, $misRow['remaining']);   // ₱500,000 over, in centavos
-        $this->assertCount(2, $rows);
+        // One row: the department's budget; others = PPRS's 3M, left to plan = 2M - 2.5M
+        $rows = $this->budget->checkPpmp($late);
+        $this->assertCount(1, $rows);
+        $this->assertSame($this->ppspd->id, $rows->first()['department']->id);
+        $this->assertSame(300000000, $rows->first()['others']);
+        $this->assertTrue($rows->first()['over']);
+        $limit = $this->budget->limits($late)['regular'];
+        $this->assertSame(-50000000, $limit['available'] - $limit['mine']);
 
-        // Left to plan = tightest allocation (MIS) minus this PPMP
-        $limit = $this->budget->limits($draft)['regular'];
-        $this->assertSame(400000000 - 450000000, $limit['available'] - $limit['mine']);
-        $this->assertSame($this->mis->id, $limit['office']->id);
+        $this->refused(fn () => $this->ppmps->submit($late, User::factory()->create()), 'COB budget of 05000: ₱5,500,000.00 used of ₱5,000,000.00 (over by ₱500,000.00)');
+        $this->assertSame(PpmpStatus::Draft, $late->fresh()->status);
 
-        $this->refused(fn () => $this->ppmps->submit($draft, User::factory()->create()), 'COB budget of 05012');
-        $this->assertSame(PpmpStatus::Draft, $draft->fresh()->status);
-
-        // Brought within the cap -> submits
-        $this->ppmps->updateItem($draft->items()->where('allotment_class', 'co')->first(), ['estimated_budget' => '3000000']);
-        $this->ppmps->submit($draft->fresh(), User::factory()->create());
-        $this->assertSame(PpmpStatus::Submitted, $draft->fresh()->status);
+        // Brought within what is left -> submits
+        $this->ppmps->updateItem($late->items()->where('allotment_class', 'co')->first(), ['estimated_budget' => '1000000']);
+        $this->ppmps->submit($late->fresh(), User::factory()->create());
+        $this->assertSame(PpmpStatus::Submitted, $late->fresh()->status);
     }
 
-    public function test_sections_without_own_cap_share_the_department_pool_first_come(): void
+    public function test_only_departments_get_budgets_and_a_department_below_has_its_own(): void
     {
-        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '1000000', $this->officer);   // 1M for all of PPSPD
+        $this->refused(fn () => $this->budget->save($this->mis, 2027, FundGroup::Regular, '1000000', $this->officer), 'allocated per department');
 
-        $this->ppmp($this->research, [['co', '500000', 'COB'], ['mooe', '200000', 'COB']]);   // first: 700k fits
-        $late = $this->ppmp($this->sppdemd, [['mooe', '400000', 'COB']], false);               // 700k + 400k > 1M
+        // SPPDEMD made a department of its own: its PPMPs use its budget, not PPSPD's
+        $this->sppdemd->update(['is_department' => true]);
+        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '1000000', $this->officer);
+        $this->budget->save($this->sppdemd, 2027, FundGroup::Regular, '3000000', $this->officer);
 
-        $limit = $this->budget->limits($late)['regular'];
-        $this->assertSame(30000000, $limit['available']);   // 300k left for SPPDEMD
-        $this->refused(fn () => $this->ppmps->submit($late, User::factory()->create()), 'over by ₱100,000.00');
+        $this->assertEqualsCanonicalizing([$this->ppspd->id, $this->pppd->id, $this->research->id, $this->mis->id], $this->ppspd->departmentOfficeIds());
+        $this->ppmp($this->sppdemd, [['co', '2500000', 'COB']]);                // within SPPDEMD's 3M
+        $this->assertSame(0, $this->budget->usedCents($this->budget->find($this->ppspd, 2027, FundGroup::Regular)->setRelation('office', $this->ppspd)));
 
-        // Drafts do not hold budget; SIDA has its own allocation (none set = no cap, only shown)
+        // No allocation for SIDA: shown, not blocked; drafts hold nothing
         $sida = $this->ppmp($this->mis, [['co', '900000', 'SIDA']], false);
         $this->assertNull($this->budget->checkPpmp($sida)->firstWhere('fund', FundGroup::Sida)['allocation']);
         $this->assertArrayNotHasKey('sida', $this->budget->limits($sida));
@@ -127,7 +126,7 @@ class BudgetAllocationTest extends TestCase
 
     public function test_amendment_replaces_its_earlier_version_when_counting(): void
     {
-        $this->budget->save($this->mis, 2027, FundGroup::Regular, '1000000', $this->officer);
+        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '1000000', $this->officer);
         $v1 = $this->ppmp($this->mis, [['co', '800000', 'COB']]);
 
         // Approve, then amend to 950k: counted instead of v1 (not 800k + 950k)
@@ -141,30 +140,26 @@ class BudgetAllocationTest extends TestCase
         $this->assertSame(PpmpStatus::Submitted, $v2->fresh()->status);
     }
 
-    public function test_realignment_guards_and_history(): void
+    public function test_realignment_between_departments_with_reason_and_history(): void
     {
-        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '10000000', $this->officer);
-        $this->budget->save($this->mis, 2027, FundGroup::Regular, '3000000', $this->officer);
-        $this->budget->save($this->sppdemd, 2027, FundGroup::Regular, '6000000', $this->officer);
+        $this->sppdemd->update(['is_department' => true]);
+        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '5000000', $this->officer);
+        $this->budget->save($this->sppdemd, 2027, FundGroup::Regular, '3000000', $this->officer);
 
-        // Sections cannot together get more than the department
-        $this->refused(fn () => $this->budget->save($this->research, 2027, FundGroup::Regular, '2000000', $this->officer), 'more than what is left of 05000');
-        // ...and the department cannot drop below what it handed out
-        $this->refused(fn () => $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '8000000', $this->officer, 'cut'), 'offices under 05000');
         // A change needs a reason
-        $this->refused(fn () => $this->budget->save($this->mis, 2027, FundGroup::Regular, '2000000', $this->officer), 'reason');
+        $this->refused(fn () => $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '4000000', $this->officer), 'reason');
 
         // Cannot go below what submitted PPMPs use: amend the PPMP first
-        $this->ppmp($this->mis, [['co', '2000000', 'COB'], ['mooe', '500000', 'COB']]);
-        $this->refused(fn () => $this->budget->save($this->mis, 2027, FundGroup::Regular, '2000000', $this->officer, 'realign'), 'already use');
+        $this->ppmp($this->mis, [['co', '4000000', 'COB'], ['mooe', '500000', 'COB']]);
+        $this->refused(fn () => $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '4000000', $this->officer, 'realign'), 'already use');
 
-        // Realignment between divisions: SPPDEMD gives 500k to MIS (department total unchanged)
-        $this->budget->save($this->sppdemd, 2027, FundGroup::Regular, '5500000', $this->officer, 'Realign 500k to MIS');
-        $mis = $this->budget->save($this->mis, 2027, FundGroup::Regular, '3500000', $this->officer, 'Realign 500k from SPPDEMD');
+        // Realignment: SPPDEMD gives 500k to PPSPD
+        $this->budget->save($this->sppdemd, 2027, FundGroup::Regular, '2500000', $this->officer, 'Realign 500k to PPSPD');
+        $ppspd = $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '5500000', $this->officer, 'Realign 500k from SPPDEMD');
 
-        $this->assertEquals('3500000.00', $mis->amount);
-        $this->assertSame(['Realign 500k from SPPDEMD', null], $mis->history()->pluck('reason')->all());
-        $this->assertEquals('3000000.00', $mis->history()->first()->old_amount);
+        $this->assertEquals('5500000.00', $ppspd->amount);
+        $this->assertSame(['Realign 500k from SPPDEMD', null], $ppspd->history()->pluck('reason')->all());
+        $this->assertEquals('5000000.00', $ppspd->history()->first()->old_amount);
     }
 
     public function test_budget_page_and_ppmp_warning(): void
@@ -174,36 +169,26 @@ class BudgetAllocationTest extends TestCase
         $this->officer->update(['is_activated' => 1]);
         $this->officer->givePermissionTo('manage budget');
 
-        $this->actingAs($this->officer)->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()->assertSee('No COB budget set for FY 2027');
-        $this->postJson(route('procurement.budget.store'), ['office_id' => $this->ppspd->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '15,000,000.00'])->assertOk();
-        $this->postJson(route('procurement.budget.store'), ['office_id' => $this->mis->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '3,000,000'])->assertOk();
-        $this->postJson(route('procurement.budget.store'), ['office_id' => $this->research->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '13,000,000'])
-            ->assertStatus(422)->assertJson(['status' => 'error']);   // more than left of PPSPD's
+        $this->actingAs($this->officer)->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
+            ->assertSee('05000')->assertSee('Not set')->assertDontSee('05012 MIS</span>', false);
+        $this->postJson(route('procurement.budget.store'), ['office_id' => $this->ppspd->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '3,000,000.00'])->assertOk();
+        $this->postJson(route('procurement.budget.store'), ['office_id' => $this->mis->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '1,000,000'])
+            ->assertStatus(422)->assertJson(['status' => 'error']);   // not a department
 
         $this->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
-            ->assertSee('15,000,000.00')->assertSee('↳ 3,000,000.00')->assertSee('Initial allocation');
+            ->assertSee('3,000,000.00')->assertSee('5 offices')->assertSee('Initial allocation');
 
-        // PPMP page: budget left at the top, warning and disabled submit while over budget
+        // PPMP page: department budget at the top, warning and disabled submit while over budget
         $staffPpmp = $this->ppmp($this->mis, [['co', '3500000', 'COB']], false);
         $staff = User::find($staffPpmp->created_by);
         $staff->update(['is_activated' => 1]);
         $staff->givePermissionTo('manage ppmp');
         $this->actingAs($staff)->get(route('procurement.ppmp.show', $staffPpmp))->assertOk()
-            ->assertSee('Over budget.')->assertSee('Budget Allocation')
+            ->assertSee('Over budget.')->assertSee('Budget Allocation')->assertSee('budget, shared by its offices')
             ->assertSee('id="btn_submit" disabled', false)
             ->assertSee('over by ₱500,000.00')
-            ->assertSee('05012 MIS')->assertDontSee('05000 PPSPD')   // only the section's own budget
             ->assertSee('-500,000.00');
         $this->postJson(route('procurement.ppmp.submit', $staffPpmp))->assertStatus(422);
-
-        // A division without its own budget sees the shared one above it (PPSPD's 15M; MIS's draft holds nothing)
-        $shared = $this->ppmp($this->sppdemd, [['mooe', '100000', 'COB']], false);
-        $sharedStaff = User::find($shared->created_by);
-        $sharedStaff->update(['is_activated' => 1]);
-        $sharedStaff->givePermissionTo('manage ppmp');
-        $this->actingAs($sharedStaff)->get(route('procurement.ppmp.show', $shared))->assertOk()
-            ->assertSee('05000 PPSPD')->assertSee('Used by other offices')->assertSee('₱14,900,000.00 left to plan');
-        $this->actingAs($staff);
 
         // Add-project modal: what is left for this PPMP before the new project (3M - 3.5M = -500k)
         $this->get(route('procurement.ppmp.items.entry', $staffPpmp))->assertOk()

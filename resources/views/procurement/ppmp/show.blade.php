@@ -117,11 +117,15 @@
     </div>
 </div>
 
-{{-- Budget allocation: what this PPMP can still use, from its office up to the department --}}
+{{-- Budget allocation: the department's budget, shared by its offices --}}
+@php $department = $ppmp->office->department(); @endphp
 @if ($budgetRows->isNotEmpty() || $canEdit)
     <div class="card border-0 shadow-sm mb-3 {{ $budgetOver ? 'border border-danger' : '' }}" style="border-radius: 12px; overflow: hidden;" id="budget_card">
         <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
-            <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation — FY {{ $ppmp->fiscal_year }}</h6>
+            <div>
+                <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation — FY {{ $ppmp->fiscal_year }}</h6>
+                @if ($department)<div class="small text-muted">{{ $department->code }} {{ $department->acronym ?: $department->name }} budget, shared by its offices</div>@endif
+            </div>
             <div class="d-flex flex-wrap gap-2">
                 @foreach ($budgetLimits as $fundValue => $limit)
                     @php $left = $limit['available'] - $limit['mine']; @endphp
@@ -132,57 +136,35 @@
                 @endforeach
             </div>
         </div>
-        @php
-            // Budget rows shown: the one that applies per fund. "Used by other offices" only matters for a shared budget above.
-            $budgetShown = $budgetRows->groupBy(fn ($r) => $r['fund']->value)->map->first();
-            $budgetShared = $budgetShown->contains(fn ($r) => $r['allocation'] && $r['allocation']->office_id !== $ppmp->office_id);
-        @endphp
-        @if ($budgetRows->isEmpty())
-            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $ppmp->office->shortName() }} or the offices above it for FY {{ $ppmp->fiscal_year }}. The PPMP is not checked against a budget until the Budget officer sets one.</div>
+        @if (! $department)
+            <div class="small text-muted px-4 py-3">{{ $ppmp->office->shortName() }} is not under a department, so it has no budget allocation. Mark its department in Settings → Offices.</div>
+        @elseif ($budgetRows->isEmpty())
+            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $department->shortName() }} for FY {{ $ppmp->fiscal_year }} yet. The PPMP is not checked against a budget until the Budget officer sets one.</div>
         @else
             <div class="table-responsive">
                 <table class="table table-sm align-middle small mb-0">
-                    <thead class="table-light"><tr class="text-nowrap"><th class="ps-4">Fund</th><th>Allocation of</th><th class="text-end">Allocated</th>@if ($budgetShared)<th class="text-end">Used by other offices</th>@endif<th class="text-end">This PPMP</th><th class="text-end pe-4">Remaining</th></tr></thead>
+                    <thead class="table-light"><tr class="text-nowrap"><th class="ps-4">Fund</th><th class="text-end">Department budget</th><th class="text-end">Used by other offices</th><th class="text-end">This PPMP</th><th class="text-end pe-4">Remaining</th></tr></thead>
                     <tbody>
-                        {{-- Only the budget that applies to this office (its own, or the nearest shared one above);
-                             a higher budget is mentioned only when it leaves less room than that --}}
-                        @foreach ($budgetRows->groupBy(fn ($r) => $r['fund']->value) as $fundRows)
-                            @php
-                                $row = $fundRows->first();
-                                $tightest = $fundRows->whereNotNull('allocation')->sortBy('remaining')->first();
-                                $limitedAbove = $tightest && $tightest !== $row && $tightest['remaining'] < $row['remaining'];
-                            @endphp
+                        @foreach ($budgetRows as $row)
                             <tr class="{{ $row['over'] ? 'table-danger' : '' }}">
                                 <td class="ps-4 fw-semibold">{{ $row['fund']->label() }}</td>
                                 @if ($row['allocation'])
-                                    <td>{{ $row['allocation']->office->code }} {{ $row['allocation']->office->acronym ?: $row['allocation']->office->name }}</td>
                                     <td class="text-end">{{ $pesoC($row['amount']) }}</td>
-                                    @if ($budgetShared)<td class="text-end">{{ $pesoC($row['others']) }}</td>@endif
+                                    <td class="text-end">{{ $pesoC($row['others']) }}</td>
                                     <td class="text-end">{{ $pesoC($row['mine']) }}</td>
                                     <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
                                 @else
-                                    <td class="text-muted">No allocation set</td>
-                                    <td></td>@if ($budgetShared)<td></td>@endif
+                                    <td class="text-end text-muted">Not set</td>
+                                    <td></td>
                                     <td class="text-end">{{ $pesoC($row['mine']) }}</td>
                                     <td class="text-muted pe-4 text-end">Not checked</td>
                                 @endif
                             </tr>
-                            @if ($limitedAbove)
-                                <tr class="{{ $tightest['over'] ? 'table-danger' : 'table-warning' }}">
-                                    <td></td>
-                                    <td colspan="{{ $budgetShared ? 5 : 4 }}" class="pe-4">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Also limited by the {{ $row['fund']->label() }} budget of {{ $tightest['allocation']->office->code }} {{ $tightest['allocation']->office->acronym ?: $tightest['allocation']->office->name }},
-                                        shared with other offices:
-                                        <strong>{{ $tightest['over'] ? 'over by ₱' . $pesoC(-$tightest['remaining']) : '₱' . $pesoC($tightest['remaining']) . ' left' }}</strong>.
-                                    </td>
-                                </tr>
-                            @endif
                         @endforeach
                     </tbody>
                 </table>
             </div>
-            <div class="small text-muted px-4 py-2">Allocated covers CO and MOOE together.@if ($budgetShared) This budget is shared: used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget).@endif</div>
+            <div class="small text-muted px-4 py-2">The budget covers CO and MOOE together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served.</div>
         @endif
     </div>
 @endif

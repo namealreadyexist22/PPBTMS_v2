@@ -79,6 +79,14 @@
                         </label>
                     </div>
 
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" name="is_department" value="1" id="office_is_department"
+                            @checked($office->is_department ?? false)>
+                        <label class="form-check-label small" for="office_is_department">
+                            Department <span class="text-muted">— receives the budget allocation; every office under it shares that budget</span>
+                        </label>
+                    </div>
+
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="is_active" value="1" id="office_is_active"
                             @checked($office->is_active ?? true)>

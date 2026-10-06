@@ -7,8 +7,9 @@ use Illuminate\Database\Seeder;
 
 /**
  * The organization's offices: [office no., name, parent office no.].
- * Safe to re-run: matches on office no. and only fills name/parent,
- * so heads and acronyms set in the Offices screen are kept.
+ * Safe to re-run: matches on office no. and only fills name/parent (and marks the
+ * departments that receive budget allocations), so heads and acronyms set in the
+ * Offices screen are kept.
  */
 class OfficeSeeder extends Seeder
 {
@@ -81,6 +82,12 @@ class OfficeSeeder extends Seeder
         ['15000', 'REGIONAL BIDS AND AWARDS COMMITTEE', null],
     ];
 
+    /** Offices that receive a budget allocation, shared by every office under them. */
+    protected array $departments = [
+        '01000', '02000', '03000', '04000', '05000', '06000', '06010', '06550', '07000', '07020', '07560',
+        '08000', '08010', '08560', '09000', '10000', '11000', '12000', '13000', '14000', '15000',
+    ];
+
     public function run(): void
     {
         // Parents are listed before their children, so one pass is enough.
@@ -91,6 +98,10 @@ class OfficeSeeder extends Seeder
                 ['code' => $code],
                 ['name' => $name, 'parent_id' => $parentCode ? $ids[$parentCode] : null]
             );
+
+            if (in_array($code, $this->departments, true) && ! $office->is_department) {
+                $office->update(['is_department' => true]);
+            }
 
             $ids[$code] = $office->id;
         }

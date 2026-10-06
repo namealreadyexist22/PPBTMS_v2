@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
-/** Budget officer's page: approved budget per office, year and fund (COB / SIDA), CO and MOOE together. */
+/** Budget officer's page: approved budget per office, year and fund (COB / SIDA), CO and MOOE together, per department. */
 class BudgetAllocationController extends Controller
 {
     public function __construct(
@@ -26,31 +26,35 @@ class BudgetAllocationController extends Controller
         $fiscalYear = (int) ($request->input('fy') ?: now()->year + 1);
         $fund = FundGroup::tryFrom((string) $request->input('fund')) ?? FundGroup::Regular;
 
-        $allocations = BudgetAllocation::with(['office.parent', 'history.user'])
-            ->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->get()
-            ->sortBy(fn ($a) => $a->office->code)
-            ->map(function (BudgetAllocation $a) use ($fiscalYear, $fund) {
-                $children = $this->budget->childAllocations($a->office, $fiscalYear, $fund);
-                $amount = Money::toCents((string) $a->amount);
-                $used = $this->budget->usedCents($a);
-                $row = [
-                    'allocation' => $a,
-                    'depth'      => $this->depth($a, $fiscalYear, $fund),
-                    'amount'     => $amount,
-                    'given'      => $children->sum(fn ($c) => Money::toCents((string) $c->amount)),
-                    'used'       => $used,
-                    'remaining'  => $amount - $used,
-                ];
+        $allocations = BudgetAllocation::with('history.user')->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->get()->keyBy('office_id');
+        $offices = Office::active()->get()->keyBy('id');
 
-                return $row;
-            })->values();
+        // One row per department, with what each of its offices uses
+        $rows = Office::active()->where('is_department', true)->orderBy('code')->get()
+            ->map(function (Office $department) use ($allocations, $offices) {
+                $allocation = $allocations->get($department->id)?->setRelation('office', $department);
+                $memberIds = $department->departmentOfficeIds();
+                $usedBy = $allocation ? $this->budget->usedByOffice($allocation) : [];
+                $amount = $allocation ? Money::toCents((string) $allocation->amount) : null;
+                $used = array_sum($usedBy);
+
+                return [
+                    'department' => $department,
+                    'allocation' => $allocation,
+                    'amount'     => $amount,
+                    'used'       => $used,
+                    'remaining'  => $amount === null ? null : $amount - $used,
+                    'offices'    => collect($memberIds)->map(fn ($id) => $offices->get($id))->filter()->sortBy('code')
+                                    ->map(fn (Office $o) => ['office' => $o, 'used' => $usedBy[$o->id] ?? 0])->values(),
+                ];
+            });
 
         return view('procurement.budget.index', [
-            'allocations' => $allocations,
-            'fiscalYear'  => $fiscalYear,
-            'fund'        => $fund,
-            'years'       => range(now()->year - 1, now()->year + 2),
-            'offices'     => Office::active()->orderBy('code')->get(),
+            'rows'       => $rows,
+            'fiscalYear' => $fiscalYear,
+            'fund'       => $fund,
+            'years'      => range(now()->year - 1, now()->year + 2),
+            'totals'     => ['amount' => $rows->sum('amount'), 'used' => $rows->whereNotNull('allocation')->sum('used')],
         ]);
     }
 
@@ -85,16 +89,5 @@ class BudgetAllocationController extends Controller
         } catch (ProcurementException $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
         }
-    }
-
-    /** How many allocated offices are above this one (for indenting the list). */
-    protected function depth(BudgetAllocation $allocation, int $fiscalYear, FundGroup $fund): int
-    {
-        $depth = 0;
-        for ($parent = $this->budget->parentAllocation($allocation->office, $fiscalYear, $fund); $parent; $parent = $this->budget->parentAllocation($parent->office, $fiscalYear, $fund)) {
-            $depth++;
-        }
-
-        return $depth;
     }
 }
