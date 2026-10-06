@@ -73,6 +73,23 @@ class StorePpmpItemRequest extends FormRequest
             'estimated_budget'     => ['required', 'numeric', 'gt:0', 'max:9999999999999.99'],
             'supporting_documents' => ['nullable', 'string', 'max:1000'],
             'remarks'              => ['nullable', 'string', 'max:1000'],
+
+            // GPPB Market Scoping Checklist
+            'market_scoping'                              => ['nullable', 'array'],
+            'market_scoping.period_from'                  => ['nullable', 'date_format:Y-m'],
+            'market_scoping.period_to'                    => ['nullable', 'date_format:Y-m', 'after_or_equal:market_scoping.period_from'],
+            'market_scoping.activities'                   => ['nullable', 'array'],
+            'market_scoping.activities.*'                 => [Rule::in(array_keys(config('market_scoping.activities')))],
+            'market_scoping.activity_other'               => ['nullable', 'string', 'max:500'],
+            'market_scoping.parameters'                   => ['nullable', 'array'],
+            'market_scoping.parameters.*.answer'          => ['nullable', Rule::in(array_keys(config('market_scoping.answers')))],
+            'market_scoping.parameters.*.recommendation'  => ['nullable', 'string', 'max:1000'],
+
+            // New files (market survey, specifications, ...), each with its kind
+            'attachments'      => ['nullable', 'array', 'max:10'],
+            'attachments.*'    => ['file', 'max:' . config('market_scoping.max_file_kb'), 'mimes:' . implode(',', config('market_scoping.allowed_types'))],
+            'attachment_kinds'   => ['nullable', 'array'],
+            'attachment_kinds.*' => [Rule::in(array_keys(config('market_scoping.attachment_kinds')))],
         ];
     }
 
@@ -86,6 +103,9 @@ class StorePpmpItemRequest extends FormRequest
             'fund_source_id'      => 'source of funds',
             'proc_start'          => 'start of procurement activity',
             'proc_end'            => 'end of procurement activity',
+            'market_scoping.period_from' => 'market scoping period (from)',
+            'market_scoping.period_to'   => 'market scoping period (to)',
+            'attachments.*'       => 'attachment',
         ];
     }
 }

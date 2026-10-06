@@ -166,7 +166,11 @@
                         <td class="c">{{ $item->delivery_period }}</td>
                         <td class="c">{{ $item->fundSource->name }} ({{ $item->fundSource->code }})</td>
                         <td class="r">{{ $peso($item->estimated_budget) }}</td>
-                        <td class="c">{{ $item->supporting_documents }}</td>
+                        <td class="c">
+                            @if ($item->marketScopingComplete())Market Scoping Checklist<br>@endif
+                            @foreach ($item->attachments->groupBy('kind') as $kind => $files){{ config("market_scoping.attachment_kinds.$kind", $kind) }}{{ $files->count() > 1 ? ' (' . $files->count() . ')' : '' }}<br>@endforeach
+                            {{ $item->supporting_documents }}
+                        </td>
                         <td class="c">{{ $item->remarks }}</td>
                     </tr>
                 @endforeach

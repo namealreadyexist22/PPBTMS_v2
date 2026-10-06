@@ -13,7 +13,7 @@
                 <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
-            <form id="form_ppmp_item" autocomplete="off" novalidate>
+            <form id="form_ppmp_item" autocomplete="off" novalidate enctype="multipart/form-data">
                 @csrf
                 @if ($item)
                     <input type="hidden" name="id" value="{{ $item->id }}">
@@ -170,18 +170,93 @@
                     {{-- Budget allocation left for this PPMP, before and after this project --}}
                     <div id="budget_left" class="alert py-2 px-3 small mb-3 d-none"></div>
 
-                    {{-- 5. Others --}}
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted mb-1">Attached Supporting Documents</label>
-                            <textarea name="supporting_documents" class="form-control form-control-sm" rows="2" placeholder="e.g. Technical specifications, market study">{{ $item->supporting_documents ?? '' }}</textarea>
-                            <div class="invalid-feedback"></div>
+                    {{-- 5. GPPB Market Scoping Checklist --}}
+                    @php
+                        $ms = $item->market_scoping ?? [];
+                        $msDone = $item?->marketScopingComplete();
+                    @endphp
+                    <div class="border rounded-3 mb-3">
+                        <button type="button" class="btn w-100 text-start d-flex align-items-center justify-content-between px-3 py-2" data-bs-toggle="collapse" data-bs-target="#ms_body">
+                            <span class="small fw-bold text-uppercase text-secondary" style="font-size: 0.72rem;">
+                                <i class="fas fa-clipboard-check me-1"></i> Market Scoping Checklist (GPPB, RA 12009 Sec. 10)
+                            </span>
+                            <span class="badge {{ $msDone ? 'bg-success' : 'bg-light text-dark border' }}">{{ $msDone ? 'Complete' : 'Not complete' }}</span>
+                        </button>
+                        <div class="collapse {{ $item && ! $msDone ? 'show' : '' }} px-3 pb-3" id="ms_body">
+                            <div class="row g-3 mb-2">
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold text-muted mb-1">Period of market scoping — from</label>
+                                    <input type="month" name="market_scoping[period_from]" class="form-control form-control-sm" value="{{ $ms['period_from'] ?? '' }}">
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-semibold text-muted mb-1">to</label>
+                                    <input type="month" name="market_scoping[period_to]" class="form-control form-control-sm" value="{{ $ms['period_to'] ?? '' }}">
+                                    <div class="invalid-feedback"></div>
+                                </div>
+                                <div class="col-md-4 small text-muted d-flex align-items-end">Agency, end-user, project name, budget and delivery are taken from this project.</div>
+                            </div>
+
+                            <div class="small fw-semibold text-muted mb-1">Market scoping activities conducted</div>
+                            @foreach (config('market_scoping.activities') as $key => $label)
+                                <div class="form-check small">
+                                    <input class="form-check-input" type="checkbox" name="market_scoping[activities][]" value="{{ $key }}" id="ms_act_{{ $key }}" @checked(in_array($key, $ms['activities'] ?? []))>
+                                    <label class="form-check-label" for="ms_act_{{ $key }}">{{ $label }}</label>
+                                </div>
+                            @endforeach
+                            <input type="text" name="market_scoping[activity_other]" class="form-control form-control-sm mt-1 mb-3" value="{{ $ms['activity_other'] ?? '' }}" placeholder="Others (specify)">
+
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle small mb-0">
+                                    <thead class="table-light"><tr><th>Parameter</th><th style="width: 110px;">Yes / No / N/A</th><th>Recommendation based on the market scoping</th></tr></thead>
+                                    <tbody>
+                                        @foreach (config('market_scoping.parameters') as $key => $label)
+                                            <tr>
+                                                <td>{{ $label }}</td>
+                                                <td>
+                                                    <select name="market_scoping[parameters][{{ $key }}][answer]" class="form-select form-select-sm">
+                                                        <option value="">—</option>
+                                                        @foreach (config('market_scoping.answers') as $value => $answer)
+                                                            <option value="{{ $value }}" @selected(($ms['parameters'][$key]['answer'] ?? null) === $value)>{{ $answer }}</option>
+                                                        @endforeach
+                                                    </select>
+                                                </td>
+                                                <td><input type="text" name="market_scoping[parameters][{{ $key }}][recommendation]" class="form-control form-control-sm" value="{{ $ms['parameters'][$key]['recommendation'] ?? '' }}"></td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted mb-1">Remarks</label>
-                            <textarea name="remarks" class="form-control form-control-sm" rows="2">{{ $item->remarks ?? '' }}</textarea>
-                            <div class="invalid-feedback"></div>
-                        </div>
+                    </div>
+
+                    {{-- 6. Attachments (market survey, specifications, ...) --}}
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;"><i class="fas fa-paperclip me-1"></i> Attached Supporting Documents</small>
+                    @if ($item && $item->attachments->isNotEmpty())
+                        <ul class="list-group list-group-flush small mb-2 border rounded" id="attachment_list">
+                            @foreach ($item->attachments as $attachment)
+                                <li class="list-group-item d-flex align-items-center gap-2 py-1">
+                                    <i class="fas {{ str_contains((string) $attachment->mime_type, 'pdf') ? 'fa-file-pdf text-danger' : 'fa-file text-muted' }}"></i>
+                                    <a href="{{ route('procurement.ppmp.attachments.show', [$ppmp, $attachment]) }}" target="_blank">{{ $attachment->original_name }}</a>
+                                    <span class="badge bg-light text-dark border">{{ $attachment->kindLabel() }}</span>
+                                    <span class="text-muted">{{ $attachment->sizeLabel() }}</span>
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto btn-delete-attachment" data-id="{{ $attachment->id }}" title="Remove"><i class="fas fa-times"></i></button>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if ($item?->supporting_documents)
+                        <div class="small text-muted mb-2"><i class="fas fa-sticky-note me-1"></i>Earlier note: {{ $item->supporting_documents }}</div>
+                    @endif
+                    <div id="new_attachments"></div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mb-1" id="btn_add_attachment"><i class="fas fa-plus me-1"></i> Attach a file</button>
+                    <div class="form-text mb-3">PDF, image, Word or Excel, up to {{ config('market_scoping.max_file_kb') / 1024 }} MB each. Files are saved with the project.</div>
+
+                    {{-- 7. Remarks --}}
+                    <div class="mb-1">
+                        <label class="form-label small fw-semibold text-muted mb-1">Remarks</label>
+                        <textarea name="remarks" class="form-control form-control-sm" rows="2">{{ $item->remarks ?? '' }}</textarea>
+                        <div class="invalid-feedback"></div>
                     </div>
                 </div>
 
@@ -280,6 +355,20 @@
             leftBox.innerHTML = '<i class="fas fa-coins me-1"></i> ' + label + ' budget left for this PPMP (' + budgetBase[group].office + '): <strong>₱' + peso(before) + '</strong>'
                 + ' → after this project: <strong>' + (after < 0 ? '−₱' + peso(-after) + ' (over budget; the PPMP cannot be submitted)' : '₱' + peso(after)) + '</strong>';
         }
+
+        // Attach a file: one row per file, with its kind
+        const kinds = @json(config('market_scoping.attachment_kinds'));
+        document.getElementById('btn_add_attachment').addEventListener('click', function () {
+            const row = document.createElement('div');
+            row.className = 'd-flex gap-2 mb-2 align-items-center';
+            row.innerHTML = '<select name="attachment_kinds[]" class="form-select form-select-sm" style="max-width: 260px;">'
+                + Object.entries(kinds).map(([value, label]) => '<option value="' + value + '">' + label + '</option>').join('')
+                + '</select><input type="file" name="attachments[]" class="form-control form-control-sm" accept="{{ collect(config('market_scoping.allowed_types'))->map(fn ($t) => '.' . $t)->join(',') }}">'
+                + '<button type="button" class="btn btn-sm btn-link text-danger p-0" title="Remove"><i class="fas fa-times"></i></button>';
+            row.querySelector('button').addEventListener('click', () => row.remove());
+            document.getElementById('new_attachments').appendChild(row);
+            row.querySelector('input[type=file]').click();
+        });
 
         form.querySelectorAll('.js-budget-calc').forEach((el) => el.addEventListener('input', recalc));
         form.querySelectorAll('.js-budget-calc, [name="estimated_budget"]').forEach((el) => el.addEventListener('input', showBudgetLeft));

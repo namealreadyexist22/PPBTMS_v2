@@ -108,6 +108,13 @@
                 @endif
             </div>
         @endif
+        @php $noScoping = $ppmp->paps->flatMap->items->reject->marketScopingComplete()->count(); @endphp
+        @if ($canEdit && $noScoping)
+            <div class="alert alert-info small mt-3 mb-0">
+                <i class="fas fa-clipboard-check me-1"></i>
+                {{ $noScoping }} {{ \Illuminate\Support\Str::plural('project', $noScoping) }} still {{ $noScoping === 1 ? 'needs' : 'need' }} the Market Scoping Checklist (RA 12009 Sec. 10). Open a project and fill in its checklist; attach the market survey there too.
+            </div>
+        @endif
         @if ($returned)
             <div class="alert alert-warning small mt-3 mb-0">
                 <i class="fas fa-undo me-1"></i>
@@ -227,9 +234,17 @@
                                 @endif
                                 <td>
                                     {{ $item->description }}
-                                    @if ($item->supporting_documents)
-                                        <div class="text-muted mt-1"><i class="fas fa-paperclip me-1"></i>{{ $item->supporting_documents }}</div>
-                                    @endif
+                                    <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
+                                        <a href="{{ route('procurement.ppmp.items.market-scoping', [$ppmp, $item]) }}" target="_blank"
+                                           class="badge text-decoration-none {{ $item->marketScopingComplete() ? 'bg-success-subtle text-success border' : 'bg-warning-subtle text-dark border' }}"
+                                           title="Print the Market Scoping Checklist"><i class="fas fa-clipboard-check me-1"></i>Market scoping {{ $item->marketScopingComplete() ? 'complete' : 'not complete' }}</a>
+                                        @foreach ($item->attachments as $attachment)
+                                            <a href="{{ route('procurement.ppmp.attachments.show', [$ppmp, $attachment]) }}" target="_blank" class="badge bg-light text-dark border text-decoration-none" title="{{ $attachment->kindLabel() }}">
+                                                <i class="fas fa-paperclip me-1"></i>{{ \Illuminate\Support\Str::limit($attachment->original_name, 28) }}
+                                            </a>
+                                        @endforeach
+                                        @if ($item->supporting_documents)<span class="text-muted small"><i class="fas fa-sticky-note me-1"></i>{{ $item->supporting_documents }}</span>@endif
+                                    </div>
                                     @if ($item->remarks)
                                         <div class="text-muted"><i class="fas fa-comment-alt me-1"></i>{{ $item->remarks }}</div>
                                     @endif
@@ -389,7 +404,9 @@ document.addEventListener('DOMContentLoaded', function () {
         $.ajax({
             url: '{{ route("procurement.ppmp.items.store", $ppmp) }}',
             type: 'POST',
-            data: form.serialize(),
+            data: new FormData(this),   // includes attached files
+            processData: false,
+            contentType: false,
             success: function (response) {
                 toastr.success(response.message, 'Success');
                 bootstrap.Modal.getInstance(document.getElementById(itemModalName)).hide();
@@ -402,16 +419,41 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (xhr.status === 422 && res.errors) {
                     errorSummary.removeClass('d-none').find('span').text('Please correct the highlighted errors below.');
                     $.each(res.errors, function (key, messages) {
-                        const input = form.find('[name="' + key + '"]');
+                        // "market_scoping.period_from" -> market_scoping[period_from]; "attachments.1" -> 2nd file
+                        const parts = key.split('.');
+                        let input = parts[0] === 'attachments' && parts.length === 2
+                            ? form.find('input[name="attachments[]"]').eq(parseInt(parts[1], 10))
+                            : form.find('[name="' + parts[0] + parts.slice(1).map((p) => '[' + p + ']').join('') + '"]');
+                        if (!input.length) input = form.find('[name="' + key + '"]');
                         input.addClass('is-invalid');
                         input.siblings('.invalid-feedback').text(messages[0]);
+                        if (!input.siblings('.invalid-feedback').length) toastr.error(messages[0]);
                     });
+                    if (Object.keys(res.errors).some((k) => k.startsWith('market_scoping'))) {
+                        bootstrap.Collapse.getOrCreateInstance(document.getElementById('ms_body'), { toggle: false }).show();
+                    }
                 } else if (xhr.status === 422 && res.message) {
                     errorSummary.removeClass('d-none').find('span').text(res.message);
                 } else {
                     toastr.error(res.message ?? 'Something went wrong.', 'Error');
                 }
             }
+        });
+    });
+
+    // Remove an attachment (draft / returned PPMPs only)
+    $(document).on('click', '.btn-delete-attachment', function (e) {
+        e.preventDefault();
+        const button = $(this);
+        Swal.fire({ title: 'Remove this file?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Remove' }).then((result) => {
+            if (!result.isConfirmed) return;
+            $.ajax({
+                url: '{{ route("procurement.ppmp.attachments.destroy", $ppmp) }}',
+                type: 'POST',
+                data: { _token: '{{ csrf_token() }}', _method: 'DELETE', id: button.data('id') },
+                success: (res) => { toastr.success(res.message); button.closest('li').remove(); },
+                error: (xhr) => toastr.error(xhr.responseJSON?.message ?? 'Could not remove the file.')
+            });
         });
     });
 

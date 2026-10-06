@@ -158,10 +158,14 @@ class PpmpService
             throw new ProcurementException('This line already has PR charges and cannot be removed.');
         }
 
+        $paths = app(PpmpAttachmentService::class)->pathsOf([$item]);
+
         DB::transaction(function () use ($item, $ppmp) {
-            $item->delete();
+            $item->delete();   // attachment rows cascade
             $ppmp->recalculateTotal();
         });
+
+        app(PpmpAttachmentService::class)->removeFilesIfUnused($paths);
     }
 
     public function submit(Ppmp $ppmp, User $user, ?string $remarks = null): Ppmp
@@ -233,10 +237,14 @@ class PpmpService
             throw new ProcurementException("Only a draft PPMP can be deleted. {$ppmp->ppmp_no} is {$ppmp->status->value}.");
         }
 
+        $paths = app(PpmpAttachmentService::class)->pathsOf($ppmp->items);
+
         DB::transaction(function () use ($ppmp) {
             $ppmp->signatories()->delete();
-            $ppmp->forceDelete();   // items cascade
+            $ppmp->forceDelete();   // items and their attachment rows cascade
         });
+
+        app(PpmpAttachmentService::class)->removeFilesIfUnused($paths);
     }
 
     /** Start an amendment: copy the approved PPMP into a new draft version. */
@@ -283,9 +291,10 @@ class PpmpService
 
             foreach ($ppmp->items as $item) {
                 // Same line_uuid keeps PR charges attached to the line across versions.
-                $copy->items()->create(array_merge($item->only($item->getFillable()), [
+                $new = $copy->items()->create(array_merge($item->only($item->getFillable()), [
                     'ppmp_pap_id' => $papIds[$item->ppmp_pap_id] ?? null,
                 ]));
+                app(PpmpAttachmentService::class)->copy($item, $new);   // same files, own rows
             }
 
             $copy->sign($user, 'prepared', $remarks);

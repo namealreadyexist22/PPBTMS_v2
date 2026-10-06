@@ -15,7 +15,7 @@ class PpmpItem extends Model
         'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id', 'unit_cost',
         'quantity_size', 'procurement_mode_id', 'pre_proc_conference', 'proc_start', 'proc_end',
         'delivery_period', 'fund_source_id', 'allotment_class', 'estimated_budget', 'committed_amount',
-        'supporting_documents', 'remarks', 'sort_order',
+        'supporting_documents', 'market_scoping', 'remarks', 'sort_order',
     ];
 
     protected function casts(): array
@@ -26,6 +26,7 @@ class PpmpItem extends Model
             'quantity'            => 'decimal:2',
             'unit_cost'           => 'decimal:2',
             'pre_proc_conference' => 'boolean',
+            'market_scoping'      => 'array',
             'proc_start'          => 'date',
             'proc_end'            => 'date',
             'estimated_budget'    => 'decimal:2',
@@ -84,5 +85,21 @@ class PpmpItem extends Model
     public function fundSource(): BelongsTo
     {
         return $this->belongsTo(FundSource::class);
+    }
+
+    public function attachments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PpmpItemAttachment::class)->orderBy('id');
+    }
+
+    /** Market scoping is done when the period, at least one activity and every parameter are filled. */
+    public function marketScopingComplete(): bool
+    {
+        $ms = $this->market_scoping ?? [];
+        $parameters = array_keys(config('market_scoping.parameters'));
+
+        return ! empty($ms['period_from']) && ! empty($ms['period_to'])
+            && (! empty($ms['activities']) || ! empty($ms['activity_other']))
+            && collect($parameters)->every(fn ($key) => ! empty($ms['parameters'][$key]['answer']));
     }
 }

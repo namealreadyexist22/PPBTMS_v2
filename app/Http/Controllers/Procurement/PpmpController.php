@@ -16,7 +16,11 @@ use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\ProcurementMode;
 use App\Models\Procurement\Unit;
+use App\Models\Procurement\PpmpItem;
+use App\Models\Procurement\PpmpItemAttachment;
 use App\Services\Procurement\BudgetAllocationService;
+use App\Services\Procurement\PpmpAttachmentService;
+use Illuminate\Support\Facades\Storage;
 use App\Services\Procurement\PpmpService;
 use Closure;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -74,7 +78,7 @@ class PpmpController extends Controller
         $this->authorizeView($request, $ppmp);
 
         $user = $request->user();
-        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'items', 'signatories', 'divisionPpmps']);
+        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'items', 'signatories', 'divisionPpmps']);
 
         $hasOpenAmendment = Ppmp::where('amended_from_id', $ppmp->id)
             ->whereIn('status', [PpmpStatus::Draft, PpmpStatus::Submitted, PpmpStatus::Returned])
@@ -105,7 +109,7 @@ class PpmpController extends Controller
     {
         $this->authorizeView($request, $ppmp);
 
-        $ppmp->load(['office', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'signatories']);
+        $ppmp->load(['office', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'signatories']);
         $approverId = $ppmp->office->approverId();
         $approver = $approverId ? \App\Models\User::find($approverId) : null;
         $prepared = $ppmp->latestSignatory('prepared');
@@ -158,19 +162,60 @@ class PpmpController extends Controller
     public function itemStore(StorePpmpItemRequest $request, Ppmp $ppmp)
     {
         $this->authorizeEdit($request, $ppmp);
-        $data = $request->safe()->except('id');
+        $data = $request->safe()->except(['id', 'attachments', 'attachment_kinds']);
 
         return $this->attempt(function () use ($request, $ppmp, $data) {
-            if ($request->filled('id')) {
-                $this->ppmpService->updateItem($ppmp->items()->findOrFail($request->id), $data);
+            $item = $request->filled('id')
+                ? $this->ppmpService->updateItem($ppmp->items()->findOrFail($request->id), $data)
+                : $this->ppmpService->addItem($ppmp, $data);
 
-                return 'Procurement project updated.';
+            if ($request->hasFile('attachments')) {
+                app(PpmpAttachmentService::class)->store($item, $request->file('attachments'), $request->input('attachment_kinds', []), $request->user());
             }
 
-            $this->ppmpService->addItem($ppmp, $data);
-
-            return 'Procurement project added.';
+            return $request->filled('id') ? 'Procurement project updated.' : 'Procurement project added.';
         });
+    }
+
+    /** Download / view a project's attachment (anyone who can view the PPMP). */
+    public function attachmentDownload(Request $request, Ppmp $ppmp, PpmpItemAttachment $attachment)
+    {
+        $this->authorizeView($request, $ppmp);
+        abort_unless($attachment->item->ppmp_id === $ppmp->id, 404);
+
+        $disk = Storage::disk(PpmpAttachmentService::DISK);
+        abort_unless($disk->exists($attachment->path), 404, 'The file is missing.');
+
+        // PDFs and images open in the browser; other files download
+        return $disk->response($attachment->path, $attachment->original_name, [], str_starts_with((string) $attachment->mime_type, 'image/') || $attachment->mime_type === 'application/pdf' ? 'inline' : 'attachment');
+    }
+
+    public function attachmentDestroy(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeEdit($request, $ppmp);
+        $this->validateJson($request, ['id' => ['required', 'integer']]);
+
+        return $this->attempt(function () use ($request, $ppmp) {
+            $attachment = PpmpItemAttachment::whereKey($request->id)->whereHas('item', fn ($q) => $q->where('ppmp_id', $ppmp->id))->firstOrFail();
+            app(PpmpAttachmentService::class)->delete($attachment);
+
+            return "Removed \"{$attachment->original_name}\".";
+        });
+    }
+
+    /** GPPB Market Scoping Checklist of one procurement project, printable. */
+    public function marketScopingPrint(Request $request, Ppmp $ppmp, PpmpItem $item)
+    {
+        $this->authorizeView($request, $ppmp);
+        abort_unless($item->ppmp_id === $ppmp->id, 404);
+        $prepared = $ppmp->latestSignatory('prepared');
+
+        return view('procurement.ppmp.market_scoping_print', [
+            'ppmp'     => $ppmp->load('office'),
+            'item'     => $item->load('attachments'),
+            'prepared' => $prepared,
+            'head'     => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
+        ]);
     }
 
     /** Add / edit PAP modal (code + title). */

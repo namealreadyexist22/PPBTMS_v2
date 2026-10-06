@@ -221,6 +221,86 @@ class PpmpPageTest extends TestCase
             ]);
     }
 
+    public function test_market_scoping_checklist_and_attachments_on_a_project(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($this->section, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'ICT');
+        $this->actingAs($this->staff);
+
+        $parameters = collect(config('market_scoping.parameters'))->map(fn ($l, $k) => ['answer' => $k === 'liability' ? 'na' : 'yes', 'recommendation' => "ok {$k}"])->all();
+
+        // Project with the checklist and a market survey PDF, sent as multipart form data
+        $this->post(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, [
+            'market_scoping' => ['period_from' => '2026-08', 'period_to' => '2026-09', 'activities' => ['consultations', 'brochures'], 'parameters' => $parameters],
+            'attachments' => [\Illuminate\Http\UploadedFile::fake()->create('canvass.pdf', 120, 'application/pdf')],
+            'attachment_kinds' => ['market_survey'],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $item = $ppmp->items()->sole();
+        $this->assertTrue($item->marketScopingComplete());
+        $attachment = $item->attachments()->sole();
+        $this->assertSame(['market_survey', 'canvass.pdf'], [$attachment->kind, $attachment->original_name]);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($attachment->path);
+
+        // Shown on the page, downloadable, printable checklist
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Market scoping complete')->assertSee('canvass.pdf');
+        $this->get(route('procurement.ppmp.attachments.show', [$ppmp, $attachment]))->assertOk();
+        $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertOk()
+            ->assertSee('MARKET SCOPING CHECKLIST')->assertSee('From 08/2026 To 09/2026')->assertSee('ok cost')->assertSee('canvass.pdf');
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Market Scoping Checklist')->assertSee('Market survey / price quotations');
+
+        // Wrong file type and a period ending before it starts are refused
+        $this->post(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, [
+            'id' => $item->id,
+            'market_scoping' => ['period_from' => '2026-09', 'period_to' => '2026-08'],
+            'attachments' => [\Illuminate\Http\UploadedFile::fake()->create('virus.exe', 10)],
+        ]), ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors(['attachments.0', 'market_scoping.period_to']);
+
+        // Outsiders cannot download
+        $this->actingAs($this->outsider)->get(route('procurement.ppmp.attachments.show', [$ppmp, $attachment]))->assertForbidden();
+
+        // Approve, amend: the amendment has its own row for the same file; removing it there keeps the file for V1
+        $service->submit($ppmp->fresh(), $this->staff);
+        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, \App\Enums\Region::Lm, $this->head, $this->head);
+        $this->actingAs($this->staff)->deleteJson(route('procurement.ppmp.attachments.destroy', $ppmp), ['id' => $attachment->id])->assertStatus(422);   // approved: locked
+
+        $v2 = $service->amend($ppmp->fresh(), $this->staff);
+        $copy = $v2->items()->sole()->attachments()->sole();
+        $this->assertSame($attachment->path, $copy->path);
+        $this->assertTrue($v2->items()->sole()->marketScopingComplete());
+
+        $this->deleteJson(route('procurement.ppmp.attachments.destroy', $v2), ['id' => $copy->id])->assertOk();
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($attachment->path);   // still used by V1
+
+        // Deleting the unsubmitted amendment then V1's own row would remove the file; V1's row stays
+        $this->assertSame(1, \App\Models\Procurement\PpmpItemAttachment::where('path', $attachment->path)->count());
+    }
+
+    public function test_removing_a_project_or_deleting_a_draft_removes_its_unused_files(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $service = app(PpmpService::class);
+        $files = app(\App\Services\Procurement\PpmpAttachmentService::class);
+        $ppmp = $service->create($this->section, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'ICT');
+        $line = array_merge($this->project($pap->id), ['proc_start' => '2027-02-01', 'proc_end' => '2027-04-01', 'estimated_budget' => '1000']);
+
+        $a = $service->addItem($ppmp, $line);
+        $b = $service->addItem($ppmp, $line);
+        $files->store($a, [\Illuminate\Http\UploadedFile::fake()->create('a.pdf', 10, 'application/pdf')], ['market_survey'], $this->staff);
+        $files->store($b, [\Illuminate\Http\UploadedFile::fake()->create('b.pdf', 10, 'application/pdf')], ['specs'], $this->staff);
+        [$pathA, $pathB] = [$a->attachments()->value('path'), $b->attachments()->value('path')];
+
+        $service->removeItem($a->fresh());
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($pathA);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($pathB);
+
+        $service->deleteDraft($ppmp->fresh());
+        \Illuminate\Support\Facades\Storage::disk('local')->assertMissing($pathB);
+    }
+
     public function test_other_offices_cannot_view_or_change(): void
     {
         $ppmp = $this->submittedSectionPpmp($this->section, $this->staff, '64000');

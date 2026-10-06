@@ -175,7 +175,7 @@ class DivisionPpmpController extends Controller
     /** PAP groups of the given section PPMPs, in section order, with their projects. */
     protected function papsOf(Collection $ppmps): Collection
     {
-        return PpmpPap::with(['items.procurementMode', 'items.fundSource', 'items.unit', 'ppmp.office'])
+        return PpmpPap::with(['items.procurementMode', 'items.fundSource', 'items.unit', 'items.attachments', 'ppmp.office'])
             ->whereIn('ppmp_id', $ppmps->pluck('id'))
             ->get()
             ->sortBy(fn (PpmpPap $pap) => [$pap->ppmp->office->code, $pap->sort_order, $pap->code])
