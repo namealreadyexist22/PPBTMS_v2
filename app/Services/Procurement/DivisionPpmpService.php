@@ -125,6 +125,7 @@ class DivisionPpmpService
             // Form signatories: Prepared by (the authorized person) and Submitted by (the division head)
             $division->sign($preparedBy, 'prepared');
             $division->sign($head, 'submitted', $remarks);
+            app(ProcurementNotifier::class)->divisionApproved($division, $pending, $head);
 
             return $division;
         });

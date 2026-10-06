@@ -154,6 +154,11 @@ class BudgetAllocationService
 
             $allocation->fill(['amount' => Money::fromCents($new), 'updated_by' => $user->id])->save();
             $allocation->history()->create(['user_id' => $user->id, 'old_amount' => $old, 'new_amount' => $allocation->amount, 'reason' => $reason]);
+            $allocation->setRelation('department', $department);
+
+            if ($existing) {
+                app(ProcurementNotifier::class)->budgetChanged($allocation, (string) $old, $user, $reason);
+            }
 
             return $allocation->setRelation('department', $department);
         });

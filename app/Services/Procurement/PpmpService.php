@@ -178,6 +178,7 @@ class PpmpService
                 'updated_by'   => $user->id,
             ]);
             $ppmp->sign($user, 'submitted', $remarks);
+            app(ProcurementNotifier::class)->ppmpSubmitted($ppmp, $user);
 
             return $ppmp;
         });
@@ -191,6 +192,7 @@ class PpmpService
         return DB::transaction(function () use ($ppmp, $approver, $remarks) {
             $ppmp->update(['status' => PpmpStatus::Returned, 'updated_by' => $approver->id]);
             $ppmp->sign($approver, 'returned', $remarks);
+            app(ProcurementNotifier::class)->ppmpReturned($ppmp, $approver, $remarks);
 
             return $ppmp;
         });

@@ -240,6 +240,7 @@ class AppService
         return DB::transaction(function () use ($app, $user, $remarks) {
             $app->update(['status' => AppStatus::Submitted]);
             $app->sign($this->signatory($app->region, 'prepared') ?? $user, 'prepared', $remarks);
+            app(ProcurementNotifier::class)->appSubmitted($app, $user);
 
             return $app;
         });
@@ -253,6 +254,7 @@ class AppService
         return DB::transaction(function () use ($app, $user, $remarks) {
             $app->update(['status' => AppStatus::Recommended]);
             $app->sign($user, 'recommended', $remarks);
+            app(ProcurementNotifier::class)->appRecommended($app, $user);
 
             return $app;
         });
@@ -267,6 +269,7 @@ class AppService
             $app->updatedFrom?->update(['status' => AppStatus::Superseded]);
             $app->update(['status' => AppStatus::Approved, 'approved_at' => now()]);
             $app->sign($user, 'approved', $remarks);
+            app(ProcurementNotifier::class)->appApproved($app, $user);
 
             return $app;
         });
@@ -285,6 +288,7 @@ class AppService
         return DB::transaction(function () use ($app, $user, $remarks) {
             $app->update(['status' => AppStatus::Draft]);
             $app->sign($user, 'returned', $remarks);
+            app(ProcurementNotifier::class)->appReturned($app, $user, $remarks);
 
             return $app;
         });
