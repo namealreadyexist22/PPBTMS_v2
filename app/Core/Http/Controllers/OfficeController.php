@@ -13,11 +13,17 @@ class OfficeController extends Controller
     /** Settings > Organization: the tree of departments, divisions and sections. */
     public function index(Request $request)
     {
-        $offices = Office::with('head')->withCount('users')->orderBy('code')->get();
+        $offices = Office::with('head')->withCount('users')->get();
+        $childrenOf = $offices->whereNotNull('parent_id')->groupBy('parent_id');
+
+        // In office-number order; a department without a number sorts by its first unit's
+        $sortKey = function (Office $office) use (&$sortKey, $childrenOf): string {
+            return $office->code ?? ($childrenOf->get($office->id, collect())->map($sortKey)->min() ?? 'zzzzz');
+        };
 
         return view('BackEnd.offices.index', [
-            'roots'      => $offices->whereNull('parent_id')->values(),
-            'childrenOf' => $offices->whereNotNull('parent_id')->groupBy('parent_id'),
+            'roots'      => $offices->whereNull('parent_id')->sortBy($sortKey)->values(),
+            'childrenOf' => $childrenOf->map(fn ($children) => $children->sortBy($sortKey)->values()),
             'canDelete'  => $request->user()->canAccessPermission('menu.offices-destroy'),
         ]);
     }

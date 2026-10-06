@@ -48,9 +48,9 @@
                     <div class="row g-3 mb-3">
                         <div class="col-6">
                             <label class="form-label small fw-semibold text-muted mb-1">Office No.</label>
-                            <input type="text" name="code" class="form-control form-control-sm" value="{{ $office->code ?? '' }}" placeholder="e.g. 05000" inputmode="numeric" required>
+                            <input type="text" name="code" class="form-control form-control-sm" value="{{ $office->code ?? '' }}" placeholder="e.g. 05000" inputmode="numeric">
                             <div class="invalid-feedback"></div>
-                            <div class="form-text">Used in the PPMP number, e.g. 27-<b>05000</b>-01.</div>
+                            <div class="form-text">Used in PPMP numbers, e.g. <b>05000</b>-2027-V1. A department with divisions leaves it blank; its Office of the Manager has it.</div>
                         </div>
                         <div class="col-6">
                             <label class="form-label small fw-semibold text-muted mb-1">Acronym</label>

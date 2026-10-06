@@ -67,7 +67,17 @@ class OfficeManagementTest extends TestCase
         $this->seed(\Database\Seeders\OfficeSeeder::class);
 
         $hrrs = Office::where('code', '06021')->first();
-        $this->assertSame(['06020', '06010', '06000'], [$hrrs->parent->code, $hrrs->parent->parent->code, $hrrs->parent->parent->parent->code]);
+        $this->assertSame(['06020', 'AFD-LM', '06000'], [$hrrs->parent->code, $hrrs->parent->parent->acronym, $hrrs->parent->parent->parent->code]);
+
+        // A department with divisions groups them; its manager's PPMP unit is the Office of the Manager (05000)
+        $om = Office::where('code', '05000')->first();
+        $this->assertSame(['OFFICE OF THE MANAGER', 'division', 'PPSPD'], [$om->name, $om->type, $om->parent->acronym]);
+        $this->assertNull($om->parent->code);
+        $this->assertSame('04000', Office::where('acronym', 'LEGAL')->value('code'));   // single-unit department keeps its number
+
+        // Re-running the seeder matches departments without a number by acronym (no duplicates)
+        $this->seed(\Database\Seeders\OfficeSeeder::class);
+        $this->assertSame(1, Office::where('acronym', 'PPSPD')->count());
         $this->assertNull(Office::where('code', '11000')->value('parent_id'));
 
         // Types and departments: MIS is a section of PPPD in PPSPD; AFD-LM is a department of its own under ODA-AF

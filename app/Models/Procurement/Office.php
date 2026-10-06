@@ -30,13 +30,13 @@ class Office extends Model
     /** Short name for lists: the acronym, or the office number if none. */
     public function shortName(): string
     {
-        return $this->acronym ?: $this->code;
+        return $this->acronym ?: ($this->code ?: $this->name);
     }
 
     /** e.g. "05000 · PPSPD — PPSPD - MANAGER III" */
     public function label(): string
     {
-        return $this->code . ($this->acronym ? ' · ' . $this->acronym : '') . ' — ' . $this->name;
+        return implode(' · ', array_filter([$this->code, $this->acronym])) . ' — ' . $this->name;
     }
 
     public function scopeActive(Builder $query): Builder
@@ -50,7 +50,8 @@ class Office extends Model
      */
     public function scopeAssignableTo(Builder $query, User $user): Builder
     {
-        $query->active()->orderBy('code');
+        // Only units with an office number prepare PPMPs (a department with divisions uses its Office of the Manager)
+        $query->active()->whereNotNull('code')->orderBy('code');
 
         return $user->hasRole('Super Admin') ? $query : $query->whereKey($user->office_id);
     }
@@ -85,7 +86,7 @@ class Office extends Model
             array_unshift($path, $office->shortName());
         }
 
-        return "{$this->code} · " . implode(' › ', $path) . " — {$this->name}";
+        return ($this->code ? "{$this->code} · " : '') . implode(' › ', $path) . " — {$this->name}";
     }
 
     /** Unit types of the organization tree, top down. */

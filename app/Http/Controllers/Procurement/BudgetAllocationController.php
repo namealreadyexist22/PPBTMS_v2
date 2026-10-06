@@ -32,7 +32,9 @@ class BudgetAllocationController extends Controller
         $offices = Office::active()->get()->keyBy('id');
         $rows = Office::active()->where('type', 'department')
             ->where(fn ($q) => $fund === FundGroup::Regular ? $q->where('budget_fund', $fund)->orWhereNull('budget_fund') : $q->where('budget_fund', $fund))
-            ->orderBy('code')->get()
+            ->get()
+            // In office-number order; a department without a number sorts by its first unit's
+            ->sortBy(fn (Office $d) => $d->code ?? collect($d->departmentOfficeIds())->map(fn ($id) => $offices->get($id)?->code)->filter()->min() ?? 'zzzzz')->values()
             ->map(function (Office $department) use ($allocations, $offices) {
                 $allocation = $allocations->get($department->id)?->setRelation('department', $department);
                 $usedBy = $allocation ? $this->budget->usedByOffice($allocation) : [];

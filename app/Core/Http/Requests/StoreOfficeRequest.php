@@ -30,7 +30,8 @@ class StoreOfficeRequest extends FormRequest
         return [
             'id'           => ['nullable', 'integer', 'exists:offices,id'],
             // Office number used in PPMP numbers (YY-xxxxx-NN); digits only, keeps leading zeros
-            'code'         => ['required', 'string', 'regex:/^\d{1,10}$/', Rule::unique('offices', 'code')->ignore($id)],
+            // A department that only groups divisions needs none (its Office of the Manager has it)
+            'code'         => ['nullable', 'required_unless:type,department', 'string', 'regex:/^\d{1,10}$/', Rule::unique('offices', 'code')->ignore($id)],
             'acronym'      => ['nullable', 'string', 'max:30'],
             'name'         => ['required', 'string', 'max:255'],
             // Never itself or one of its own sub-offices (that would make a loop)
@@ -52,6 +53,7 @@ class StoreOfficeRequest extends FormRequest
             'code.regex'       => 'The office number must contain digits only (e.g. 05000).',
             'code.unique'      => 'This office number is already used.',
             'parent_id.not_in' => 'The parent cannot be this office or one of its sub-offices.',
+            'code.required_unless'      => 'Divisions and sections need an office number.',
             'parent_id.required_unless' => 'A division or section must be under a department or division.',
         ];
     }

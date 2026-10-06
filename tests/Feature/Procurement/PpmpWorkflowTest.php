@@ -354,4 +354,25 @@ class PpmpWorkflowTest extends TestCase
         $this->assertSame(1, $no1->ppmp_number);
         $this->assertSame(['prepared', 'submitted'], $no1->signatories()->orderBy('id')->pluck('role')->all());
     }
+
+    public function test_a_department_without_an_office_number_cannot_prepare_a_ppmp(): void
+    {
+        $department = Office::create(['code' => null, 'acronym' => 'PPSPD', 'name' => 'PPSPD', 'type' => 'department', 'budget_fund' => 'regular']);
+        $manager = Office::create(['code' => '05000', 'acronym' => 'PPSPD-OM', 'name' => 'OFFICE OF THE MANAGER', 'type' => 'division', 'parent_id' => $department->id]);
+        $admin = User::factory()->create();
+        $admin->assignRole(\Spatie\Permission\Models\Role::findOrCreate('Super Admin'));
+
+        try {
+            $this->ppmps->create($department, 2027, $admin);
+            $this->fail('Expected a ProcurementException.');
+        } catch (\App\Exceptions\ProcurementException $e) {
+            $this->assertStringContainsString('no office number', $e->getMessage());
+        }
+
+        // The Office of the Manager prepares it, under the department's budget
+        $ppmp = $this->ppmps->create($manager, 2027, $admin);
+        $this->assertSame('05000-2027-V1', $ppmp->ppmp_no);
+        $this->assertSame($department->id, $manager->department->id);
+        $this->assertNotContains($department->id, Office::assignableTo($admin)->pluck('id')->all());
+    }
 }

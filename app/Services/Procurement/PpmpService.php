@@ -27,6 +27,10 @@ class PpmpService
         // The preparer's region (LM / VIS) decides which Division PPMP and APP this goes to
         $region ??= $user->region ?? Region::Lm;
 
+        if (! $office->code) {
+            throw new ProcurementException("{$office->shortName()} has no office number, so it cannot prepare a PPMP. Use its Office of the Manager or a division.");
+        }
+
         if (! Office::assignableTo($user)->whereKey($office->id)->exists()) {
             throw new ProcurementException('You can only create a PPMP for your home office.');
         }
