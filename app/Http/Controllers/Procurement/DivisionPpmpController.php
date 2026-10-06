@@ -52,11 +52,17 @@ class DivisionPpmpController extends Controller
                 'current'  => $this->divisionService->current($office, $fiscalYear, $region),
                 'history'  => DivisionPpmp::where('office_id', $office->id)->where('fiscal_year', $fiscalYear)->where('region', $region)->orderByDesc('ppmp_number')->get(),
                 'sections' => $this->divisionService->sectionPpmps($office, $fiscalYear, $region),
+                // Every unit whose PPMP this head approves, started or not
+                'units'    => Office::whereKey($office->consolidatedOfficeIds())->whereNotNull('code')->orderBy('code')->get(),
+                'department' => $office->department,
                 'pending'  => $this->divisionService->pending($office, $fiscalYear, $region),
                 'isHead'   => (int) $office->head_user_id === (int) $user->id,
                 'members'  => User::whereIn('office_id', $office->consolidatedOfficeIds())->orWhere('id', $office->head_user_id)->orderBy('fname')->get(),
             ]);
-        })->values();
+        })
+            // Grouped by department (in office-number order), each approver's card under it
+            ->sortBy(fn ($d) => [$this->departmentSortKey($d['department']), $d['office']->code ?? '', $d['region']->value])
+            ->values();
 
         return view('procurement.division_ppmp.index', [
             'divisions'  => $divisions,
@@ -193,6 +199,16 @@ class DivisionPpmpController extends Controller
             ->unique('id')
             ->sortBy('code')
             ->values();
+    }
+
+    /** A department's place in office-number order: its own number, or its first unit's. */
+    protected function departmentSortKey(?Office $department): string
+    {
+        if (! $department) {
+            return 'zzzzz';
+        }
+
+        return $department->code ?? (Office::whereKey($department->departmentOfficeIds())->whereNotNull('code')->min('code') ?? 'zzzzz');
     }
 
     protected function authorizeView(Request $request, DivisionPpmp $divisionPpmp): void

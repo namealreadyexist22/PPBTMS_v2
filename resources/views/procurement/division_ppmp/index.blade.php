@@ -8,7 +8,7 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <div>
         <h5 class="fw-bold mb-0"><i class="fas fa-layer-group text-muted me-2"></i>Division PPMP</h5>
-        <div class="text-muted small">Section PPMPs combined per division. The division head approves them as PPMP No. 1, 2, 3… for BAC.</div>
+        <div class="text-muted small">Grouped by department. Each card is one approver: its head approves the PPMPs of the units listed in it as PPMP No. 1, 2, 3… for BAC.</div>
     </div>
     <form method="GET" class="d-flex align-items-center gap-2">
         <label class="small text-muted">Fiscal Year</label>
@@ -20,13 +20,25 @@
     </form>
 </div>
 
+@php $lastDepartment = false; @endphp
 @forelse ($divisions as $d)
-    @php $office = $d['office']; $current = $d['current']; $region = $d['region']; $key = $office->id . '-' . $region->value; @endphp
-    <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
+    @php $office = $d['office']; $current = $d['current']; $region = $d['region']; $key = $office->id . '-' . $region->value; $dept = $d['department']; @endphp
+    @if ($lastDepartment === false || $lastDepartment?->id !== $dept?->id)
+        <div class="d-flex align-items-center gap-2 mt-4 mb-2">
+            <span class="badge bg-dark">Department</span>
+            @if ($dept)
+                <span class="fw-bold">{{ $dept->acronym ?: $dept->code }}</span><span class="text-muted">— {{ $dept->name }}</span>
+            @else
+                <span class="text-muted">Not under a department</span>
+            @endif
+        </div>
+        @php $lastDepartment = $dept; @endphp
+    @endif
+    <div class="card border-0 shadow-sm mb-3 {{ $dept && $dept->id !== $office->id ? 'ms-md-4' : '' }}" style="border-radius: 12px;">
         <div class="card-body p-4">
             <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
                 <div>
-                    <div class="small text-muted">{{ $office->code }}{{ $office->acronym ? ' · ' . $office->acronym : '' }}</div>
+                    <div class="small text-muted">{{ $office->typeLabel() }}{{ $office->code ? ' · ' . $office->code : '' }}{{ $office->acronym ? ' · ' . $office->acronym : '' }}</div>
                     <h6 class="fw-bold mb-1">
                         {{ $office->name }}
                         <span class="badge {{ $region === \App\Enums\Region::Vis ? 'bg-info' : 'bg-primary' }} align-middle ms-1" title="Goes to the {{ $region->bac() }}">{{ $region->label() }}</span>
@@ -66,19 +78,27 @@
             <div class="table-responsive mt-3">
                 <table class="table table-sm align-middle small mb-0">
                     <thead class="table-light">
-                        <tr><th class="ps-3">Section / Office</th><th>Section PPMP</th><th class="text-center">Status</th><th class="text-end">Total</th><th></th></tr>
+                        <tr><th class="ps-3">Unit</th><th>PPMP</th><th class="text-center">Status</th><th class="text-end">Total</th><th></th></tr>
                     </thead>
                     <tbody>
-                        @forelse ($d['sections'] as $ppmp)
-                            <tr>
-                                <td class="ps-3">{{ $ppmp->office->code }} — {{ $ppmp->office->name }}</td>
-                                <td>{{ $ppmp->ppmp_no }}</td>
-                                <td class="text-center"><span class="badge bg-{{ $statusColors[$ppmp->status->value] ?? 'secondary' }}">{{ $ppmp->status->label() }}</span></td>
-                                <td class="text-end">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
-                                <td class="text-end pe-3"><a href="{{ route('procurement.ppmp.show', $ppmp) }}">Open</a></td>
+                        @forelse ($d['units'] as $unit)
+                            @php $ppmp = $d['sections']->firstWhere('office_id', $unit->id); @endphp
+                            <tr class="{{ $ppmp ? '' : 'text-muted' }}">
+                                <td class="ps-3">
+                                    <span class="badge bg-light text-dark border me-1" style="min-width: 62px;">{{ $unit->typeLabel() }}</span>
+                                    {{ $unit->code }} — {{ $unit->acronym ? $unit->acronym . ' · ' : '' }}{{ $unit->name }}
+                                </td>
+                                @if ($ppmp)
+                                    <td>{{ $ppmp->ppmp_no }}</td>
+                                    <td class="text-center"><span class="badge bg-{{ $statusColors[$ppmp->status->value] ?? 'secondary' }}">{{ $ppmp->status->label() }}</span></td>
+                                    <td class="text-end">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
+                                    <td class="text-end pe-3"><a href="{{ route('procurement.ppmp.show', $ppmp) }}">Open</a></td>
+                                @else
+                                    <td colspan="4" class="fst-italic">No PPMP for FY {{ $fiscalYear }} yet</td>
+                                @endif
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center text-muted py-3">No section has started a PPMP for FY {{ $fiscalYear }} yet.</td></tr>
+                            <tr><td colspan="5" class="text-center text-muted py-3">No units with an office number report to this head.</td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -204,6 +204,23 @@ class PpmpPageTest extends TestCase
         $this->actingAs($this->staff)->get(route('procurement.ppmp.show', $misV2))->assertSee('PPMP No. 2');
     }
 
+    public function test_division_page_groups_approvers_under_their_department_and_lists_every_unit(): void
+    {
+        // PPSPD (department) > Office of the Manager, PPPD (approves its sections), SPPDEM
+        $ppspd = Office::create(['code' => null, 'acronym' => 'PPSPD', 'name' => 'PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT', 'type' => 'department', 'budget_fund' => 'regular', 'head_user_id' => $this->head->id, 'is_consolidating' => true]);
+        $this->division->update(['parent_id' => $ppspd->id, 'type' => 'division', 'acronym' => 'PPPD']);
+        Office::create(['code' => '05000', 'acronym' => 'PPSPD-OM', 'name' => 'OFFICE OF THE MANAGER', 'type' => 'division', 'parent_id' => $ppspd->id]);
+        Office::create(['code' => '05020', 'acronym' => 'SPPDEM', 'name' => 'SPECIAL PROJECTS DIVISION', 'type' => 'division', 'parent_id' => $ppspd->id]);
+        app(PpmpService::class)->create($this->section2, 2027, $this->staff2);
+
+        $this->actingAs($this->head)->get(route('procurement.division-ppmp.index', ['fy' => 2027]))->assertOk()
+            ->assertSeeInOrder([
+                'Department', 'PPSPD', 'PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT',
+                '05000', 'OFFICE OF THE MANAGER', 'No PPMP for FY 2027 yet', '05020', 'SPECIAL PROJECTS DIVISION',
+                'PLANNING, POLICY AND PROGRAMMING DIVISION', '05011', '05011-2027-V1', '05012', 'MIS SECTION', 'No PPMP for FY 2027 yet',
+            ]);
+    }
+
     public function test_other_offices_cannot_view_or_change(): void
     {
         $ppmp = $this->submittedSectionPpmp($this->section, $this->staff, '64000');
