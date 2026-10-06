@@ -41,7 +41,7 @@
                     <tr>
                         <td class="ps-4">
                             <button class="btn btn-sm btn-link p-0 me-1 text-muted" data-bs-toggle="collapse" data-bs-target=".dept-{{ $d->id }}" title="Show offices"><i class="fas fa-chevron-right"></i></button>
-                            <span class="fw-semibold">{{ $d->code }}</span> {{ $d->name }}
+                            <span class="fw-semibold">{{ $d->code }}</span>@if ($d->name !== $d->code) <span class="text-muted">—</span> {{ $d->name }}@endif
                             <span class="text-muted">· {{ $row['offices']->count() }} {{ Str::plural('office', $row['offices']->count()) }}</span>
                         </td>
                         @if ($a)
@@ -60,10 +60,10 @@
                         <td class="pe-4 text-end text-nowrap">
                             @if ($a)
                                 <button class="btn btn-sm btn-link p-0 me-2 btn-set" title="Edit / realign"
-                                    data-office="{{ $d->id }}" data-name="{{ $d->code }} — {{ $d->name }}" data-amount="{{ number_format((float) $a->amount, 2) }}" data-existing="1"><i class="fas fa-edit"></i></button>
+                                    data-department="{{ $d->id }}" data-name="{{ $d->label() }}" data-amount="{{ number_format((float) $a->amount, 2) }}" data-existing="1"><i class="fas fa-edit"></i></button>
                                 <button class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#history-{{ $a->id }}" title="History"><i class="fas fa-history"></i></button>
                             @else
-                                <button class="btn btn-sm btn-outline-success py-0 btn-set" data-office="{{ $d->id }}" data-name="{{ $d->code }} — {{ $d->name }}"><i class="fas fa-plus me-1"></i> Set</button>
+                                <button class="btn btn-sm btn-outline-success py-0 btn-set" data-department="{{ $d->id }}" data-name="{{ $d->label() }}"><i class="fas fa-plus me-1"></i> Set</button>
                             @endif
                         </td>
                     </tr>
@@ -76,7 +76,7 @@
                         </tr>
                     @endforeach
                 @empty
-                    <tr><td colspan="6" class="text-center text-muted py-5"><i class="fas fa-building fa-2x mb-2 d-block opacity-50"></i>No departments yet. Mark the departments in Settings → Offices.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-5"><i class="fas fa-building fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} departments yet. Add them in Settings → Procurement Lookups → Departments, then assign their offices in Settings → Offices.</td></tr>
                 @endforelse
             </tbody>
             @if ($rows->isNotEmpty())
@@ -128,7 +128,7 @@
         <form class="modal-content border-0 shadow" id="form_budget" novalidate>
             <input type="hidden" name="fiscal_year" value="{{ $fiscalYear }}">
             <input type="hidden" name="fund_group" value="{{ $fund->value }}">
-            <input type="hidden" name="office_id">
+            <input type="hidden" name="department_id">
             <div class="modal-header bg-light py-3"><h5 class="modal-title fw-bold"><i class="fas fa-coins me-2"></i>{{ $fund->label() }} Budget — FY {{ $fiscalYear }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body p-4 small">
                 <div class="mb-3">
@@ -164,7 +164,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $(document).on('click', '.btn-set', function () {
         const data = $(this).data();
         form.find('.is-invalid').removeClass('is-invalid');
-        form.find('[name=office_id]').val(data.office);
+        form.find('[name=department_id]').val(data.department);
         form.find('[name=amount]').val(data.amount || '');
         form.find('[name=reason]').val('');
         $('#budget_department').text(data.name);

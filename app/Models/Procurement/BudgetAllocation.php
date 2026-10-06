@@ -8,12 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * Approved budget of an office for a fiscal year and fund (COB / SIDA), CO and MOOE together.
- * It caps the PPMPs of the office and everything under it.
+ * Approved budget of a department for a fiscal year and fund (COB / SIDA), CO and MOOE together.
+ * Every office in the department shares it.
  */
 class BudgetAllocation extends Model
 {
-    protected $fillable = ['fiscal_year', 'office_id', 'fund_group', 'amount', 'created_by', 'updated_by'];
+    protected $fillable = ['fiscal_year', 'department_id', 'fund_group', 'amount', 'created_by', 'updated_by'];
 
     protected function casts(): array
     {
@@ -24,9 +24,9 @@ class BudgetAllocation extends Model
         ];
     }
 
-    public function office(): BelongsTo
+    public function department(): BelongsTo
     {
-        return $this->belongsTo(Office::class);
+        return $this->belongsTo(Department::class);
     }
 
     public function history(): HasMany

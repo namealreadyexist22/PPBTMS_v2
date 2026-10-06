@@ -40,6 +40,7 @@ class StoreOfficeRequest extends FormRequest
                 Rule::notIn($id ? Office::withDescendantIds([$id])->all() : []),
             ],
             'head_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'department_id' => ['nullable', 'integer', 'exists:departments,id'],
         ];
     }
 

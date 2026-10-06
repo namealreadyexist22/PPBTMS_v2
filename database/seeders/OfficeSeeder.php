@@ -2,14 +2,14 @@
 
 namespace Database\Seeders;
 
+use App\Models\Procurement\Department;
 use App\Models\Procurement\Office;
 use Illuminate\Database\Seeder;
 
 /**
  * The organization's offices: [office no., name, parent office no.].
- * Safe to re-run: matches on office no. and only fills name/parent (and marks the
- * departments that receive budget allocations), so heads and acronyms set in the
- * Offices screen are kept.
+ * Safe to re-run: matches on office no. and only fills name/parent (plus the department
+ * of offices that have none), so heads, acronyms and departments set in the screens are kept.
  */
 class OfficeSeeder extends Seeder
 {
@@ -82,14 +82,30 @@ class OfficeSeeder extends Seeder
         ['15000', 'REGIONAL BIDS AND AWARDS COMMITTEE', null],
     ];
 
-    /** Offices that receive a budget allocation, shared by every office under them. */
+    /** Departments as the Budget office groups offices: [code, name, budget fund, office numbers]. */
     protected array $departments = [
-        '01000', '02000', '03000', '04000', '05000', '06000', '06010', '06550', '07000', '07020', '07560',
-        '08000', '08010', '08560', '09000', '10000', '11000', '12000', '13000', '14000', '15000',
+        ['OSB', 'OFFICE OF THE SUGAR BOARD', 'regular', ['01000']],
+        ['IAD', 'INTERNAL AUDIT DEPARTMENT', 'regular', ['02000', '02010', '02020']],
+        ['OA', 'OFFICE OF THE ADMINISTRATOR', 'regular', ['03000']],
+        ['LEGAL', 'LEGAL DEPARTMENT', 'regular', ['04000']],
+        ['PPSPD', 'PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT', 'regular', ['05000', '05010', '05011', '05012', '05020']],
+        ['ODA-AF', 'OFC OF THE DEP. ADMIN - ADMINISTRATION AND FINANCE', 'regular', ['06000']],
+        ['AFD-LM', 'AFD-LUZON MINDANAO', 'regular', ['06010', '06020', '06021', '06022', '06030', '06040']],
+        ['AFD-VIS', 'AFD-VISAYAS', 'regular', ['06550', '06560', '06561', '06562', '06570', '06571', '06572']],
+        ['ODA-RDE', 'OFC OF THE DEP. ADMIN - RESEARCH, DEVELOPMENT AND EXTENSION', 'regular', ['07000']],
+        ['RDE-LM', 'RDE-LM', 'regular', ['07010', '07011', '07012', '07020', '07030', '07040', '07050']],
+        ['RDE-VIS', 'RDE-VIS', 'regular', ['07560', '07570', '07580', '07581', '07582', '07583', '07590']],
+        ['ODA-RD', 'OFC OF THE DEP. ADMIN - REGULATIONS', 'regular', ['08000']],
+        ['RD-LM', 'RD-LM', 'regular', ['08010', '08020', '08021', '08022', '08030', '08040', '08050']],
+        ['RD-VIS', 'RD-VIS', 'regular', ['08560', '08570', '08580', '08590']],
+        ['GAD', 'GENDER AND DEVELOPMENT (GAD)', 'regular', ['09000']],
+        ['SIDA-BFP', 'SIDA-BFP', 'sida', ['10000']],
+        ['SIDA-SCP', 'SIDA-SCP', 'sida', ['11000']],
+        ['SIDA-HRD', 'SIDA-HRD', 'sida', ['12000']],
+        ['SIDA-FMR', 'SIDA-FMR', 'sida', ['13000']],
+        ['SIDA-R&D', 'SIDA-R&D', 'sida', ['14000']],
+        ['RBAC', 'REGIONAL BIDS AND AWARDS COMMITTEE', 'regular', ['15000']],
     ];
-
-    /** Departments budgeted under SIDA; the rest are under COB. */
-    protected array $sidaDepartments = ['10000', '11000', '12000', '13000', '14000'];
 
     public function run(): void
     {
@@ -102,11 +118,13 @@ class OfficeSeeder extends Seeder
                 ['name' => $name, 'parent_id' => $parentCode ? $ids[$parentCode] : null]
             );
 
-            if (in_array($code, $this->departments, true) && ! $office->is_department) {
-                $office->update(['is_department' => true, 'budget_fund' => in_array($code, $this->sidaDepartments, true) ? 'sida' : 'regular']);
-            }
-
             $ids[$code] = $office->id;
+        }
+
+        // Departments: created if missing; offices without a department get theirs
+        foreach ($this->departments as [$code, $name, $fund, $offices]) {
+            $department = Department::firstOrCreate(['code' => $code], ['name' => $name, 'fund_group' => $fund]);
+            Office::whereIn('code', $offices)->whereNull('department_id')->update(['department_id' => $department->id]);
         }
     }
 }

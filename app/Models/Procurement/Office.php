@@ -19,11 +19,11 @@ class Office extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'head_user_id', 'is_consolidating', 'is_department', 'budget_fund', 'is_active'];
+    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'department_id', 'head_user_id', 'is_consolidating', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean', 'is_department' => 'boolean', 'budget_fund' => \App\Enums\FundGroup::class];
+        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean'];
     }
 
     /** Short name for lists: the acronym, or the office number if none. */
@@ -76,41 +76,6 @@ class Office extends Model
         return $this->parent_id ? null : $this;
     }
 
-    /** The department whose budget this office shares: the nearest office at or above it marked as a department. */
-    public function department(): ?Office
-    {
-        for ($office = $this; $office; $office = $office->parent) {
-            if ($office->is_department) {
-                return $office;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Offices that share this department's budget: itself and everything below it,
-     * except offices under another department further down.
-     */
-    public function departmentOfficeIds(): array
-    {
-        $childrenOf = static::query()->whereNotNull('parent_id')->get(['id', 'parent_id', 'is_department'])->groupBy('parent_id');
-
-        $result = [$this->id];
-        $queue = [$this->id];
-
-        while ($queue) {
-            foreach ($childrenOf->get(array_shift($queue), collect()) as $child) {
-                if (! $child->is_department) {
-                    $result[] = $child->id;
-                    $queue[] = $child->id;
-                }
-            }
-        }
-
-        return $result;
-    }
-
     /** Who approves this office's PPMP: the head of its consolidating office. */
     public function approverId(): ?int
     {
@@ -152,6 +117,12 @@ class Office extends Model
         }
 
         return $result->values();
+    }
+
+    /** The department whose budget this office shares. */
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
     }
 
     public function parent(): BelongsTo

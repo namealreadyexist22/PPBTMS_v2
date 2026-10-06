@@ -29,6 +29,9 @@ class OfficeController extends Controller
                 ->orderBy('code')
                 ->get(),
             'users'     => User::where('is_activated', true)->orderBy('lname')->get(),
+            'departments' => \App\Models\Procurement\Department::query()
+                ->where(fn ($q) => $q->where('is_active', true)->when($office?->department_id, fn ($q) => $q->orWhereKey($office->department_id)))
+                ->orderBy('code')->get(),
         ]);
     }
 
@@ -37,9 +40,6 @@ class OfficeController extends Controller
         $data = $request->safe()->except('id');
         $data['is_active'] = $request->boolean('is_active');
         $data['is_consolidating'] = $request->boolean('is_consolidating');
-        $data['is_department'] = $request->boolean('is_department');
-        // A department is budgeted under one fund: COB, or SIDA for the SIDA departments
-        $data['budget_fund'] = $data['is_department'] ? (\App\Enums\FundGroup::tryFrom((string) $request->input('budget_fund')) ?? \App\Enums\FundGroup::Regular) : null;
 
         $office = $request->filled('id') ? Office::findOrFail($request->id) : new Office();
         $isNew = ! $office->exists;

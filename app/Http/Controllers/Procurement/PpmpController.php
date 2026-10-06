@@ -146,7 +146,7 @@ class PpmpController extends Controller
             'modes'        => $activeOr(ProcurementMode::class, $item?->procurement_mode_id),
             // Only the fund the office's department is budgeted under (COB, or SIDA for SIDA departments)
             'fundSources'  => $activeOr(FundSource::class, $item?->fund_source_id)
-                ->filter(fn ($fund) => ! ($budgetFund = $ppmp->office->department()?->budget_fund)
+                ->filter(fn ($fund) => ! ($budgetFund = $ppmp->office->department?->fund_group)
                     || $fund->fund_group === $budgetFund || $fund->id === $item?->fund_source_id)
                 ->values(),
             'units'        => $activeOr(Unit::class, $item?->unit_id),
@@ -300,7 +300,7 @@ class PpmpController extends Controller
         return collect(app(BudgetAllocationService::class)->limits($ppmp))
             ->map(fn ($limit, $fund) => [
                 'left'   => $limit['available'] - $limit['mine'] + ($fund === $itemFund ? \App\Support\Money::toCents($item->estimated_budget) : 0),
-                'office' => $limit['office']->code . ' ' . ($limit['office']->acronym ?: $limit['office']->name),
+                'office' => $limit['department']->code,
             ])->all();
     }
 

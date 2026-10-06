@@ -59,6 +59,18 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1">Department (budget)</label>
+                        <select name="department_id" class="form-select form-select-sm">
+                            <option value="">— None —</option>
+                            @foreach ($departments as $department)
+                                <option value="{{ $department->id }}" @selected(($office->department_id ?? null) == $department->id)>{{ $department->label() }} ({{ $department->fund_group->label() }})</option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">The office's PPMPs use this department's budget, shared with its other offices.</div>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label small fw-semibold text-muted mb-1">Head</label>
                         <select name="head_user_id" class="form-select form-select-sm">
                             <option value="">— Not set —</option>
@@ -79,26 +91,7 @@
                         </label>
                     </div>
 
-                    <div class="form-check form-switch mb-2">
-                        <input class="form-check-input" type="checkbox" name="is_department" value="1" id="office_is_department"
-                            @checked($office->is_department ?? false)>
-                        <label class="form-check-label small" for="office_is_department">
-                            Department <span class="text-muted">— receives the budget allocation; every office under it shares that budget</span>
-                        </label>
-                        <div class="mt-2" id="office_budget_fund_wrap" style="{{ ($office->is_department ?? false) ? '' : 'display: none;' }}">
-                            <label class="form-label small fw-semibold text-muted mb-1">Budget fund</label>
-                            <select name="budget_fund" class="form-select form-select-sm" style="max-width: 200px;">
-                                @foreach (\App\Enums\FundGroup::cases() as $fund)
-                                    <option value="{{ $fund->value }}" @selected(($office->budget_fund ?? \App\Enums\FundGroup::Regular) === $fund)>{{ $fund->label() }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <script>
-                            document.getElementById('office_is_department').addEventListener('change', function () {
-                                document.getElementById('office_budget_fund_wrap').style.display = this.checked ? '' : 'none';
-                            });
-                        </script>
-                    </div>
+
 
                     <div class="form-check form-switch">
                         <input class="form-check-input" type="checkbox" name="is_active" value="1" id="office_is_active"

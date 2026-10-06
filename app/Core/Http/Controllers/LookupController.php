@@ -3,6 +3,7 @@
 namespace App\Core\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Procurement\Department;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\ItemCategory;
 use App\Models\Procurement\ProcurementMode;
@@ -26,6 +27,7 @@ class LookupController extends Controller
         'procurement-modes' => [ProcurementMode::class, 'Modes of Procurement', ['ppmp_items' => 'procurement_mode_id', 'app_items' => 'procurement_mode_id']],
         'units'             => [Unit::class, 'Units', ['ppmp_items' => 'unit_id', 'items' => 'unit_id']],
         'item-categories'   => [ItemCategory::class, 'Item Categories', ['items' => 'item_category_id']],
+        'departments'       => [Department::class, 'Departments', ['offices' => 'department_id', 'budget_allocations' => 'department_id']],
     ];
 
     public function index(Request $request)
@@ -42,6 +44,7 @@ class LookupController extends Controller
             'type'  => $type,
             'label' => $label,
             'rows'  => $rows,
+            'hasFund' => $this->hasFund($type),
         ]);
     }
 
@@ -56,8 +59,8 @@ class LookupController extends Controller
             'id'         => ['nullable', 'integer', Rule::exists($table, 'id')],
             'code'       => ['required', 'string', 'max:30', Rule::unique($table, 'code')->ignore($id)],
             'name'       => ['required', 'string', 'max:255'],
-            // Fund sources only: which APP their projects go to
-            'fund_group' => [$type === 'fund-sources' ? 'required' : 'nullable', Rule::enum(\App\Enums\FundGroup::class)],
+            // Fund sources: which APP their projects go to; departments: which fund they are budgeted under
+            'fund_group' => [$this->hasFund($type) ? 'required' : 'nullable', Rule::enum(\App\Enums\FundGroup::class)],
         ], ['code.unique' => 'This code is already used.']);
 
         if ($validator->fails()) {
@@ -65,7 +68,7 @@ class LookupController extends Controller
         }
 
         $row = $id ? $model::findOrFail($id) : new $model;
-        $fields = $type === 'fund-sources' ? ['code', 'name', 'fund_group'] : ['code', 'name'];
+        $fields = $this->hasFund($type) ? ['code', 'name', 'fund_group'] : ['code', 'name'];
         $row->fill($validator->safe()->only($fields) + ['is_active' => $request->boolean('is_active', true)])->save();
 
         activity()->causedBy($request->user())->performedOn($row)->log(($id ? 'updated' : 'added') . " {$type} \"{$row->name}\"");
@@ -89,6 +92,11 @@ class LookupController extends Controller
         $row->delete();
 
         return response()->json(['status' => 'success', 'message' => "Deleted \"{$row->name}\"."]);
+    }
+
+    protected function hasFund(string $type): bool
+    {
+        return in_array($type, ['fund-sources', 'departments'], true);
     }
 
     protected function type(?string $type): string
