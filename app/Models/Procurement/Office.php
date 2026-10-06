@@ -19,11 +19,11 @@ class Office extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'head_user_id', 'is_consolidating', 'is_department', 'is_active'];
+    protected $fillable = ['code', 'acronym', 'name', 'parent_id', 'head_user_id', 'is_consolidating', 'is_department', 'budget_fund', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean', 'is_department' => 'boolean'];
+        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean', 'is_department' => 'boolean', 'budget_fund' => \App\Enums\FundGroup::class];
     }
 
     /** Short name for lists: the acronym, or the office number if none. */

@@ -88,6 +88,9 @@ class OfficeSeeder extends Seeder
         '08000', '08010', '08560', '09000', '10000', '11000', '12000', '13000', '14000', '15000',
     ];
 
+    /** Departments budgeted under SIDA; the rest are under COB. */
+    protected array $sidaDepartments = ['10000', '11000', '12000', '13000', '14000'];
+
     public function run(): void
     {
         // Parents are listed before their children, so one pass is enough.
@@ -100,7 +103,7 @@ class OfficeSeeder extends Seeder
             );
 
             if (in_array($code, $this->departments, true) && ! $office->is_department) {
-                $office->update(['is_department' => true]);
+                $office->update(['is_department' => true, 'budget_fund' => in_array($code, $this->sidaDepartments, true) ? 'sida' : 'regular']);
             }
 
             $ids[$code] = $office->id;

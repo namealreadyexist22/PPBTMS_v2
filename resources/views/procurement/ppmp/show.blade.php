@@ -98,8 +98,14 @@
         @if ($budgetOver && $canEdit)
             <div class="alert alert-danger small mt-3 mb-0">
                 <i class="fas fa-exclamation-triangle me-1"></i>
-                <strong>Over budget.</strong> This PPMP goes over its budget allocation, so it cannot be submitted.
-                <a href="#budget_card" class="alert-link">See the budget summary</a> and lower the estimated budgets.
+                @foreach ($budgetRows->where('over', true)->where('wrong_fund', true) as $row)
+                    <strong>No {{ $row['fund']->label() }} budget.</strong> {{ $row['department']->shortName() }} is budgeted under {{ $row['department']->budget_fund->label() }};
+                    change the source of funds of its {{ $row['fund']->label() }} projects.
+                @endforeach
+                @if ($budgetRows->where('over', true)->where('wrong_fund', false)->isNotEmpty())
+                    <strong>Over budget.</strong> This PPMP goes over its department's budget, so it cannot be submitted.
+                    <a href="#budget_card" class="alert-link">See the budget summary</a> and lower the estimated budgets.
+                @endif
             </div>
         @endif
         @if ($returned)
@@ -153,6 +159,10 @@
                                     <td class="text-end">{{ $pesoC($row['others']) }}</td>
                                     <td class="text-end">{{ $pesoC($row['mine']) }}</td>
                                     <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
+                                @elseif ($row['wrong_fund'])
+                                    <td class="text-end text-danger" colspan="2">No {{ $row['fund']->label() }} budget (department is {{ $department->budget_fund->label() }})</td>
+                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                                    <td class="text-danger pe-4 text-end fw-semibold">Not allowed</td>
                                 @else
                                     <td class="text-end text-muted">Not set</td>
                                     <td></td>

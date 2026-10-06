@@ -21,7 +21,7 @@ class OfficesDataTable extends DataTable
         return (new EloquentDataTable($query))
             ->addColumn('parent', fn ($row) => $row->parent?->shortName() ?? '<span class="text-muted">— Top level —</span>')
             ->editColumn('name', fn ($row) => e($row->name) . ($row->is_consolidating ? ' <span class="badge bg-info-subtle text-info border" title="Consolidates PPMPs">Division PPMP</span>' : '')
-                . ($row->is_department ? ' <span class="badge bg-success-subtle text-success border" title="Receives the budget allocation, shared by its offices">Department</span>' : ''))
+                . ($row->is_department ? ' <span class="badge bg-success-subtle text-success border" title="Receives the budget allocation, shared by its offices">Department · ' . e($row->budget_fund?->label() ?? 'COB') . '</span>' : ''))
             ->addColumn('head', fn ($row) => $row->head?->fullname ?? '<span class="text-muted">Not set</span>')
             ->addColumn('users_count', fn ($row) => $row->users_count)
             ->editColumn('is_active', fn ($row) => view('BackEnd.auth.extras.user_is_activated', ['is_activated' => $row->is_active])->render())

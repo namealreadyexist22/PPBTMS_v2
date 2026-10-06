@@ -124,6 +124,30 @@ class BudgetAllocationTest extends TestCase
         $this->assertSame(PpmpStatus::Submitted, $sida->fresh()->status);
     }
 
+    public function test_sida_departments_get_sida_budgets_and_others_cob(): void
+    {
+        $this->ppspd->update(['budget_fund' => 'regular']);
+        $sida = Office::create(['code' => '11000', 'name' => 'SIDA-SCP', 'is_department' => true, 'budget_fund' => 'sida']);
+
+        // Each department only takes a budget in its own fund
+        $this->refused(fn () => $this->budget->save($this->ppspd, 2027, FundGroup::Sida, '1000000', $this->officer), 'budgeted under COB, not SIDA');
+        $this->refused(fn () => $this->budget->save($sida, 2027, FundGroup::Regular, '1000000', $this->officer), 'budgeted under SIDA, not COB');
+        $this->budget->save($sida, 2027, FundGroup::Sida, '50000000', $this->officer);
+        $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '5000000', $this->officer);
+
+        // A COB department's PPMP with a SIDA project cannot be submitted
+        $mixed = $this->ppmp($this->mis, [['co', '100000', 'COB'], ['mooe', '50000', 'SIDA']], false);
+        $row = $this->budget->checkPpmp($mixed)->firstWhere('fund', FundGroup::Sida);
+        $this->assertTrue($row['wrong_fund']);
+        $this->refused(fn () => $this->ppmps->submit($mixed, User::factory()->create()), '05000 has no SIDA budget');
+
+        // The SIDA department's PPMP is checked against its SIDA budget
+        $sidaPpmp = $this->ppmp($sida, [['co', '20000000', 'SIDA']]);
+        $this->assertSame(PpmpStatus::Submitted, $sidaPpmp->status);
+        $limit = $this->budget->limits($sidaPpmp)['sida'];
+        $this->assertSame(3000000000, $limit['available'] - $limit['mine']);   // 30M left of 50M
+    }
+
     public function test_amendment_replaces_its_earlier_version_when_counting(): void
     {
         $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '1000000', $this->officer);
@@ -169,8 +193,12 @@ class BudgetAllocationTest extends TestCase
         $this->officer->update(['is_activated' => 1]);
         $this->officer->givePermissionTo('manage budget');
 
+        Office::create(['code' => '12000', 'name' => 'SIDA-HRD', 'is_department' => true, 'budget_fund' => 'sida']);
+        $this->ppspd->update(['budget_fund' => 'regular']);
         $this->actingAs($this->officer)->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
-            ->assertSee('05000')->assertSee('Not set')->assertDontSee('05012 MIS</span>', false);
+            ->assertSee('05000')->assertSee('Not set')->assertDontSee('SIDA-HRD');
+        $this->get(route('procurement.budget.index', ['fy' => 2027, 'fund' => 'sida']))->assertOk()
+            ->assertSee('SIDA-HRD')->assertDontSee('PPSPD');
         $this->postJson(route('procurement.budget.store'), ['office_id' => $this->ppspd->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '3,000,000.00'])->assertOk();
         $this->postJson(route('procurement.budget.store'), ['office_id' => $this->mis->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '1,000,000'])
             ->assertStatus(422)->assertJson(['status' => 'error']);   // not a department

@@ -15,7 +15,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Budget allocations per department, year and fund (COB / SIDA): one amount for CO and MOOE together.
+ * Budget allocations per department, year and fund: one amount for CO and MOOE together.
+ * Each department is budgeted under one fund (COB, or SIDA for the SIDA departments), so a
+ * project charged to the other fund has no budget and blocks the PPMP's submission.
  *
  * The Budget officer allocates to departments only. Every office under a department shares
  * its budget, first come, first served, until the full allocation is used. What counts as
@@ -74,9 +76,13 @@ class BudgetAllocationService
                     ->sum(fn ($i) => Money::toCents($i->estimated_budget));
                 $allocation = $allocations->get($fund->value);
 
-                if (! $allocation) {
+                // Projects charged to a fund the department is not budgeted under
+                $wrongFund = $department?->budget_fund && $department->budget_fund !== $fund;
+
+                if (! $allocation || $wrongFund) {
                     return ['fund' => $fund, 'department' => $department, 'allocation' => null, 'mine' => $mine, 'amount' => null,
-                            'others' => null, 'used' => null, 'available' => null, 'remaining' => null, 'over' => false];
+                            'others' => null, 'used' => null, 'available' => null, 'remaining' => null,
+                            'wrong_fund' => $wrongFund, 'over' => $wrongFund && $mine > 0];
                 }
 
                 $amount = Money::toCents((string) $allocation->amount);
@@ -85,7 +91,7 @@ class BudgetAllocationService
                 return [
                     'fund' => $fund, 'department' => $department, 'allocation' => $allocation, 'mine' => $mine, 'amount' => $amount,
                     'others' => $used - $mine, 'used' => $used, 'available' => $amount - ($used - $mine),
-                    'remaining' => $amount - $used, 'over' => $used > $amount,
+                    'remaining' => $amount - $used, 'wrong_fund' => false, 'over' => $used > $amount,
                 ];
             })->values();
     }
@@ -108,12 +114,15 @@ class BudgetAllocationService
         $over = $this->checkPpmp($ppmp)->where('over', true);
 
         if ($over->isNotEmpty()) {
-            $lines = $over->map(fn ($r) => sprintf('%s budget of %s: ₱%s used of ₱%s (over by ₱%s)',
-                $r['fund']->label(), $r['department']->shortName(),
-                Money::format(Money::fromCents($r['used'])), Money::format(Money::fromCents($r['amount'])),
-                Money::format(Money::fromCents($r['used'] - $r['amount']))));
+            $lines = $over->map(fn ($r) => $r['wrong_fund']
+                ? sprintf('%s has no %s budget (it is budgeted under %s); change the source of funds of its %s projects',
+                    $r['department']->shortName(), $r['fund']->label(), $r['department']->budget_fund->label(), $r['fund']->label())
+                : sprintf('%s budget of %s: ₱%s used of ₱%s (over by ₱%s)',
+                    $r['fund']->label(), $r['department']->shortName(),
+                    Money::format(Money::fromCents($r['used'])), Money::format(Money::fromCents($r['amount'])),
+                    Money::format(Money::fromCents($r['used'] - $r['amount']))));
 
-            throw new ProcurementException('This PPMP goes over the budget allocation. ' . $lines->join('; ') . '.');
+            throw new ProcurementException('This PPMP cannot be submitted. ' . $lines->join('; ') . '.');
         }
     }
 
@@ -125,6 +134,10 @@ class BudgetAllocationService
     {
         if (! $office->is_department) {
             throw new ProcurementException("Budgets are allocated per department. {$office->shortName()} is not marked as a department in Offices.");
+        }
+
+        if ($office->budget_fund && $office->budget_fund !== $fund) {
+            throw new ProcurementException("{$office->shortName()} is budgeted under {$office->budget_fund->label()}, not {$fund->label()}.");
         }
 
         $existing = $this->find($office, $fiscalYear, $fund);

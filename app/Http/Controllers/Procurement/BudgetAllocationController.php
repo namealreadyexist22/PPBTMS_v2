@@ -30,7 +30,9 @@ class BudgetAllocationController extends Controller
         $offices = Office::active()->get()->keyBy('id');
 
         // One row per department, with what each of its offices uses
-        $rows = Office::active()->where('is_department', true)->orderBy('code')->get()
+        $rows = Office::active()->where('is_department', true)
+            ->where(fn ($q) => $fund === FundGroup::Regular ? $q->where('budget_fund', $fund)->orWhereNull('budget_fund') : $q->where('budget_fund', $fund))
+            ->orderBy('code')->get()
             ->map(function (Office $department) use ($allocations, $offices) {
                 $allocation = $allocations->get($department->id)?->setRelation('office', $department);
                 $memberIds = $department->departmentOfficeIds();

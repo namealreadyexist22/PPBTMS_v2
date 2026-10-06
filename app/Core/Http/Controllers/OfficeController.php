@@ -38,6 +38,8 @@ class OfficeController extends Controller
         $data['is_active'] = $request->boolean('is_active');
         $data['is_consolidating'] = $request->boolean('is_consolidating');
         $data['is_department'] = $request->boolean('is_department');
+        // A department is budgeted under one fund: COB, or SIDA for the SIDA departments
+        $data['budget_fund'] = $data['is_department'] ? (\App\Enums\FundGroup::tryFrom((string) $request->input('budget_fund')) ?? \App\Enums\FundGroup::Regular) : null;
 
         $office = $request->filled('id') ? Office::findOrFail($request->id) : new Office();
         $isNew = ! $office->exists;

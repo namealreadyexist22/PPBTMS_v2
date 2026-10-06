@@ -85,6 +85,19 @@
                         <label class="form-check-label small" for="office_is_department">
                             Department <span class="text-muted">— receives the budget allocation; every office under it shares that budget</span>
                         </label>
+                        <div class="mt-2" id="office_budget_fund_wrap" style="{{ ($office->is_department ?? false) ? '' : 'display: none;' }}">
+                            <label class="form-label small fw-semibold text-muted mb-1">Budget fund</label>
+                            <select name="budget_fund" class="form-select form-select-sm" style="max-width: 200px;">
+                                @foreach (\App\Enums\FundGroup::cases() as $fund)
+                                    <option value="{{ $fund->value }}" @selected(($office->budget_fund ?? \App\Enums\FundGroup::Regular) === $fund)>{{ $fund->label() }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <script>
+                            document.getElementById('office_is_department').addEventListener('change', function () {
+                                document.getElementById('office_budget_fund_wrap').style.display = this.checked ? '' : 'none';
+                            });
+                        </script>
                     </div>
 
                     <div class="form-check form-switch">
