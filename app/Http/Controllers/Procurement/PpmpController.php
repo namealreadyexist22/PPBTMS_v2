@@ -279,8 +279,11 @@ class PpmpController extends Controller
         }
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($item, $rows, $request) {
+            // End-users are assigned at delivery (ICS / PAR); keep any already recorded for the office
+            $recipients = PpmpItemDistribution::where('line_uuid', $item->line_uuid)->whereNotNull('recipient')->pluck('recipient', 'office_id');
             PpmpItemDistribution::where('line_uuid', $item->line_uuid)->delete();
             foreach ($rows as $row) {
+                $row['recipient'] = $row['recipient'] ?? $recipients[$row['office_id']] ?? null;
                 PpmpItemDistribution::create($row + ['line_uuid' => $item->line_uuid, 'created_by' => $request->user()->id]);
             }
         });

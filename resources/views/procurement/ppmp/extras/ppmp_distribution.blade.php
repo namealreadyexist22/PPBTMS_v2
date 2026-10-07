@@ -32,29 +32,27 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3 small">
-                <div class="text-muted mb-2">Which offices receive these items, based on {{ $ppmp->office->shortName() }}'s assessment. This list is not printed on the PPMP or APP; it can be updated any time and will be used for issuance (ICS / PAR).</div>
-                <table class="table table-sm align-middle mb-2" id="dist_table">
-                    <thead class="table-light"><tr><th style="width: 38%;">Office</th><th style="width: 12%;" class="text-end">Qty</th><th>Recipient / end-user</th><th>Remarks</th>@if ($canEdit)<th></th>@endif</tr></thead>
+                <div class="text-muted mb-2">Which offices receive these items, based on {{ $ppmp->office->shortName() }}'s assessment. This list is not printed on the PPMP or APP; it can be updated any time and will be used for issuance (ICS / PAR). The end-user / accountable person is assigned later, when the items are delivered.</div>
+                <table class="table table-sm align-middle mb-2" id="dist_table" style="table-layout: fixed;">
+                    <thead class="table-light"><tr><th style="width: 58%;">Office</th><th style="width: 90px;" class="text-end">Qty</th><th>Remarks</th>@if ($canEdit)<th style="width: 28px;"></th>@endif</tr></thead>
                     <tbody>
                         @foreach ($item->distributions as $d)
                             <tr>
                                 @if ($canEdit)
                                     <td>{!! $officeSelect($d->office_id) !!}</td>
                                     <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end d-qty" value="{{ $fmt($d->quantity) }}"></td>
-                                    <td><input type="text" class="form-control form-control-sm d-recipient" value="{{ $d->recipient }}"></td>
                                     <td><input type="text" class="form-control form-control-sm d-remarks" value="{{ $d->remarks }}"></td>
                                     <td><button type="button" class="btn btn-sm btn-link text-danger p-0 d-remove"><i class="fas fa-times"></i></button></td>
                                 @else
                                     <td>{{ $d->office->shortName() }} — {{ $d->office->name }}</td>
                                     <td class="text-end">{{ $fmt($d->quantity) }}</td>
-                                    <td>{{ $d->recipient }}</td>
                                     <td>{{ $d->remarks }}</td>
                                 @endif
                             </tr>
                         @endforeach
                     </tbody>
                     <tfoot>
-                        <tr class="fw-semibold"><td class="text-end">Total</td><td class="text-end" id="dist_total">{{ $fmt($item->distributions->sum('quantity')) }}</td><td colspan="3" class="text-muted fw-normal">@if ($item->quantity !== null) of {{ $fmt($item->quantity) }} <span id="dist_left"></span>@endif</td></tr>
+                        <tr class="fw-semibold"><td class="text-end">Total</td><td class="text-end" id="dist_total">{{ $fmt($item->distributions->sum('quantity')) }}</td><td colspan="2" class="text-muted fw-normal">@if ($item->quantity !== null) of {{ $fmt($item->quantity) }} <span id="dist_left"></span>@endif</td></tr>
                     </tfoot>
                 </table>
                 @if ($item->distributions->isEmpty() && ! $canEdit)<div class="text-muted">No distribution yet.</div>@endif
@@ -116,7 +114,6 @@
         const tr = document.createElement('tr');
         tr.innerHTML = '<td>' + officeSelectHtml + '</td>'
             + '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end d-qty" value="1"></td>'
-            + '<td><input type="text" class="form-control form-control-sm d-recipient"></td>'
             + '<td><input type="text" class="form-control form-control-sm d-remarks"></td>'
             + '<td><button type="button" class="btn btn-sm btn-link text-danger p-0 d-remove"><i class="fas fa-times"></i></button></td>';
         table.appendChild(tr);
@@ -135,7 +132,6 @@
         const rows = [...table.querySelectorAll('tr')].map((tr) => ({
             office_id: tr.querySelector('.d-office').value,
             quantity: tr.querySelector('.d-qty').value,
-            recipient: tr.querySelector('.d-recipient').value,
             remarks: tr.querySelector('.d-remarks').value,
         }));
         $.ajax({
