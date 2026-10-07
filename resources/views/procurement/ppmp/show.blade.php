@@ -34,6 +34,11 @@
                 <a href="{{ route('procurement.ppmp.print', $ppmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
                     <i class="fas fa-print me-1"></i> Print
                 </a>
+                @if ($ppmp->items->isNotEmpty())
+                    <a href="{{ route('procurement.ppmp.market-scoping', $ppmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Every project's Market Scoping Checklist, one per page">
+                        <i class="fas fa-clipboard-check me-1"></i> Print Checklists
+                    </a>
+                @endif
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#PPMP_HISTORY_MODAL">
                     <i class="fas fa-history me-1"></i> History <span class="badge bg-secondary ms-1">{{ $ppmp->signatories->count() }}</span>
                 </button>

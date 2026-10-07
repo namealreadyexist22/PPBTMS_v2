@@ -90,9 +90,10 @@
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-5">
-                            <label class="form-label small fw-semibold text-muted mb-1">Specifications (optional)</label>
+                            <label class="form-label small fw-semibold text-muted mb-1">Size / brief specs <span class="fw-normal">(optional, printed on the PPMP)</span></label>
                             <textarea name="quantity_size" class="form-control form-control-sm" rows="2" placeholder="e.g. 3.5&quot; HDD, SATA, 7200 RPM">{{ $item->quantity_size ?? '' }}</textarea>
                             <div class="invalid-feedback"></div>
+                            <div class="form-text">Full specifications, TOR or scope of work: attach the file below.</div>
                         </div>
                     </div>
 

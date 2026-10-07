@@ -208,12 +208,25 @@ class PpmpController extends Controller
     {
         $this->authorizeView($request, $ppmp);
         abort_unless($item->ppmp_id === $ppmp->id, 404);
-        $prepared = $ppmp->latestSignatory('prepared');
 
+        return $this->marketScopingView($ppmp, collect([$item->load('attachments')]));
+    }
+
+    /** Every project's Market Scoping Checklist, one per page, in PAP order. */
+    public function marketScopingPrintAll(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeView($request, $ppmp);
+        $ppmp->load('paps.items.attachments');
+
+        return $this->marketScopingView($ppmp, $ppmp->paps->flatMap->items);
+    }
+
+    protected function marketScopingView(Ppmp $ppmp, \Illuminate\Support\Collection $items)
+    {
         return view('procurement.ppmp.market_scoping_print', [
             'ppmp'     => $ppmp->load('office'),
-            'item'     => $item->load('attachments'),
-            'prepared' => $prepared,
+            'items'    => $items,
+            'prepared' => $ppmp->latestSignatory('prepared'),
             'head'     => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
         ]);
     }

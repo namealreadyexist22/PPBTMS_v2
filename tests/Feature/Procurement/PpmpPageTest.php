@@ -252,6 +252,14 @@ class PpmpPageTest extends TestCase
             ->assertSee('Use of data from PhilGEPS or agency websites')->assertSee('f. Identified Risk/s')->assertSee('Approved by:');
         $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Market Scoping Checklist')->assertSee('Market survey / price quotations');
 
+        // Print all: every project's checklist, one sheet each (second project has none filled yet)
+        $service->addItem($ppmp, array_merge($this->project($pap->id), ['description' => 'Supply of UPS', 'proc_start' => '2027-02-01', 'proc_end' => '2027-04-01', 'estimated_budget' => '20000']));
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('Print Checklists');
+        $all = $this->get(route('procurement.ppmp.market-scoping', $ppmp))->assertOk()
+            ->assertSee('Market Scoping Checklists (2 projects)')->assertSeeInOrder(['Supply and Delivery of Hard Drive', 'ok cost', 'Supply of UPS', 'From __________ To __________']);
+        $this->assertSame(2, substr_count($all->getContent(), 'class="sheet"'));
+        $ppmp->items()->where('description', 'Supply of UPS')->delete();
+
         // Wrong file type and a period ending before it starts are refused
         $this->post(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, [
             'id' => $item->id,
