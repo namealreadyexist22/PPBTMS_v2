@@ -137,4 +137,77 @@ class StandardItemTest extends TestCase
         $this->assertSame(PpmpStatus::Approved, $ppmp->fresh()->status);
         $this->assertTrue($service->amend($ppmp->fresh(), $this->staff)->items()->sole()->is_epa);
     }
+
+    public function test_ict_equipment_only_by_mis_for_cob_but_sida_departments_may(): void
+    {
+        $unit = Unit::first();
+        $ict = \App\Models\Procurement\ItemCategory::updateOrCreate(['code' => 'ICT-EQ'], ['name' => 'ICT Equipment', 'restricted_office_id' => $this->mis->id, 'restricted_fund_group' => 'regular', 'is_active' => true]);
+        $laptop = Item::create(['code' => 'ICT-LAP', 'name' => 'Laptop', 'unit_id' => $unit->id, 'item_category_id' => $ict->id, 'project_type' => 'goods', 'standard_unit_cost' => '65000', 'is_active' => true]);
+        $this->assertSame('Procured by 05012 only (COB)', $ict->restrictionLabel());
+
+        $service = app(PpmpService::class);
+        $line = fn (Office $office) => $this->line(['item_id' => $laptop->id, 'quantity' => 1, 'estimated_budget' => '65000']);
+
+        // MIS can
+        $misPpmp = $service->create($this->mis, 2027, $this->staff);
+        $pap = $service->addPap($misPpmp, $service->suggestPapCode($misPpmp), 'ICT');
+        $service->addItem($misPpmp, $line($this->mis) + ['ppmp_pap_id' => $pap->id]);
+
+        // Legal (COB) cannot: hidden in its form and refused on save
+        $legal = Office::create(['code' => '04000', 'name' => 'LEGAL']);
+        $lawyer = User::factory()->create(['is_activated' => 1, 'office_id' => $legal->id]);
+        $lawyer->givePermissionTo('manage ppmp');
+        $legalPpmp = $service->create($legal, 2027, $lawyer);
+        $legalPap = $service->addPap($legalPpmp, $service->suggestPapCode($legalPpmp), 'Admin');
+        $this->actingAs($lawyer)->get(route('procurement.ppmp.items.entry', $legalPpmp))->assertOk()->assertDontSee('ICT-LAP');
+        try {
+            $service->addItem($legalPpmp, $line($legal) + ['ppmp_pap_id' => $legalPap->id]);
+            $this->fail('Expected a ProcurementException.');
+        } catch (ProcurementException $e) {
+            $this->assertStringContainsString('Procured by 05012 only (COB)', $e->getMessage());
+        }
+
+        // A SIDA department buying with SIDA may
+        $sidaDept = Office::create(['code' => '11000', 'acronym' => 'SIDA-SCP', 'name' => 'SIDA-SCP', 'type' => 'department', 'budget_fund' => 'sida']);
+        $sidaStaff = User::factory()->create(['is_activated' => 1, 'office_id' => $sidaDept->id]);
+        $sidaStaff->givePermissionTo('manage ppmp');
+        $sidaPpmp = $service->create($sidaDept, 2027, $sidaStaff);
+        $sidaPap = $service->addPap($sidaPpmp, $service->suggestPapCode($sidaPpmp), 'SCP');
+        $this->actingAs($sidaStaff)->get(route('procurement.ppmp.items.entry', $sidaPpmp))->assertOk()->assertSee('ICT-LAP');
+        $service->addItem($sidaPpmp, array_merge($line($sidaDept), ['ppmp_pap_id' => $sidaPap->id, 'fund_source_id' => FundSource::where('code', 'SIDA')->value('id')]));
+        $this->assertSame(1, $sidaPpmp->items()->count());
+    }
+
+    public function test_mis_keeps_a_distribution_list_that_follows_the_project(): void
+    {
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($this->mis, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'ICT');
+        $item = $service->addItem($ppmp, $this->line(['ppmp_pap_id' => $pap->id, 'quantity' => 12, 'unit_cost' => '65000', 'estimated_budget' => '780000']));
+        $legal = Office::create(['code' => '04000', 'name' => 'LEGAL']);
+        $url = route('procurement.ppmp.items.distribution.store', [$ppmp, $item]);
+
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.items.distribution', [$ppmp, $item]))->assertOk()->assertSee('Add office');
+        $this->postJson($url, ['rows' => [['office_id' => $legal->id, 'quantity' => 10], ['office_id' => $this->mis->id, 'quantity' => 3]]])
+            ->assertStatus(422)->assertJson(['message' => 'The distribution (13) is more than the project quantity (12).']);
+        $this->postJson($url, ['rows' => [['office_id' => $legal->id, 'quantity' => 4, 'recipient' => 'Atty. Reyes'], ['office_id' => $this->mis->id, 'quantity' => 8]]])->assertOk();
+        $this->assertEquals(12, $item->distributions()->sum('quantity'));
+
+        // Not on the PPMP print; shown as a count on the page
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('Distribution (2)');
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertDontSee('Atty. Reyes');
+
+        // Still editable after approval; follows the project into an amendment
+        $service->submit($ppmp->fresh(), $this->staff);
+        app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->mis->parent, 2027, \App\Enums\Region::Lm, $this->mis->parent->head, $this->mis->parent->head);
+        $this->postJson($url, ['rows' => [['office_id' => $legal->id, 'quantity' => 5]]])->assertOk();
+        $v2 = $service->amend($ppmp->fresh(), $this->staff);
+        $this->assertSame(['5.00'], $v2->items()->sole()->distributions()->pluck('quantity')->map(fn ($q) => (string) $q)->all());
+
+        // Another office can view but not change it
+        $other = User::factory()->create(['is_activated' => 1]);
+        $other->givePermissionTo(['manage ppmp', \Spatie\Permission\Models\Permission::findOrCreate('menu.ppmp-view-all')]);
+        $this->actingAs($other)->get(route('procurement.ppmp.items.distribution', [$ppmp, $item]))->assertOk()->assertDontSee('Add office');
+        $this->postJson($url, ['rows' => []])->assertForbidden();
+    }
 }

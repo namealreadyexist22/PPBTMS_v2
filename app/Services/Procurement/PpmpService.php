@@ -110,7 +110,7 @@ class PpmpService
     public function addItem(Ppmp $ppmp, array $data): PpmpItem
     {
         $this->assertEditable($ppmp);
-        $data = $this->applyUnitCost($this->applyStandardItem($data));
+        $data = $this->applyUnitCost($this->applyStandardItem($data, $ppmp));
         $this->assertItemData($data);
         $this->assertPapBelongs($ppmp, $data['ppmp_pap_id'] ?? null);
 
@@ -130,7 +130,7 @@ class PpmpService
         $ppmp = $item->ppmp;
         $this->assertEditable($ppmp);
         unset($data['line_uuid'], $data['committed_amount'], $data['ppmp_id']);
-        $data = $this->applyUnitCost($this->applyStandardItem($data, $item), $item);
+        $data = $this->applyUnitCost($this->applyStandardItem($data, $ppmp, $item), $item);
         $this->assertItemData(array_merge($item->only(['proc_start', 'proc_end', 'estimated_budget']), $data));
 
         if (array_key_exists('ppmp_pap_id', $data)) {
@@ -380,7 +380,7 @@ class PpmpService
      * as they are (set by the TWG); only the quantity is the office's. An inactive item can no
      * longer be picked, but a project that already uses it keeps it.
      */
-    protected function applyStandardItem(array $data, ?PpmpItem $item = null): array
+    protected function applyStandardItem(array $data, Ppmp $ppmp, ?PpmpItem $item = null): array
     {
         $itemId = array_key_exists('item_id', $data) ? $data['item_id'] : $item?->item_id;
 
@@ -392,6 +392,15 @@ class PpmpService
 
         if (! $standard || (! $standard->is_active && (int) $itemId !== (int) $item?->item_id)) {
             throw new ProcurementException('That standard item is no longer available. Pick another or leave it blank.');
+        }
+
+        // A restricted category (e.g. ICT Equipment: MIS only, for COB) is open only to its unit
+        $category = $standard->category;
+        $fundSourceId = array_key_exists('fund_source_id', $data) ? $data['fund_source_id'] : $item?->fund_source_id;
+        $fund = $fundSourceId ? \App\Models\Procurement\FundSource::find($fundSourceId)?->fund_group : null;
+
+        if ($category && ! $category->allows($ppmp->office, $fund)) {
+            throw new ProcurementException("{$standard->name} is in {$category->name}, which is {$category->restrictionLabel()}. It cannot be in {$ppmp->office->shortName()}'s PPMP.");
         }
 
         if (! $standard->isStandard()) {

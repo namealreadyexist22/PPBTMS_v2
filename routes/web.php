@@ -185,6 +185,8 @@ use Illuminate\Support\Facades\Route;
             Route::delete('ppmp/{ppmp}/items/destroy', [PpmpController::class, 'itemDestroy'])->name('ppmp.items.destroy');
             Route::get('ppmp/{ppmp}/items/{item}/market-scoping', [PpmpController::class, 'marketScopingPrint'])->name('ppmp.items.market-scoping');
             Route::get('ppmp/{ppmp}/market-scoping', [PpmpController::class, 'marketScopingPrintAll'])->name('ppmp.market-scoping');
+            Route::get('ppmp/{ppmp}/items/{item}/distribution', [PpmpController::class, 'distributionEntry'])->name('ppmp.items.distribution');
+            Route::post('ppmp/{ppmp}/items/{item}/distribution', [PpmpController::class, 'distributionStore'])->name('ppmp.items.distribution.store');
             Route::get('ppmp/{ppmp}/attachments/{attachment}', [PpmpController::class, 'attachmentDownload'])->name('ppmp.attachments.show');
             Route::delete('ppmp/{ppmp}/attachments/destroy', [PpmpController::class, 'attachmentDestroy'])->name('ppmp.attachments.destroy');
             Route::get('ppmp/{ppmp}/paps/entry', [PpmpController::class, 'papEntry'])->name('ppmp.paps.entry');

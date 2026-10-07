@@ -242,6 +242,11 @@
                                     <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
                                         @if ($item->is_epa)<span class="badge bg-info text-dark" title="Early Procurement Activity (RA 12009 Sec. 12): no award until the funds are effective">EPA</span>@endif
                                         @if ($item->item_id)<span class="badge bg-light text-dark border" title="Standard item: unit, price and specs from the catalog"><i class="fas fa-tag me-1"></i>Standard item</span>@endif
+                                        @if ($item->quantity !== null)
+                                            <a href="#" class="badge bg-light text-dark border text-decoration-none btn-distribution" data-url="{{ route('procurement.ppmp.items.distribution', [$ppmp, $item]) }}" title="Which offices get these items">
+                                                <i class="fas fa-people-carry me-1"></i>Distribution{{ $item->distributions->isNotEmpty() ? ' (' . $item->distributions->count() . ')' : '' }}
+                                            </a>
+                                        @endif
                                         <a href="{{ route('procurement.ppmp.items.market-scoping', [$ppmp, $item]) }}" target="_blank"
                                            class="badge text-decoration-none {{ $item->marketScopingComplete() ? 'bg-success-subtle text-success border' : 'bg-warning-subtle text-dark border' }}"
                                            title="Print the Market Scoping Checklist"><i class="fas fa-clipboard-check me-1"></i>Market scoping {{ $item->marketScopingComplete() ? 'complete' : 'not complete' }}</a>
@@ -445,6 +450,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     toastr.error(res.message ?? 'Something went wrong.', 'Error');
                 }
             }
+        });
+    });
+
+    // Distribution: which offices get the project's items
+    $(document).on('click', '.btn-distribution', function (e) {
+        e.preventDefault();
+        $.get($(this).data('url'), function (html) {
+            $('#modal-body').html(html);
+            const el = document.getElementById('DISTRIBUTION_MODAL');
+            new bootstrap.Modal(el).show();
+            el.addEventListener('hidden.bs.modal', () => $('#modal-body').html(''));
         });
     });
 

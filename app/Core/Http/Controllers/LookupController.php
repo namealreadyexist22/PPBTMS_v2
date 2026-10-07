@@ -43,6 +43,8 @@ class LookupController extends Controller
             'label' => $label,
             'rows'  => $rows,
             'hasFund' => $this->hasFund($type),
+            // Item categories: the unit that alone may procure them (e.g. ICT Equipment -> MIS)
+            'offices' => $type === 'item-categories' ? \App\Models\Procurement\Office::active()->whereNotNull('code')->orderBy('code')->get() : collect(),
         ]);
     }
 
@@ -59,6 +61,9 @@ class LookupController extends Controller
             'name'       => ['required', 'string', 'max:255'],
             // Fund sources: which APP their projects go to; departments: which fund they are budgeted under
             'fund_group' => [$this->hasFund($type) ? 'required' : 'nullable', Rule::enum(\App\Enums\FundGroup::class)],
+            // Item categories only: procured by one unit, for every fund or one fund (e.g. COB)
+            'restricted_office_id'  => ['nullable', 'integer', 'exists:offices,id'],
+            'restricted_fund_group' => ['nullable', Rule::enum(\App\Enums\FundGroup::class)],
         ], ['code.unique' => 'This code is already used.']);
 
         if ($validator->fails()) {
@@ -67,7 +72,11 @@ class LookupController extends Controller
 
         $row = $id ? $model::findOrFail($id) : new $model;
         $fields = $this->hasFund($type) ? ['code', 'name', 'fund_group'] : ['code', 'name'];
-        $row->fill($validator->safe()->only($fields) + ['is_active' => $request->boolean('is_active', true)])->save();
+        $extra = $type === 'item-categories' ? [
+            'restricted_office_id'  => $request->input('restricted_office_id') ?: null,
+            'restricted_fund_group' => $request->input('restricted_office_id') ? ($request->input('restricted_fund_group') ?: null) : null,
+        ] : [];
+        $row->fill($validator->safe()->only($fields) + $extra + ['is_active' => $request->boolean('is_active', true)])->save();
 
         activity()->causedBy($request->user())->performedOn($row)->log(($id ? 'updated' : 'added') . " {$type} \"{$row->name}\"");
 

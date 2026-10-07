@@ -60,4 +60,19 @@ class LookupManagementTest extends TestCase
         $this->deleteJson(route('core.lookups.destroy'), ['type' => 'fund-sources', 'id' => $cob->id])->assertStatus(422)->assertJson(['status' => 'error']);
         $this->assertNotNull($cob->fresh());
     }
+
+    public function test_item_category_can_be_restricted_to_one_unit_for_one_fund(): void
+    {
+        $mis = \App\Models\Procurement\Office::create(['code' => '05012', 'acronym' => 'MIS', 'name' => 'MIS SECTION']);
+
+        $this->postJson(route('core.lookups.store'), ['type' => 'item-categories', 'code' => 'ICT-EQ', 'name' => 'ICT Equipment', 'restricted_office_id' => $mis->id, 'restricted_fund_group' => 'regular', 'is_active' => 1])->assertOk();
+        $category = \App\Models\Procurement\ItemCategory::where('code', 'ICT-EQ')->sole();
+        $this->assertSame([$mis->id, 'regular'], [$category->restricted_office_id, $category->restricted_fund_group->value]);
+
+        $this->get(route('core.lookups.index', ['type' => 'item-categories']))->assertOk()->assertSee('Procured by MIS only (COB)');
+
+        // Clearing the unit clears the fund too
+        $this->postJson(route('core.lookups.store'), ['type' => 'item-categories', 'id' => $category->id, 'code' => 'ICT-EQ', 'name' => 'ICT Equipment', 'restricted_fund_group' => 'regular', 'is_active' => 1])->assertOk();
+        $this->assertNull($category->fresh()->restricted_fund_group);
+    }
 }

@@ -103,4 +103,10 @@ class PpmpItem extends Model
             && (! empty($ms['activities']) || ! empty($ms['activity_other']))
             && collect($parameters)->every(fn ($key) => ! empty($ms['parameters'][$key]['answer']));
     }
+
+    /** Which offices get this project's items (the procuring unit's assessment). */
+    public function distributions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PpmpItemDistribution::class, 'line_uuid', 'line_uuid')->orderBy('id');
+    }
 }

@@ -18,6 +18,7 @@ use App\Models\Procurement\ProcurementMode;
 use App\Models\Procurement\Unit;
 use App\Models\Procurement\PpmpItem;
 use App\Models\Procurement\PpmpItemAttachment;
+use App\Models\Procurement\PpmpItemDistribution;
 use App\Services\Procurement\BudgetAllocationService;
 use App\Services\Procurement\PpmpAttachmentService;
 use Illuminate\Support\Facades\Storage;
@@ -78,7 +79,7 @@ class PpmpController extends Controller
         $this->authorizeView($request, $ppmp);
 
         $user = $request->user();
-        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'items', 'signatories', 'divisionPpmps']);
+        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'paps.items.distributions', 'items', 'signatories', 'divisionPpmps']);
 
         $hasOpenAmendment = Ppmp::where('amended_from_id', $ppmp->id)
             ->whereIn('status', [PpmpStatus::Draft, PpmpStatus::Submitted, PpmpStatus::Returned])
@@ -140,9 +141,13 @@ class PpmpController extends Controller
             ->when($current, fn ($q) => $q->orWhereKey($current))->orderBy('name')->get();
 
         // Standard items: active ones, plus the one already on the project even if deactivated since
-        $catalog = Item::with(['unit', 'category'])
+        $budgetFund = $ppmp->office->department?->budget_fund;
+        $catalog = Item::with(['unit', 'category.restrictedOffice'])
             ->where(fn ($q) => $q->where('is_active', true)->when($item?->item_id, fn ($q) => $q->orWhereKey($item->item_id)))
-            ->orderBy('name')->get();
+            ->orderBy('name')->get()
+            // Restricted categories (e.g. ICT Equipment: MIS only, for COB) only for the office allowed
+            ->filter(fn (Item $c) => ! $c->category || $c->category->allows($ppmp->office, $budgetFund) || $c->id === $item?->item_id)
+            ->values();
 
         return view('procurement.ppmp.extras.ppmp_item_entry', [
             'modalName'    => 'PPMP_ITEM_MODAL',
@@ -216,6 +221,57 @@ class PpmpController extends Controller
 
             return "Removed \"{$attachment->original_name}\".";
         });
+    }
+
+    /**
+     * Who gets this project's items (e.g. MIS: which offices receive the laptops). Not part of the
+     * PPMP / APP, so its unit can keep it current at any status; later used for ICS / PAR.
+     */
+    public function distributionEntry(Request $request, Ppmp $ppmp, PpmpItem $item)
+    {
+        $this->authorizeView($request, $ppmp);
+        abort_unless($item->ppmp_id === $ppmp->id, 404);
+
+        return view('procurement.ppmp.extras.ppmp_distribution', [
+            'ppmp'    => $ppmp,
+            'item'    => $item->load(['distributions.office', 'unit']),
+            'offices' => Office::active()->orderBy('code')->get(),
+            'canEdit' => $ppmp->isEditableBy($request->user()),
+        ]);
+    }
+
+    public function distributionStore(Request $request, Ppmp $ppmp, PpmpItem $item)
+    {
+        abort_unless($item->ppmp_id === $ppmp->id, 404);
+        if (! $ppmp->isEditableBy($request->user())) {
+            $this->deny($request, 'Only the office that owns this PPMP can change its distribution.');
+        }
+
+        $data = $this->validateJson($request, [
+            'rows'             => ['nullable', 'array', 'max:200'],
+            'rows.*.office_id' => ['required', 'integer', 'exists:offices,id'],
+            'rows.*.quantity'  => ['required', 'numeric', 'gt:0'],
+            'rows.*.recipient' => ['nullable', 'string', 'max:255'],
+            'rows.*.remarks'   => ['nullable', 'string', 'max:500'],
+        ], [], ['rows.*.office_id' => 'office', 'rows.*.quantity' => 'quantity']);
+
+        $rows = collect($data['rows'] ?? []);
+        $total = $rows->sum(fn ($r) => (float) $r['quantity']);
+
+        if ($item->quantity !== null && $total > (float) $item->quantity + 0.0001) {
+            return response()->json(['status' => 'error', 'message' => 'The distribution (' . rtrim(rtrim(number_format($total, 2), '0'), '.') . ') is more than the project quantity (' . rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') . ').'], 422);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($item, $rows, $request) {
+            PpmpItemDistribution::where('line_uuid', $item->line_uuid)->delete();
+            foreach ($rows as $row) {
+                PpmpItemDistribution::create($row + ['line_uuid' => $item->line_uuid, 'created_by' => $request->user()->id]);
+            }
+        });
+
+        activity()->causedBy($request->user())->performedOn($item)->log("updated the distribution of \"{$item->description}\" ({$rows->count()} offices)");
+
+        return response()->json(['status' => 'success', 'message' => 'Distribution saved.']);
     }
 
     /** GPPB Market Scoping Checklist of one procurement project, printable. */
