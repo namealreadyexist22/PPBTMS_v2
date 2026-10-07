@@ -43,6 +43,16 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
+                        <div class="col-6 office-dept-only" style="{{ $type === 'department' ? '' : 'display: none;' }}">
+                            <label class="form-label small fw-semibold text-muted mb-1">Region</label>
+                            <select name="region" class="form-select form-select-sm">
+                                <option value="">Same as the unit above (Luzon/Mindanao at the top)</option>
+                                @foreach (\App\Enums\Region::cases() as $region)
+                                    <option value="{{ $region->value }}" @selected(($office->region ?? null) === $region)>{{ $region->label() }}</option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Visayas units have their own PPMP and APP; Luzon/Mindanao users don't see them in lists.</div>
+                        </div>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -124,5 +134,6 @@
 <script>
     document.getElementById('office_type').addEventListener('change', function () {
         document.getElementById('office_budget_fund_wrap').style.display = this.value === 'department' ? '' : 'none';
+        document.querySelectorAll('.office-dept-only').forEach((el) => { el.style.display = this.value === 'department' ? '' : 'none'; });
     });
 </script>

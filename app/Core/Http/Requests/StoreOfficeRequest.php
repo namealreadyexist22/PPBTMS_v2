@@ -44,6 +44,7 @@ class StoreOfficeRequest extends FormRequest
             'head_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'type'         => ['required', Rule::in(array_keys(Office::TYPES))],
             'budget_fund'  => ['nullable', Rule::enum(\App\Enums\FundGroup::class)],
+            'region'       => ['nullable', Rule::enum(\App\Enums\Region::class)],
         ];
     }
 

@@ -242,7 +242,8 @@ class PpmpController extends Controller
         return view('procurement.ppmp.extras.ppmp_distribution', [
             'ppmp'    => $ppmp,
             'item'    => $item->load(['distributions.office', 'unit']),
-            'offices' => Office::active()->orderBy('code')->get(),
+            // Units of the PPMP's region (LM or VIS), grouped by department
+            'groups'  => Office::groupedByDepartment($ppmp->region),
             'canEdit' => $ppmp->isEditableBy($request->user()),
         ]);
     }
@@ -263,6 +264,14 @@ class PpmpController extends Controller
         ], [], ['rows.*.office_id' => 'office', 'rows.*.quantity' => 'quantity']);
 
         $rows = collect($data['rows'] ?? []);
+
+        // Only units of the PPMP's region (offices already on the list may stay)
+        $allowed = collect(Office::groupedByDepartment($ppmp->region))->flatMap(fn ($g) => collect($g['units'])->pluck('office.id'))
+            ->merge(PpmpItemDistribution::where('line_uuid', $item->line_uuid)->pluck('office_id'));
+        if ($rows->pluck('office_id')->map(fn ($id) => (int) $id)->diff($allowed)->isNotEmpty()) {
+            return response()->json(['status' => 'error', 'message' => "Only {$ppmp->region->short()} offices can receive items of this PPMP."], 422);
+        }
+
         $total = $rows->sum(fn ($r) => (float) $r['quantity']);
 
         if ($item->quantity !== null && $total > (float) $item->quantity + 0.0001) {

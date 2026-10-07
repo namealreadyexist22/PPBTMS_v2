@@ -231,4 +231,31 @@ class StandardItemTest extends TestCase
         $this->assertSame(\App\Enums\AllotmentClass::Semi, $ppmp->items()->sole()->allotment_class);
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Semi-Exp.');
     }
+
+    public function test_distribution_lists_offices_of_the_ppmp_region_by_department(): void
+    {
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($this->mis, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'ICT');
+        $item = $service->addItem($ppmp, $this->line(['ppmp_pap_id' => $pap->id, 'quantity' => 5, 'unit_cost' => '65000', 'estimated_budget' => '325000']));
+
+        $oda = Office::create(['type' => 'department', 'code' => '06000', 'acronym' => 'ODA-AF', 'name' => 'OFC OF THE DEP. ADMIN']);
+        $afdLm = Office::create(['type' => 'department', 'acronym' => 'AFD-LM', 'name' => 'AFD-LUZON MINDANAO', 'parent_id' => $oda->id, 'region' => 'lm']);
+        $gad = Office::create(['type' => 'division', 'code' => '06020', 'name' => 'AFD-LM GENERAL ADMINISTRATIVE DIVISION', 'parent_id' => $afdLm->id]);
+        $afdVis = Office::create(['type' => 'department', 'acronym' => 'AFD-VIS', 'name' => 'AFD-VISAYAS', 'parent_id' => $oda->id, 'region' => 'vis']);
+        $visGad = Office::create(['type' => 'division', 'code' => '06560', 'name' => 'AFD-VISAYAS - GENERAL ADMINISTRATIVE DIVISION', 'parent_id' => $afdVis->id]);
+
+        $this->assertSame(\App\Enums\Region::Vis, $visGad->effectiveRegion());
+        $this->assertSame(\App\Enums\Region::Lm, $gad->effectiveRegion());
+
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.items.distribution', [$ppmp, $item]))->assertOk()
+            ->assertSee('AFD-LM \\u2014 AFD-LUZON MINDANAO', false)
+            ->assertSee('AFD-LM GENERAL ADMINISTRATIVE DIVISION')
+            ->assertDontSee('AFD-VISAYAS');
+
+        $url = route('procurement.ppmp.items.distribution.store', [$ppmp, $item]);
+        $this->postJson($url, ['rows' => [['office_id' => $visGad->id, 'quantity' => 1]]])
+            ->assertStatus(422)->assertJson(['message' => 'Only LM offices can receive items of this PPMP.']);
+        $this->postJson($url, ['rows' => [['office_id' => $gad->id, 'quantity' => 2]]])->assertOk();
+    }
 }

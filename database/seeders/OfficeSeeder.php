@@ -111,6 +111,11 @@ class OfficeSeeder extends Seeder
 
             if ($isNew) {
                 $office->fill(['type' => $type, 'acronym' => $row[5] ?? null, 'budget_fund' => $row[6] ?? null]);
+
+                // Regional departments: VIS units have their own PPMP and APP
+                if ($type === 'department' && preg_match('/-(LM|VIS)$|^RBAC$/', (string) ($row[5] ?? ''), $m)) {
+                    $office->region = ($m[1] ?? '') === 'LM' ? 'lm' : 'vis';
+                }
             }
 
             $office->save();

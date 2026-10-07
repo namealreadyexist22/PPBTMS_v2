@@ -11,6 +11,12 @@ window.bootstrap = bootstrap;
 window.toastr = toastr;
 window.Swal = Swal;
 
+// Select2: searchable dropdowns ($('select').select2({ theme: 'bootstrap-5' }))
+import select2 from 'select2';
+import 'select2/dist/css/select2.min.css';
+import 'select2-bootstrap-5-theme/dist/select2-bootstrap-5-theme.min.css';
+select2(window, jQuery);
+
 // 2. Explicit DataTables Sequence
 import DataTable from 'datatables.net-bs5';
 window.DataTable = DataTable;

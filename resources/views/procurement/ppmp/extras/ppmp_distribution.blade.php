@@ -1,5 +1,26 @@
 {{-- Who gets this project's items (procuring unit's assessment). Not printed on the PPMP / APP. --}}
-@php $fmt = fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.'); @endphp
+@php
+    $fmt = fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.');
+    // Offices already on the list but outside this region (or inactive) stay selectable on their row
+    $listed = collect($groups)->flatMap(fn ($g) => collect($g['units'])->pluck('office.id'));
+    $officeSelect = function (?int $selected) use ($groups, $listed, $item) {
+        $html = '<select class="form-select form-select-sm d-office"><option value="">Choose office…</option>';
+        if ($selected && ! $listed->contains($selected) && ($o = $item->distributions->firstWhere('office_id', $selected)?->office)) {
+            $html .= '<option value="' . $o->id . '" selected>' . e($o->shortName() . ' — ' . $o->name) . '</option>';
+        }
+        foreach ($groups as $group) {
+            $html .= '<optgroup label="' . e($group['department'] ? $group['department']->shortName() . ' — ' . $group['department']->name : 'Other offices') . '">';
+            foreach ($group['units'] as $unit) {
+                $o = $unit['office'];
+                $label = $unit['depth'] === 0 ? $o->shortName() . ' (whole department)' : $o->shortName() . ' — ' . $o->name;
+                $html .= '<option value="' . $o->id . '" data-depth="' . $unit['depth'] . '"' . ($o->id === $selected ? ' selected' : '') . '>' . e($label) . '</option>';
+            }
+            $html .= '</optgroup>';
+        }
+
+        return $html . '</select>';
+    };
+@endphp
 <div class="modal fade" id="DISTRIBUTION_MODAL" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow">
@@ -18,7 +39,7 @@
                         @foreach ($item->distributions as $d)
                             <tr>
                                 @if ($canEdit)
-                                    <td><select class="form-select form-select-sm d-office">@foreach ($offices as $o)<option value="{{ $o->id }}" @selected($o->id === $d->office_id)>{{ $o->shortName() }} — {{ $o->name }}</option>@endforeach</select></td>
+                                    <td>{!! $officeSelect($d->office_id) !!}</td>
                                     <td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end d-qty" value="{{ $fmt($d->quantity) }}"></td>
                                     <td><input type="text" class="form-control form-control-sm d-recipient" value="{{ $d->recipient }}"></td>
                                     <td><input type="text" class="form-control form-control-sm d-remarks" value="{{ $d->remarks }}"></td>
@@ -50,11 +71,34 @@
 </div>
 
 @if ($canEdit)
+<style>
+    #DISTRIBUTION_MODAL .select2-results__group { display: block; font-weight: 700; color: #111827; background: #f1f5f9; }
+</style>
 <script>
 (function () {
     const table = document.querySelector('#dist_table tbody');
     const max = {{ $item->quantity !== null ? (float) $item->quantity : 'null' }};
-    const officeOptions = @json($offices->map(fn ($o) => ['id' => $o->id, 'label' => $o->shortName() . ' — ' . $o->name])->values());
+    const officeSelectHtml = @json($officeSelect(null));
+    const modal = $('#DISTRIBUTION_MODAL');
+
+    // Searchable office dropdown: typing a department (e.g. PPSPD) lists all its units
+    function matcher(params, data) {
+        const term = (params.term || '').trim().toLowerCase();
+        if (!term) return data;
+        if (data.children) {
+            if (data.text.toLowerCase().includes(term)) return data;
+            const children = data.children.filter((c) => c.text.toLowerCase().includes(term));
+            return children.length ? $.extend({}, data, { children: children }) : null;
+        }
+        return data.text.toLowerCase().includes(term) ? data : null;
+    }
+    function indent(data) {
+        const depth = data.element ? parseInt(data.element.dataset.depth || '0', 10) : 0;
+        return depth > 1 ? $('<span class="d-block">').css('padding-left', (depth - 1) * 16 + 'px').text(data.text) : data.text;
+    }
+    function enhance(select) {
+        $(select).select2({ theme: 'bootstrap-5', dropdownParent: modal, width: '100%', selectionCssClass: 'select2--small', dropdownCssClass: 'select2--small', placeholder: 'Choose office…', matcher: matcher, templateResult: indent });
+    }
     const fmt = (n) => Number(n.toFixed(2)).toString();
 
     function total() {
@@ -70,14 +114,17 @@
 
     function addRow() {
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td><select class="form-select form-select-sm d-office">' + officeOptions.map((o) => '<option value="' + o.id + '">' + o.label.replace(/</g, '&lt;') + '</option>').join('') + '</select></td>'
+        tr.innerHTML = '<td>' + officeSelectHtml + '</td>'
             + '<td><input type="number" step="0.01" min="0" class="form-control form-control-sm text-end d-qty" value="1"></td>'
             + '<td><input type="text" class="form-control form-control-sm d-recipient"></td>'
             + '<td><input type="text" class="form-control form-control-sm d-remarks"></td>'
             + '<td><button type="button" class="btn btn-sm btn-link text-danger p-0 d-remove"><i class="fas fa-times"></i></button></td>';
         table.appendChild(tr);
+        enhance(tr.querySelector('.d-office'));
         total();
     }
+
+    table.querySelectorAll('.d-office').forEach(enhance);
 
     document.getElementById('dist_add').addEventListener('click', addRow);
     table.addEventListener('input', total);

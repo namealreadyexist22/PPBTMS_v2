@@ -54,6 +54,8 @@ class OfficeController extends Controller
         $data['is_consolidating'] = $request->boolean('is_consolidating');
         // Only a department has a budget fund (COB, or SIDA for the SIDA departments)
         $data['budget_fund'] = $data['type'] === 'department' ? ($data['budget_fund'] ?? 'regular') : null;
+        // Region is set on departments; units under one follow it
+        $data['region'] = $data['type'] === 'department' ? ($data['region'] ?? null) : null;
 
         $office = $request->filled('id') ? Office::findOrFail($request->id) : new Office();
         $isNew = ! $office->exists;

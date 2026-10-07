@@ -20,11 +20,11 @@ class Office extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = ['code', 'acronym', 'name', 'type', 'parent_id', 'head_user_id', 'is_consolidating', 'budget_fund', 'is_active'];
+    protected $fillable = ['code', 'acronym', 'name', 'type', 'parent_id', 'head_user_id', 'is_consolidating', 'budget_fund', 'region', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean', 'budget_fund' => \App\Enums\FundGroup::class];
+        return ['is_active' => 'boolean', 'is_consolidating' => 'boolean', 'budget_fund' => \App\Enums\FundGroup::class, 'region' => \App\Enums\Region::class];
     }
 
     /** Short name for lists: the acronym, or the office number if none. */
@@ -79,6 +79,66 @@ class Office extends Model
     }
 
     /** Where the unit sits, e.g. "05012 · PPSPD › PPPD › MIS — MIS SECTION". */
+    /** Region of the nearest unit up the tree that has one set; Luzon/Mindanao when none has. */
+    public function effectiveRegion(): \App\Enums\Region
+    {
+        for ($office = $this; $office; $office = $office->parent) {
+            if ($office->region) {
+                return $office->region;
+            }
+        }
+
+        return \App\Enums\Region::Lm;
+    }
+
+    /**
+     * Active units of one region, grouped under their department, top down:
+     * [['department' => Office, 'units' => [['office' => Office, 'depth' => int], ...]], ...].
+     * A sub-department (e.g. AFD-LM under ODA-AF) is a group of its own; units under no
+     * department come last with 'department' => null.
+     */
+    public static function groupedByDepartment(?\App\Enums\Region $region = null): array
+    {
+        $all = static::active()->with('parent')->orderBy('code')->orderBy('name')->get();
+        $byId = $all->keyBy('id');
+        $childrenOf = $all->groupBy('parent_id');
+        $regionOf = function (Office $office) use ($byId) {
+            for ($o = $office; $o; $o = $o->parent_id ? $byId->get($o->parent_id) : null) {
+                if ($o->region) {
+                    return $o->region;
+                }
+            }
+
+            return \App\Enums\Region::Lm;
+        };
+
+        $groups = [];
+        foreach ($all->where('type', 'department')->sortBy(fn ($d) => $d->code ?? ($childrenOf->get($d->id)?->min('code') ?? $d->acronym)) as $department) {
+            if ($region && $regionOf($department) !== $region) {
+                continue;
+            }
+
+            $units = [['office' => $department, 'depth' => 0]];
+            $walk = function ($parentId, $depth) use (&$walk, &$units, $childrenOf) {
+                foreach ($childrenOf->get($parentId, collect())->reject->isDepartment() as $child) {
+                    $units[] = ['office' => $child, 'depth' => $depth];
+                    $walk($child->id, $depth + 1);
+                }
+            };
+            $walk($department->id, 1);
+            $groups[] = ['department' => $department, 'units' => $units];
+        }
+
+        // Units not under any department (not yet placed in the tree)
+        $placed = collect($groups)->flatMap(fn ($g) => collect($g['units'])->pluck('office.id'));
+        $loose = $all->reject(fn ($o) => $placed->contains($o->id) || $o->isDepartment() || ($region && $regionOf($o) !== $region));
+        if ($loose->isNotEmpty()) {
+            $groups[] = ['department' => null, 'units' => $loose->map(fn ($o) => ['office' => $o, 'depth' => 1])->values()->all()];
+        }
+
+        return $groups;
+    }
+
     public function pathLabel(): string
     {
         $path = [];

@@ -16,6 +16,7 @@
             @if ($office->isDepartment())
                 <span class="badge {{ $office->budget_fund === \App\Enums\FundGroup::Sida ? 'bg-warning text-dark' : 'bg-success-subtle text-success border' }}" title="Budget fund">{{ $office->budget_fund?->label() ?? 'COB' }} budget</span>
             @endif
+            @if ($office->region)<span class="badge {{ $office->region === \App\Enums\Region::Vis ? 'bg-info text-dark' : 'bg-light text-dark border' }}" title="Region">{{ $office->region->short() }}</span>@endif
             @if ($office->is_consolidating)<span class="badge bg-primary-subtle text-primary border">Approves PPMPs</span>@endif
             @unless ($office->is_active)<span class="badge bg-secondary">Inactive</span>@endunless
         </div>
