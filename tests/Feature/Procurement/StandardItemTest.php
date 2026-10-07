@@ -54,19 +54,29 @@ class StandardItemTest extends TestCase
         $unit = Unit::first();
         $this->actingAs($this->twg)->get(route('procurement.items.index'))->assertOk()->assertSee('No standard items yet');
 
+        $ict = \App\Models\Procurement\ItemCategory::where('code', 'ICT')->value('id');
         $this->postJson(route('procurement.items.store'), [
-            'code' => 'ICT-TV-55', 'name' => 'LED Smart TV, 55"', 'unit_id' => $unit->id, 'project_type' => 'goods',
+            'code' => 'ignored', 'name' => 'LED Smart TV, 55"', 'item_category_id' => $ict, 'unit_id' => $unit->id, 'project_type' => 'goods',
             'standard_unit_cost' => '50,000.00', 'specifications' => '55-inch 4K UHD, 3 HDMI', 'twg_reference' => 'TWG-ICT Res. 2026-03', 'is_active' => 1,
-        ])->assertOk();
+        ])->assertOk()->assertJsonPath('message', 'Added ICT-0001 "LED Smart TV, 55"".');
 
-        $this->get(route('procurement.items.index'))->assertOk()->assertSee('ICT-TV-55')->assertSee('₱50,000.00')->assertSee('TWG-ICT Res. 2026-03');
-        $this->postJson(route('procurement.items.store'), ['code' => 'ICT-TV-55', 'name' => 'Dup', 'unit_id' => $unit->id, 'project_type' => 'goods'])
+        // The series continues per category; no category = ITEM-
+        $this->postJson(route('procurement.items.store'), ['name' => 'Laptop', 'item_category_id' => $ict, 'unit_id' => $unit->id, 'project_type' => 'goods'])->assertOk();
+        $this->postJson(route('procurement.items.store'), ['name' => 'Bond paper', 'unit_id' => $unit->id, 'project_type' => 'goods'])->assertOk();
+        $this->assertSame(['ICT-0001', 'ICT-0002', 'ITEM-0001'], Item::orderBy('id')->pluck('code')->all());
+        $this->get(route('procurement.items.entry'))->assertOk()->assertSee('ITEM-0002');
+
+        $this->get(route('procurement.items.index'))->assertOk()->assertSee('ICT-0001')->assertSee('₱50,000.00')->assertSee('TWG-ICT Res. 2026-03');
+
+        // Editing keeps the code; it can be corrected but must stay unique
+        $tv = Item::where('code', 'ICT-0001')->sole();
+        $this->postJson(route('procurement.items.store'), ['id' => $tv->id, 'code' => 'ICT-0002', 'name' => $tv->name, 'unit_id' => $unit->id, 'project_type' => 'goods'])
             ->assertStatus(422)->assertJsonValidationErrors('code');
 
         // Deactivate (unticked box sends 0)
-        $tv = Item::where('code', 'ICT-TV-55')->sole();
-        $this->postJson(route('procurement.items.store'), ['id' => $tv->id, 'code' => 'ICT-TV-55', 'name' => $tv->name, 'unit_id' => $unit->id, 'project_type' => 'goods', 'standard_unit_cost' => '50000', 'is_active' => 0])->assertOk();
+        $this->postJson(route('procurement.items.store'), ['id' => $tv->id, 'code' => 'ICT-0001', 'name' => $tv->name, 'item_category_id' => $ict, 'unit_id' => $unit->id, 'project_type' => 'goods', 'standard_unit_cost' => '50000', 'is_active' => 0])->assertOk();
         $this->assertFalse($tv->fresh()->is_active);
+        $this->assertSame('ICT-0001', $tv->fresh()->code);
 
         // Others cannot manage the catalog
         $this->actingAs($this->staff)->get(route('procurement.items.index'))->assertForbidden();

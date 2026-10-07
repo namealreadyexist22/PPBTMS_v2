@@ -117,10 +117,12 @@
                             <label for="office_id" class="form-label small fw-semibold text-muted mb-1">Unit (Department / Division / Section)</label>
                             <select class="form-select form-select-sm rounded" id="office_id" name="office_id">
                                 <option value="">— No office —</option>
-                                @foreach ($offices as $office)
-                                    <option value="{{ $office->id }}" {{ isset($user) && $user->office_id == $office->id ? 'selected' : '' }}>
-                                        {{ $office->pathLabel() }}
-                                    </option>
+                                @foreach ($officeGroups as $group)
+                                    <optgroup label="{{ $group['department']?->displayName() ?? 'Other offices' }}{{ $group['department'] && $group['department']->effectiveRegion() === \App\Enums\Region::Vis ? ' (Visayas)' : '' }}">
+                                        @foreach ($group['units'] as $unit)
+                                            <option value="{{ $unit['office']->id }}" data-depth="{{ $unit['depth'] }}" @selected(isset($user) && $user->office_id == $unit['office']->id)>{{ $unit['office']->displayName() }}</option>
+                                        @endforeach
+                                    </optgroup>
                                 @endforeach
                             </select>
                             <div class="invalid-feedback small fw-medium"></div>
@@ -137,23 +139,54 @@
                         <input type="text" class="form-control form-control-sm rounded mb-1" id="office_ids_filter" placeholder="Filter offices...">
                         @php $extraIds = isset($user) ? $user->offices->pluck('id')->all() : []; @endphp
                         <div class="border rounded px-2 py-1" style="max-height: 160px; overflow-y: auto;" id="office_ids_list">
-                            @foreach ($offices as $office)
-                                <div class="form-check small office-option">
-                                    <input class="form-check-input" type="checkbox" name="office_ids[]" value="{{ $office->id }}" id="office_ids_{{ $office->id }}"
-                                        {{ in_array($office->id, $extraIds) ? 'checked' : '' }}>
-                                    <label class="form-check-label" for="office_ids_{{ $office->id }}">{{ $office->pathLabel() }}</label>
-                                </div>
+                            @foreach ($officeGroups as $group)
+                                <div class="small fw-bold text-dark mt-1 office-group">{{ $group['department']?->displayName() ?? 'Other offices' }}</div>
+                                @foreach ($group['units'] as $unit)
+                                    @php $office = $unit['office']; @endphp
+                                    <div class="form-check small office-option" style="margin-left: {{ $unit['depth'] * 14 }}px;" data-group="{{ $group['department']?->displayName() }}">
+                                        <input class="form-check-input" type="checkbox" name="office_ids[]" value="{{ $office->id }}" id="office_ids_{{ $office->id }}"
+                                            {{ in_array($office->id, $extraIds) ? 'checked' : '' }}>
+                                        <label class="form-check-label" for="office_ids_{{ $office->id }}">{{ $office->displayName() }}</label>
+                                    </div>
+                                @endforeach
                             @endforeach
                         </div>
                         <div class="form-text">Offices whose approved PPMPs this user may use when creating a PR (view only, no PPMP editing), e.g. SIDA-SCP and SIDA-HRD.</div>
                         <script>
                             document.getElementById('office_ids_filter').addEventListener('input', function () {
                                 const q = this.value.toLowerCase();
+                                // Typing a department (e.g. PPSPD) keeps all of its units
                                 document.querySelectorAll('#office_ids_list .office-option').forEach(function (el) {
-                                    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+                                    el.style.display = (el.textContent + ' ' + el.dataset.group).toLowerCase().includes(q) ? '' : 'none';
+                                });
+                                document.querySelectorAll('#office_ids_list .office-group').forEach(function (el) {
+                                    let next = el.nextElementSibling, any = false;
+                                    for (; next && next.classList.contains('office-option'); next = next.nextElementSibling) any = any || next.style.display !== 'none';
+                                    el.style.display = any ? '' : 'none';
                                 });
                             });
+
+                            // Searchable unit dropdown, grouped by department (group names bold: see style below)
+                            $('#office_id').select2({
+                                theme: 'bootstrap-5', width: '100%', dropdownParent: $('#office_id').closest('.modal'),
+                                selectionCssClass: 'select2--small', dropdownCssClass: 'select2--small',
+                                matcher: function (params, data) {
+                                    const term = (params.term || '').trim().toLowerCase();
+                                    if (!term) return data;
+                                    if (data.children) {
+                                        if (data.text.toLowerCase().includes(term)) return data;
+                                        const children = data.children.filter((c) => c.text.toLowerCase().includes(term));
+                                        return children.length ? $.extend({}, data, { children: children }) : null;
+                                    }
+                                    return data.text.toLowerCase().includes(term) ? data : null;
+                                },
+                                templateResult: function (data) {
+                                    const depth = data.element ? parseInt(data.element.dataset.depth || '0', 10) : 0;
+                                    return depth > 1 ? $('<span class="d-block">').css('padding-left', (depth - 1) * 16 + 'px').text(data.text) : data.text;
+                                }
+                            });
                         </script>
+                        <style>.select2-results__group { display: block; font-weight: 700; color: #111827; background: #f1f5f9; }</style>
                     </div>
 
                     <small class="text-uppercase fw-bold text-secondary tracking-wider d-block mb-3" style="font-size: 0.75rem;">

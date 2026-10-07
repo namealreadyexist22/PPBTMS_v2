@@ -11,8 +11,13 @@
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label fw-semibold text-muted mb-1">Code</label>
-                        <input type="text" name="code" class="form-control form-control-sm" value="{{ $item->code ?? '' }}" placeholder="e.g. ICT-TV-55">
-                        <div class="invalid-feedback"></div>
+                        @if ($item)
+                            <input type="text" name="code" class="form-control form-control-sm" value="{{ $item->code }}">
+                            <div class="invalid-feedback"></div>
+                        @else
+                            <input type="text" class="form-control form-control-sm bg-light" id="item_code_preview" value="{{ $nextCodes[''] ?? '' }}" readonly>
+                            <div class="form-text">Given on save, from the category.</div>
+                        @endif
                     </div>
                     <div class="col-md-9">
                         <label class="form-label fw-semibold text-muted mb-1">Item name</label>
@@ -21,7 +26,7 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label fw-semibold text-muted mb-1">Category</label>
-                        <select name="item_category_id" class="form-select form-select-sm">
+                        <select name="item_category_id" class="form-select form-select-sm" @unless ($item) onchange="document.getElementById('item_code_preview').value = ({{ json_encode($nextCodes) }})[this.value] || ''" @endunless>
                             <option value="">—</option>
                             @foreach ($categories as $category)<option value="{{ $category->id }}" @selected(($item->item_category_id ?? null) == $category->id)>{{ $category->name }}</option>@endforeach
                         </select>

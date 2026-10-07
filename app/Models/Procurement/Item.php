@@ -31,6 +31,23 @@ class Item extends Model
     }
 
     /** Has a standard cost, so a project using it is priced and specified by the catalog. */
+    /** Code prefix: the category code (e.g. ICT), or ITEM when uncategorized. */
+    public static function codePrefix(?ItemCategory $category): string
+    {
+        return strtoupper($category?->code ?: 'ITEM');
+    }
+
+    /** Next code in the prefix's series: ICT-0001, ICT-0002, ... (ignores hand-made codes like ICT-TV-55). */
+    public static function nextCode(?ItemCategory $category): string
+    {
+        $prefix = static::codePrefix($category);
+        $last = static::where('code', 'like', $prefix . '-%')->pluck('code')
+            ->map(fn ($code) => preg_match('/^' . preg_quote($prefix, '/') . '-(\d+)$/', $code, $m) ? (int) $m[1] : 0)
+            ->max() ?? 0;
+
+        return sprintf('%s-%04d', $prefix, $last + 1);
+    }
+
     public function isStandard(): bool
     {
         return $this->standard_unit_cost !== null;

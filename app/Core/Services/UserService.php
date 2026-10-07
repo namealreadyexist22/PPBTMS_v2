@@ -33,7 +33,8 @@ class UserService
         return view('BackEnd.auth.extras.user_entry', [
             'user'      => $user,
             'modalName' => 'USER_ENTRY_MODAL',
-            'offices'   => \App\Models\Procurement\Office::active()->with('parent')->orderBy('code')->get(),
+            // Units grouped under their department (both regions)
+            'officeGroups' => \App\Models\Procurement\Office::groupedByDepartment(),
         ]);
     }
 

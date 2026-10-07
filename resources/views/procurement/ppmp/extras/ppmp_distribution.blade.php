@@ -6,13 +6,13 @@
     $officeSelect = function (?int $selected) use ($groups, $listed, $item) {
         $html = '<select class="form-select form-select-sm d-office"><option value="">Choose office…</option>';
         if ($selected && ! $listed->contains($selected) && ($o = $item->distributions->firstWhere('office_id', $selected)?->office)) {
-            $html .= '<option value="' . $o->id . '" selected>' . e($o->shortName() . ' — ' . $o->name) . '</option>';
+            $html .= '<option value="' . $o->id . '" selected>' . e($o->displayName()) . '</option>';
         }
         foreach ($groups as $group) {
-            $html .= '<optgroup label="' . e($group['department'] ? $group['department']->shortName() . ' — ' . $group['department']->name : 'Other offices') . '">';
+            $html .= '<optgroup label="' . e($group['department']?->displayName() ?? 'Other offices') . '">';
             foreach ($group['units'] as $unit) {
                 $o = $unit['office'];
-                $label = $unit['depth'] === 0 ? $o->shortName() . ' (whole department)' : $o->shortName() . ' — ' . $o->name;
+                $label = $unit['depth'] === 0 ? ($o->acronym ?: $o->name) . ' (whole department)' : $o->displayName();
                 $html .= '<option value="' . $o->id . '" data-depth="' . $unit['depth'] . '"' . ($o->id === $selected ? ' selected' : '') . '>' . e($label) . '</option>';
             }
             $html .= '</optgroup>';
@@ -44,7 +44,7 @@
                                     <td><input type="text" class="form-control form-control-sm d-remarks" value="{{ $d->remarks }}"></td>
                                     <td><button type="button" class="btn btn-sm btn-link text-danger p-0 d-remove"><i class="fas fa-times"></i></button></td>
                                 @else
-                                    <td>{{ $d->office->shortName() }} — {{ $d->office->name }}</td>
+                                    <td>{{ $d->office->displayName() }}</td>
                                     <td class="text-end">{{ $fmt($d->quantity) }}</td>
                                     <td>{{ $d->remarks }}</td>
                                 @endif

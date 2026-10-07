@@ -42,6 +42,9 @@ class StandardItemController extends Controller
             'units'      => Unit::where('is_active', true)->when($item, fn ($q) => $q->orWhereKey($item->unit_id))->orderBy('name')->get(),
             'categories' => ItemCategory::where('is_active', true)->when($item?->item_category_id, fn ($q) => $q->orWhereKey($item->item_category_id))->orderBy('name')->get(),
             'types'      => ProjectType::cases(),
+            // Preview of the code a new item gets, per category ('' = no category)
+            'nextCodes'  => $item ? [] : ItemCategory::where('is_active', true)->get()
+                ->mapWithKeys(fn ($c) => [$c->id => Item::nextCode($c)])->put('', Item::nextCode(null))->all(),
         ]);
     }
 
@@ -49,10 +52,14 @@ class StandardItemController extends Controller
     {
         $request->merge(['standard_unit_cost' => str_replace(',', '', (string) $request->input('standard_unit_cost')) ?: null]);
         $id = $request->input('id');
+        if (! $id) {
+            $request->merge(['code' => null]);   // new items get their code on save
+        }
 
         $validator = Validator::make($request->all(), [
             'id'                 => ['nullable', 'integer', 'exists:items,id'],
-            'code'               => ['required', 'string', 'max:30', Rule::unique('items', 'code')->ignore($id)],
+            // Given automatically to new items (category code + series); kept when the item is edited
+            'code'               => [Rule::requiredIf((bool) $id), 'nullable', 'string', 'max:30', Rule::unique('items', 'code')->ignore($id)],
             'name'               => ['required', 'string', 'max:255'],
             'item_category_id'   => ['nullable', 'integer', 'exists:item_categories,id'],
             'unit_id'            => ['required', 'integer', 'exists:units,id'],
@@ -69,7 +76,24 @@ class StandardItemController extends Controller
 
         $item = $id ? Item::findOrFail($id) : new Item();
         $oldCost = $item->standard_unit_cost;
-        $item->fill($validator->safe()->except('id') + ['is_active' => $request->boolean('is_active', true), 'updated_by' => $request->user()->id])->save();
+        $data = $validator->safe()->except('id') + ['is_active' => $request->boolean('is_active', true), 'updated_by' => $request->user()->id];
+
+        if ($id) {
+            $item->fill($data)->save();
+        } else {
+            // Two people saving at once may pick the same number; the unique index catches it, so retry
+            $category = ItemCategory::find($data['item_category_id'] ?? null);
+            for ($attempt = 1; ; $attempt++) {
+                try {
+                    $item->fill(['code' => Item::nextCode($category)] + $data)->save();
+                    break;
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    if ($attempt >= 3) {
+                        throw $e;
+                    }
+                }
+            }
+        }
 
         $log = ($id ? 'updated' : 'added') . " standard item \"{$item->code} {$item->name}\"";
         if ($id && (string) $oldCost !== (string) $item->standard_unit_cost) {
@@ -77,7 +101,7 @@ class StandardItemController extends Controller
         }
         activity()->causedBy($request->user())->performedOn($item)->log($log);
 
-        return response()->json(['status' => 'success', 'message' => ($id ? 'Updated' : 'Added') . " \"{$item->name}\"."]);
+        return response()->json(['status' => 'success', 'message' => ($id ? 'Updated' : 'Added') . " {$item->code} \"{$item->name}\"."]);
     }
 
     /** Delete only when no PPMP project uses it; otherwise deactivate it instead. */

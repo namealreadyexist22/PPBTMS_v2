@@ -20,7 +20,7 @@ class UserStoreTest extends TestCase
         $office = Office::create(['code' => '05001', 'acronym' => 'PPSPD-PS', 'name' => 'Planning Section']);
         $extra = Office::create(['code' => '12000', 'name' => 'SIDA-HRD']);
 
-        $this->actingAs($admin)->get(route('core.users.entry'))->assertOk()->assertSee('05001 · PPSPD-PS — Planning Section', false);
+        $this->actingAs($admin)->get(route('core.users.entry'))->assertOk()->assertSee('PPSPD-PS — Planning Section', false)->assertDontSee('05001');
 
         $this->postJson(route('core.users.store'), [
             'fname' => 'Juan', 'lname' => 'Cruz', 'username' => 'jcruz', 'email' => 'jcruz@example.com',

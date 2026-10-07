@@ -33,6 +33,12 @@ class Office extends Model
         return $this->acronym ?: ($this->code ?: $this->name);
     }
 
+    /** For dropdowns, without the office number: "MIS — MIS SECTION", or just the name. */
+    public function displayName(): string
+    {
+        return $this->acronym ? "{$this->acronym} — {$this->name}" : $this->name;
+    }
+
     /** e.g. "05000 · PPSPD — PPSPD - MANAGER III" */
     public function label(): string
     {
