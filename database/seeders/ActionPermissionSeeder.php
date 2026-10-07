@@ -34,6 +34,7 @@ class ActionPermissionSeeder extends Seeder
             'manage app'      => 'APP',
             'manage lookups'  => 'Procurement Lookups',
             'manage budget'   => 'Budget Allocation',
+            'manage items'    => 'Standard Items',
         ];
 
         foreach ($links as $permissionName => $menuName) {

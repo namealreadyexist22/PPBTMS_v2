@@ -85,6 +85,11 @@ class MenuSeeder extends Seeder
             ['nav_name' => 'APP', 'icon' => 'fas fa-calendar-check', 'route' => 'procurement.app.index', 'order' => 3]
         );
 
+        Menu::updateOrCreate(
+            ['name' => 'Standard Items', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-tags', 'route' => 'procurement.items.index', 'order' => 4]
+        );
+
         // Hidden gate: the BAC Secretariat prepares the APP of its own region (menu.app-manage)
         Menu::firstOrCreate(
             ['name' => 'APP Manage', 'parent_id' => $app->id],

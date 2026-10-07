@@ -13,7 +13,7 @@ class PpmpItem extends Model
 {
     protected $fillable = [
         'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id', 'unit_cost',
-        'quantity_size', 'procurement_mode_id', 'pre_proc_conference', 'proc_start', 'proc_end',
+        'quantity_size', 'procurement_mode_id', 'pre_proc_conference', 'is_epa', 'proc_start', 'proc_end',
         'delivery_period', 'fund_source_id', 'allotment_class', 'estimated_budget', 'committed_amount',
         'supporting_documents', 'market_scoping', 'remarks', 'sort_order',
     ];
@@ -26,6 +26,7 @@ class PpmpItem extends Model
             'quantity'            => 'decimal:2',
             'unit_cost'           => 'decimal:2',
             'pre_proc_conference' => 'boolean',
+            'is_epa'              => 'boolean',
             'market_scoping'      => 'array',
             'proc_start'          => 'date',
             'proc_end'            => 'date',

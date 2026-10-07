@@ -6,6 +6,7 @@ use App\Enums\PpmpStatus;
 use App\Enums\PpmpType;
 use App\Enums\Region;
 use App\Exceptions\ProcurementException;
+use App\Models\Procurement\Item;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpItem;
@@ -109,7 +110,7 @@ class PpmpService
     public function addItem(Ppmp $ppmp, array $data): PpmpItem
     {
         $this->assertEditable($ppmp);
-        $data = $this->applyUnitCost($data);
+        $data = $this->applyUnitCost($this->applyStandardItem($data));
         $this->assertItemData($data);
         $this->assertPapBelongs($ppmp, $data['ppmp_pap_id'] ?? null);
 
@@ -129,7 +130,7 @@ class PpmpService
         $ppmp = $item->ppmp;
         $this->assertEditable($ppmp);
         unset($data['line_uuid'], $data['committed_amount'], $data['ppmp_id']);
-        $data = $this->applyUnitCost($data, $item);
+        $data = $this->applyUnitCost($this->applyStandardItem($data, $item), $item);
         $this->assertItemData(array_merge($item->only(['proc_start', 'proc_end', 'estimated_budget']), $data));
 
         if (array_key_exists('ppmp_pap_id', $data)) {
@@ -374,6 +375,42 @@ class PpmpService
     }
 
     /** With both quantity and unit cost, the estimated budget is quantity x unit cost. */
+    /**
+     * A project on a standard item takes the catalog's unit, unit cost, specifications and type
+     * as they are (set by the TWG); only the quantity is the office's. An inactive item can no
+     * longer be picked, but a project that already uses it keeps it.
+     */
+    protected function applyStandardItem(array $data, ?PpmpItem $item = null): array
+    {
+        $itemId = array_key_exists('item_id', $data) ? $data['item_id'] : $item?->item_id;
+
+        if (! $itemId) {
+            return $data;
+        }
+
+        $standard = Item::find($itemId);
+
+        if (! $standard || (! $standard->is_active && (int) $itemId !== (int) $item?->item_id)) {
+            throw new ProcurementException('That standard item is no longer available. Pick another or leave it blank.');
+        }
+
+        if (! $standard->isStandard()) {
+            return $data;
+        }
+
+        $quantity = array_key_exists('quantity', $data) ? $data['quantity'] : $item?->quantity;
+        if (! is_numeric($quantity) || (float) $quantity <= 0) {
+            throw new ProcurementException("Enter the quantity of {$standard->name}; its unit price is the standard cost of ₱" . Money::format($standard->standard_unit_cost) . '.');
+        }
+
+        return array_merge($data, [
+            'unit_id'       => $standard->unit_id,
+            'unit_cost'     => (string) $standard->standard_unit_cost,
+            'quantity_size' => $standard->specifications,
+            'project_type'  => $standard->project_type?->value ?? $data['project_type'] ?? null,
+        ]);
+    }
+
     protected function applyUnitCost(array $data, ?PpmpItem $item = null): array
     {
         $quantity = array_key_exists('quantity', $data) ? $data['quantity'] : $item?->quantity;

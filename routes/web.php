@@ -14,6 +14,7 @@ use App\Http\Controllers\BackEnd\LoginController;
 use App\Http\Controllers\BackEnd\MainController;
 use App\Http\Controllers\Procurement\AppController;
 use App\Http\Controllers\Procurement\BudgetAllocationController;
+use App\Http\Controllers\Procurement\StandardItemController;
 use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use Illuminate\Support\Facades\Route;
@@ -141,6 +142,14 @@ use Illuminate\Support\Facades\Route;
         Route::middleware('perm:manage budget')->group(function () {
             Route::get('budget', [BudgetAllocationController::class, 'index'])->name('budget.index');
             Route::post('budget/store', [BudgetAllocationController::class, 'store'])->name('budget.store');
+        });
+
+        // Standard items (articles with standard cost and TWG specifications)
+        Route::middleware('perm:manage items')->group(function () {
+            Route::get('items', [StandardItemController::class, 'index'])->name('items.index');
+            Route::get('items/entry', [StandardItemController::class, 'entry'])->name('items.entry');
+            Route::post('items/store', [StandardItemController::class, 'store'])->name('items.store');
+            Route::delete('items/destroy', [StandardItemController::class, 'destroy'])->name('items.destroy');
         });
 
         // Annual Procurement Plan (per fiscal year and region)

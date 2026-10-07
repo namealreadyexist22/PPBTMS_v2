@@ -343,7 +343,7 @@ class AppService
             'end_user'             => $item->ppmp->office->name,
             'description'          => $item->description . ' - ' . $item->project_type->label(),
             'procurement_mode_id'  => $item->procurement_mode_id,
-            'early_procurement'    => false,
+            'early_procurement'    => (bool) $item->is_epa,
             'bid_criteria'         => $isCse ? 'N/A' : 'LCRB',
             'proc_start'           => $item->proc_start,
             'proc_end'             => $item->proc_end,
@@ -364,6 +364,11 @@ class AppService
     {
         $items = $line->ppmpItems()->with('ppmp.office')->get();
         $data = ['estimated_budget' => Money::fromCents($items->sum(fn ($i) => Money::toCents($i->estimated_budget)))];
+
+        // A line with an EPA project is an early procurement activity (the BAC can still edit it)
+        if ($items->contains(fn ($i) => $i->is_epa)) {
+            $data['early_procurement'] = true;
+        }
 
         if ($updateEndUser) {
             $data['end_user'] = $items->map(fn ($i) => $i->ppmp->office->name)->unique()->join('; ');

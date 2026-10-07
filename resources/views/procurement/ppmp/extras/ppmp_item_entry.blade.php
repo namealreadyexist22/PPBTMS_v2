@@ -27,6 +27,25 @@
                     {{-- 1. Procurement project --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Procurement Project</small>
                     <div class="row g-3 mb-3">
+                        @if ($catalog->isNotEmpty())
+                            <div class="col-md-12">
+                                <label class="form-label small fw-semibold text-muted mb-1">Standard Item <span class="fw-normal">(optional — articles the agency regularly buys, with a standard cost and TWG specs)</span></label>
+                                <select name="item_id" class="form-select form-select-sm" id="standard_item">
+                                    <option value="">— Not a standard item —</option>
+                                    @foreach ($catalog->groupBy(fn ($c) => $c->category?->name ?? 'Uncategorized') as $categoryName => $group)
+                                        <optgroup label="{{ $categoryName }}">
+                                            @foreach ($group as $catalogItem)
+                                                <option value="{{ $catalogItem->id }}" @selected(($item->item_id ?? null) == $catalogItem->id)>
+                                                    {{ $catalogItem->code }} — {{ $catalogItem->name }}{{ $catalogItem->isStandard() ? ' (₱' . number_format((float) $catalogItem->standard_unit_cost, 2) . ' / ' . ($catalogItem->unit?->name ?? 'unit') . ')' : '' }}{{ $catalogItem->is_active ? '' : ' [inactive]' }}
+                                                </option>
+                                            @endforeach
+                                        </optgroup>
+                                    @endforeach
+                                </select>
+                                <div class="invalid-feedback"></div>
+                                <div class="alert alert-secondary small py-2 px-3 mt-2 mb-0 d-none" id="standard_item_info"></div>
+                            </div>
+                        @endif
                         <div class="col-md-12">
                             <label class="form-label small fw-semibold text-muted mb-1">PAP</label>
                             <select name="ppmp_pap_id" class="form-select form-select-sm" required>
@@ -51,18 +70,6 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        @if ($catalog->isNotEmpty())
-                            <div class="col-md-12">
-                                <label class="form-label small fw-semibold text-muted mb-1">Catalog Item (optional)</label>
-                                <select name="item_id" class="form-select form-select-sm">
-                                    <option value="">— None —</option>
-                                    @foreach ($catalog as $catalogItem)
-                                        <option value="{{ $catalogItem->id }}" @selected(($item->item_id ?? null) == $catalogItem->id)>{{ $catalogItem->code }} — {{ $catalogItem->name }}</option>
-                                    @endforeach
-                                </select>
-                                <div class="invalid-feedback"></div>
-                            </div>
-                        @endif
                     </div>
 
                     {{-- 2. Quantity and size --}}
@@ -110,11 +117,15 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-6 d-flex align-items-end">
+                        <div class="col-md-6 d-flex align-items-end flex-wrap">
                             <div class="form-check form-switch mb-1">
                                 <input class="form-check-input" type="checkbox" name="pre_proc_conference" value="1" id="pre_proc_conference"
                                     @checked($item->pre_proc_conference ?? false)>
                                 <label class="form-check-label small" for="pre_proc_conference">Pre-Procurement Conference required</label>
+                            </div>
+                            <div class="form-check form-switch mb-1 ms-4">
+                                <input class="form-check-input" type="checkbox" name="is_epa" value="1" id="is_epa" @checked($item->is_epa ?? false)>
+                                <label class="form-check-label small" for="is_epa" title="RA 12009 Sec. 12: may start before the budget is approved, once the Indicative APP is approved; no award until the funds are effective">Early Procurement Activity (EPA)</label>
                             </div>
                         </div>
                         <div class="col-md-4">
@@ -359,6 +370,38 @@
                 + ' → after this project: <strong>' + (after < 0 ? '−₱' + peso(-after) + ' (over budget; the PPMP cannot be submitted)' : '₱' + peso(after)) + '</strong>';
         }
 
+        // Standard item: unit, unit price, specs and type come from the catalog (set by the TWG) and are locked
+        const standardItems = @json($standardItems);
+        const standardSelect = document.getElementById('standard_item');
+        const lockable = ['unit_id', 'unit_cost', 'quantity_size', 'project_type'].map((n) => form.querySelector('[name="' + n + '"]'));
+        function applyStandardItem(fromUser) {
+            const info = document.getElementById('standard_item_info');
+            const s = standardSelect ? standardItems[standardSelect.value] : null;
+            const locked = !!(s && s.cost !== null);
+            lockable.forEach((el) => {
+                if (!el) return;
+                el.classList.toggle('bg-light', locked);
+                el.tagName === 'SELECT' ? el.style.pointerEvents = locked ? 'none' : '' : el.readOnly = locked;
+                el.tabIndex = locked ? -1 : 0;
+            });
+            if (!s) { info?.classList.add('d-none'); recalc(); return; }
+            if (locked) {
+                form.querySelector('[name="unit_id"]').value = s.unit_id;
+                form.querySelector('[name="unit_cost"]').value = peso(s.cost);
+                form.querySelector('[name="quantity_size"]').value = s.specs || '';
+                if (s.type) form.querySelector('[name="project_type"]').value = s.type;
+            }
+            const desc = form.querySelector('[name="description"]');
+            if (fromUser && !desc.value.trim()) desc.value = 'Procurement of ' + s.name;
+            info.classList.remove('d-none');
+            info.innerHTML = locked
+                ? '<i class="fas fa-lock me-1"></i> Standard item: <strong>₱' + peso(s.cost) + ' per ' + (s.unit || 'unit') + '</strong>; unit, price and specifications are set by the TWG' + (s.twg ? ' (' + s.twg + ')' : '') + '. Enter the quantity.'
+                : '<i class="fas fa-info-circle me-1"></i> Catalog item without a standard cost: enter the unit price.';
+            recalc();
+            showBudgetLeft();
+        }
+        standardSelect?.addEventListener('change', () => applyStandardItem(true));
+
         // Attach a file: one row per file, with its kind
         const kinds = @json(config('market_scoping.attachment_kinds'));
         document.getElementById('btn_add_attachment').addEventListener('click', function () {
@@ -378,5 +421,6 @@
         fundSelect.addEventListener('change', showBudgetLeft);
         recalc();
         showBudgetLeft();
+        applyStandardItem(false);
     })();
 </script>

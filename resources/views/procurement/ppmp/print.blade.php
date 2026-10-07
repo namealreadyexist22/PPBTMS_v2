@@ -171,7 +171,7 @@
                             @foreach ($item->attachments->groupBy('kind') as $kind => $files){{ config("market_scoping.attachment_kinds.$kind", $kind) }}{{ $files->count() > 1 ? ' (' . $files->count() . ')' : '' }}<br>@endforeach
                             {{ $item->supporting_documents }}
                         </td>
-                        <td class="c">{{ $item->remarks }}</td>
+                        <td class="c">@if ($item->is_epa)Early Procurement Activity<br>@endif{{ $item->remarks }}</td>
                     </tr>
                 @endforeach
             @empty

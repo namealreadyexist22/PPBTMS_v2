@@ -139,6 +139,11 @@ class PpmpController extends Controller
         $activeOr = fn (string $model, ?int $current) => $model::where('is_active', true)
             ->when($current, fn ($q) => $q->orWhereKey($current))->orderBy('name')->get();
 
+        // Standard items: active ones, plus the one already on the project even if deactivated since
+        $catalog = Item::with(['unit', 'category'])
+            ->where(fn ($q) => $q->where('is_active', true)->when($item?->item_id, fn ($q) => $q->orWhereKey($item->item_id)))
+            ->orderBy('name')->get();
+
         return view('procurement.ppmp.extras.ppmp_item_entry', [
             'modalName'    => 'PPMP_ITEM_MODAL',
             'ppmp'         => $ppmp,
@@ -154,7 +159,17 @@ class PpmpController extends Controller
                     || $fund->fund_group === $budgetFund || $fund->id === $item?->fund_source_id)
                 ->values(),
             'units'        => $activeOr(Unit::class, $item?->unit_id),
-            'catalog'      => Item::active()->orderBy('name')->get(),
+            'catalog'      => $catalog,
+            // For the form script: what a standard item fills in (and locks)
+            'standardItems' => $catalog->mapWithKeys(fn (Item $c) => [$c->id => [
+                'name'    => $c->name,
+                'unit_id' => $c->unit_id,
+                'unit'    => $c->unit?->name,
+                'cost'    => $c->standard_unit_cost !== null ? (float) $c->standard_unit_cost : null,
+                'specs'   => $c->specifications,
+                'type'    => $c->project_type?->value,
+                'twg'     => trim(($c->twg_reference ?? '') . ($c->twg_approved_at ? ' (' . $c->twg_approved_at->format('M d, Y') . ')' : '')),
+            ]]),
             'budgetBase'   => $this->budgetBase($ppmp, $item),
         ]);
     }

@@ -240,6 +240,8 @@
                                 <td>
                                     {{ $item->description }}
                                     <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
+                                        @if ($item->is_epa)<span class="badge bg-info text-dark" title="Early Procurement Activity (RA 12009 Sec. 12): no award until the funds are effective">EPA</span>@endif
+                                        @if ($item->item_id)<span class="badge bg-light text-dark border" title="Standard item: unit, price and specs from the catalog"><i class="fas fa-tag me-1"></i>Standard item</span>@endif
                                         <a href="{{ route('procurement.ppmp.items.market-scoping', [$ppmp, $item]) }}" target="_blank"
                                            class="badge text-decoration-none {{ $item->marketScopingComplete() ? 'bg-success-subtle text-success border' : 'bg-warning-subtle text-dark border' }}"
                                            title="Print the Market Scoping Checklist"><i class="fas fa-clipboard-check me-1"></i>Market scoping {{ $item->marketScopingComplete() ? 'complete' : 'not complete' }}</a>
