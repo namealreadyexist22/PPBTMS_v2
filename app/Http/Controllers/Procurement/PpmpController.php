@@ -149,6 +149,15 @@ class PpmpController extends Controller
             ->filter(fn (Item $c) => ! $c->category || $c->category->allows($ppmp->office, $budgetFund) || $c->id === $item?->item_id)
             ->values();
 
+        // Source of funds picked for a new project: the only one allowed, else the one last used in this PPMP
+        $fundSources = $activeOr(FundSource::class, $item?->fund_source_id)
+            ->filter(fn ($fund) => ! ($budgetFund = $ppmp->office->department?->budget_fund)
+                || $fund->fund_group === $budgetFund || $fund->id === $item?->fund_source_id)
+            ->values();
+        $lastFund = $ppmp->items()->latest('id')->value('fund_source_id');
+        $defaultFundId = $item?->fund_source_id
+            ?? ($fundSources->count() === 1 ? $fundSources->first()->id : ($fundSources->contains('id', $lastFund) ? $lastFund : null));
+
         return view('procurement.ppmp.extras.ppmp_item_entry', [
             'modalName'    => 'PPMP_ITEM_MODAL',
             'ppmp'         => $ppmp,
@@ -159,10 +168,8 @@ class PpmpController extends Controller
             'allotments'   => \App\Enums\AllotmentClass::cases(),
             'modes'        => $activeOr(ProcurementMode::class, $item?->procurement_mode_id),
             // Only the fund the office's department is budgeted under (COB, or SIDA for SIDA departments)
-            'fundSources'  => $activeOr(FundSource::class, $item?->fund_source_id)
-                ->filter(fn ($fund) => ! ($budgetFund = $ppmp->office->department?->budget_fund)
-                    || $fund->fund_group === $budgetFund || $fund->id === $item?->fund_source_id)
-                ->values(),
+            'fundSources'  => $fundSources,
+            'defaultFundId' => $defaultFundId,
             'units'        => $activeOr(Unit::class, $item?->unit_id),
             'catalog'      => $catalog,
             // For the form script: what a standard item fills in (and locks)

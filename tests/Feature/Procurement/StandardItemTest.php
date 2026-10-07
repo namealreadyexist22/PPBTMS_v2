@@ -210,4 +210,25 @@ class StandardItemTest extends TestCase
         $this->actingAs($other)->get(route('procurement.ppmp.items.distribution', [$ppmp, $item]))->assertOk()->assertDontSee('Add office');
         $this->postJson($url, ['rows' => []])->assertForbidden();
     }
+
+    public function test_semi_expendable_class_and_source_of_funds_picked_for_the_office(): void
+    {
+        $legal = Office::create(['code' => '04000', 'acronym' => 'LEGAL', 'name' => 'LEGAL DEPARTMENT', 'type' => 'department', 'budget_fund' => 'regular']);
+        $lawyer = User::factory()->create(['is_activated' => 1, 'office_id' => $legal->id]);
+        $lawyer->givePermissionTo('manage ppmp');
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($legal, 2027, $lawyer);
+        $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'Admin');
+        $cob = FundSource::where('code', 'COB')->value('id');
+
+        // A COB department has one fund source to choose from: it comes selected, with no "Choose..."
+        $form = $this->actingAs($lawyer)->get(route('procurement.ppmp.items.entry', $ppmp))->assertOk()
+            ->assertSee('value="' . $cob . '" data-group="regular" selected', false)->assertSee('Semi-Expendable')->getContent();
+        preg_match('/<select name="fund_source_id".*?<\/select>/s', $form, $fundSelect);
+        $this->assertStringNotContainsString('Choose...', $fundSelect[0]);
+
+        $this->postJson(route('procurement.ppmp.items.store', $ppmp), array_merge($this->line(['ppmp_pap_id' => $pap->id, 'fund_source_id' => $cob, 'allotment_class' => 'semi', 'estimated_budget' => '30,000']), ['proc_start' => '2027-01', 'proc_end' => '2027-02']))->assertOk();
+        $this->assertSame(\App\Enums\AllotmentClass::Semi, $ppmp->items()->sole()->allotment_class);
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Semi-Exp.');
+    }
 }

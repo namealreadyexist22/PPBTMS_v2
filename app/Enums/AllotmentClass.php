@@ -2,17 +2,19 @@
 
 namespace App\Enums;
 
-/** Budget class of a PPMP project; the APP splits estimated budgets into MOOE and CO. */
+/** Allotment class of a PPMP project: MOOE, Capital Outlay or Semi-Expendable. */
 enum AllotmentClass: string
 {
     case Mooe = 'mooe';
     case Co = 'co';
+    case Semi = 'semi';
 
     public function label(): string
     {
         return match ($this) {
             self::Mooe => 'MOOE',
             self::Co   => 'Capital Outlay (CO)',
+            self::Semi => 'Semi-Expendable',
         };
     }
 
@@ -21,6 +23,7 @@ enum AllotmentClass: string
         return match ($this) {
             self::Mooe => 'MOOE',
             self::Co   => 'CO',
+            self::Semi => 'Semi-Exp.',
         };
     }
 }

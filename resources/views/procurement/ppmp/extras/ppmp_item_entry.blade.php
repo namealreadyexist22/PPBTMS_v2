@@ -151,9 +151,9 @@
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold text-muted mb-1">Source of Funds</label>
                             <select name="fund_source_id" class="form-select form-select-sm" required>
-                                <option value="">Choose...</option>
+                                @if ($fundSources->count() !== 1)<option value="">Choose...</option>@endif
                                 @foreach ($fundSources as $fund)
-                                    <option value="{{ $fund->id }}" data-group="{{ $fund->fund_group?->value }}" @selected(($item->fund_source_id ?? null) == $fund->id)>{{ $fund->name }}</option>
+                                    <option value="{{ $fund->id }}" data-group="{{ $fund->fund_group?->value }}" @selected($defaultFundId == $fund->id)>{{ $fund->name }}</option>
                                 @endforeach
                             </select>
                             <div class="invalid-feedback"></div>

@@ -6,7 +6,7 @@
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <div>
         <h5 class="fw-bold mb-0"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation</h5>
-        <div class="text-muted small">Approved budget per department (CO and MOOE together). All offices under a department share its budget, first come, first served; PPMPs that would go over it cannot be submitted.</div>
+        <div class="text-muted small">Approved budget per department (MOOE, CO and semi-expendable together). All offices under a department share its budget, first come, first served; PPMPs that would go over it cannot be submitted.</div>
     </div>
     <form method="GET" class="d-flex align-items-center gap-2">
         <input type="hidden" name="fund" value="{{ $fund->value }}">
@@ -136,7 +136,7 @@
                     <div class="fw-semibold" id="budget_department"></div>
                 </div>
                 <div class="mb-3">
-                    <label class="form-label fw-semibold text-muted mb-1">Approved Budget (PHP) <span class="text-muted fw-normal">— CO and MOOE together</span></label>
+                    <label class="form-label fw-semibold text-muted mb-1">Approved Budget (PHP) <span class="text-muted fw-normal">— MOOE, CO and semi-expendable together</span></label>
                     <input type="text" inputmode="decimal" name="amount" class="form-control form-control-sm text-end js-money" placeholder="0.00">
                     <div class="invalid-feedback"></div>
                 </div>

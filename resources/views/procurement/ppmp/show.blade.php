@@ -186,7 +186,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="small text-muted px-4 py-2">The budget covers CO and MOOE together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served.</div>
+            <div class="small text-muted px-4 py-2">The budget covers MOOE, CO and semi-expendable together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served.</div>
         @endif
     </div>
 @endif
@@ -281,7 +281,7 @@
                                 <td>{{ $item->delivery_period }}</td>
                                 <td class="text-nowrap" title="{{ $item->fundSource->name }} · {{ $item->allotment_class->label() }}">
                                     {{ $item->fundSource->code }}
-                                    <span class="badge {{ $item->allotment_class === \App\Enums\AllotmentClass::Co ? 'bg-warning-subtle text-warning-emphasis' : 'bg-light text-dark' }} border">{{ $item->allotment_class->short() }}</span>
+                                    <span class="badge {{ match ($item->allotment_class) { \App\Enums\AllotmentClass::Co => 'bg-warning-subtle text-warning-emphasis', \App\Enums\AllotmentClass::Semi => 'bg-info-subtle text-info-emphasis', default => 'bg-light text-dark' } }} border">{{ $item->allotment_class->short() }}</span>
                                 </td>
                                 <td class="text-end text-nowrap fw-semibold pe-4">
                                     {{ number_format((float) $item->estimated_budget, 2) }}
