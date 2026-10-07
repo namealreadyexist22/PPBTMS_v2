@@ -166,6 +166,7 @@
                                 @endforeach
                             </select>
                             <div class="invalid-feedback"></div>
+                            <div class="form-text" id="allotment_hint"></div>
                         </div>
                         <div class="col-md-5">
                             <label class="form-label small fw-semibold text-muted mb-1">Estimated Budget / ABA (PHP)</label>
@@ -342,6 +343,27 @@
             }
         }
 
+        // Allotment class suggested from the unit price (capitalization threshold), when the price changes;
+        // the user can still pick another class
+        const threshold = {{ (float) config('procurement.capitalization_threshold') }};
+        const allotment = form.querySelector('[name="allotment_class"]');
+        const typeSelect = form.querySelector('[name="project_type"]');
+        const allotmentHint = document.getElementById('allotment_hint');
+        function suggestAllotment() {
+            const p = toNumber(price.value);
+            allotmentHint.textContent = '';
+            if (typeSelect.value !== 'goods' || isNaN(p) || p <= 0) return;
+            if (p >= threshold && allotment.value !== 'co') {
+                allotment.value = 'co';
+                allotmentHint.textContent = 'Suggested: Capital Outlay (unit price ₱' + peso(threshold) + ' or more). Change it if this does not apply.';
+            } else if (p < threshold && allotment.value === 'co') {
+                allotment.value = 'semi';
+                allotmentHint.textContent = 'Suggested: Semi-Expendable (unit price below ₱' + peso(threshold) + '); choose MOOE for consumables.';
+            }
+        }
+        price.addEventListener('input', suggestAllotment);
+        typeSelect.addEventListener('change', suggestAllotment);
+
         // Budget left for this PPMP per fund (COB / SIDA), from the tightest allocation above the office
         const budgetBase = @json($budgetBase);
         const fundSelect = form.querySelector('[name="fund_source_id"]');
@@ -393,6 +415,7 @@
             }
             const desc = form.querySelector('[name="description"]');
             if (fromUser && !desc.value.trim()) desc.value = 'Procurement of ' + s.name;
+            if (fromUser && locked) suggestAllotment();
             info.classList.remove('d-none');
             info.innerHTML = locked
                 ? '<i class="fas fa-lock me-1"></i> Standard item: <strong>₱' + peso(s.cost) + ' per ' + (s.unit || 'unit') + '</strong>; unit, price and specifications are set by the TWG' + (s.twg ? ' (' + s.twg + ')' : '') + '. Enter the quantity.'
