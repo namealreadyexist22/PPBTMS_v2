@@ -17,6 +17,7 @@ use App\Http\Controllers\Procurement\BudgetAllocationController;
 use App\Http\Controllers\Procurement\StandardItemController;
 use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
+use App\Http\Controllers\Procurement\PurchaseRequestController;
 use Illuminate\Support\Facades\Route;
 
     Route::get('/', function () {
@@ -170,6 +171,24 @@ use Illuminate\Support\Facades\Route;
             Route::post('app/{app}/approve', [AppController::class, 'approve'])->name('app.approve');
             Route::post('app/{app}/return', [AppController::class, 'returnToSecretariat'])->name('app.return');
             Route::post('app/{app}/update-version', [AppController::class, 'createUpdated'])->name('app.update-version');
+        });
+
+        // Purchase Requests (PR) and Job Requests (JR); {purchaseRequest} is the uuid
+        Route::middleware('perm:manage requests')->group(function () {
+            Route::get('requests', [PurchaseRequestController::class, 'index'])->name('requests.index');
+            Route::get('requests/entry', [PurchaseRequestController::class, 'entry'])->name('requests.entry');
+            Route::post('requests/store', [PurchaseRequestController::class, 'store'])->name('requests.store');
+            Route::get('requests/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->name('requests.show');
+            Route::get('requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])->name('requests.print');
+            Route::post('requests/{purchaseRequest}/header', [PurchaseRequestController::class, 'header'])->name('requests.header');
+            Route::post('requests/{purchaseRequest}/signatories', [PurchaseRequestController::class, 'signatories'])->name('requests.signatories');
+            Route::get('requests/{purchaseRequest}/lines/entry', [PurchaseRequestController::class, 'lineEntry'])->name('requests.lines.entry');
+            Route::post('requests/{purchaseRequest}/lines/store', [PurchaseRequestController::class, 'lineStore'])->name('requests.lines.store');
+            Route::delete('requests/{purchaseRequest}/lines/destroy', [PurchaseRequestController::class, 'lineDestroy'])->name('requests.lines.destroy');
+            Route::post('requests/{purchaseRequest}/submit', [PurchaseRequestController::class, 'submit'])->name('requests.submit');
+            Route::post('requests/{purchaseRequest}/revise', [PurchaseRequestController::class, 'revise'])->name('requests.revise');
+            Route::post('requests/{purchaseRequest}/cancel', [PurchaseRequestController::class, 'cancel'])->name('requests.cancel');
+            Route::delete('requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->name('requests.destroy');
         });
 
         Route::middleware('perm:manage ppmp')->group(function () {
