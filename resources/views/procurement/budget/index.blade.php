@@ -8,20 +8,22 @@
         <h5 class="fw-bold mb-0"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation</h5>
         <div class="text-muted small">Approved budget per department (MOOE, CO and semi-expendable together). All offices under a department share its budget, first come, first served; PPMPs that would go over it cannot be submitted.</div>
     </div>
-    <form method="GET" class="d-flex align-items-center gap-2">
+    <form method="GET" class="d-flex align-items-center gap-2" id="budget_fy_form">
         <input type="hidden" name="fund" value="{{ $fund->value }}">
         <label class="small text-muted">Fiscal Year</label>
-        <select name="fy" class="form-select form-select-sm" style="width: 110px;" onchange="this.form.submit()">
+        <select name="fy" class="form-select form-select-sm" style="width: 110px;" id="budget_fy">
             @foreach ($years as $year)<option value="{{ $year }}" @selected($year === $fiscalYear)>{{ $year }}</option>@endforeach
         </select>
     </form>
 </div>
 
+{{-- Swapped in place when the fund tab or year changes (no full reload) --}}
+<div id="budget_view">
 <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white pt-3 pb-0 px-4" style="border-bottom: 1px solid #f1f5f9;">
         <ul class="nav nav-tabs border-0">
             @foreach (\App\Enums\FundGroup::cases() as $f)
-                <li class="nav-item"><a class="nav-link {{ $f === $fund ? 'active fw-semibold' : 'text-muted' }}" href="{{ route('procurement.budget.index', ['fy' => $fiscalYear, 'fund' => $f->value]) }}">{{ $f->label() }}</a></li>
+                <li class="nav-item"><a class="nav-link budget-nav {{ $f === $fund ? 'active fw-semibold' : 'text-muted' }}" href="{{ route('procurement.budget.index', ['fy' => $fiscalYear, 'fund' => $f->value]) }}">{{ $f->label() }}</a></li>
             @endforeach
         </ul>
     </div>
@@ -152,17 +154,43 @@
         </form>
     </div>
 </div>
+</div>
 @endsection
 
 @push('script')
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
-    const form = $('#form_budget');
     const modal = () => bootstrap.Modal.getOrCreateInstance(document.getElementById('BUDGET_MODAL'));
     const peso = (n) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+    // Fund tabs and fiscal year: load the other view and swap it in, without reloading the page
+    function loadView(url, push = true) {
+        const view = $('#budget_view').css({ opacity: .5, pointerEvents: 'none' });
+        $.get(url)
+            .done(function (html) {
+                const fresh = $('<div>').append($.parseHTML(html)).find('#budget_view');
+                if (!fresh.length) { window.location.href = url; return; }
+                view.replaceWith(fresh);
+                $('#budget_fy_form [name=fund]').val(new URL(url, window.location.href).searchParams.get('fund') || 'regular');
+                if (push) history.pushState({ budget: true }, '', url);
+            })
+            .fail(() => { window.location.href = url; })
+            .always(() => $('#budget_view').css({ opacity: '', pointerEvents: '' }));
+    }
+
+    $(document).on('click', '.budget-nav', function (e) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;   // let open-in-new-tab work
+        e.preventDefault();
+        if (!$(this).hasClass('active')) loadView(this.href);
+    });
+    $('#budget_fy').on('change', function () {
+        loadView('{{ route("procurement.budget.index") }}?' + $('#budget_fy_form').serialize());
+    });
+    window.addEventListener('popstate', () => loadView(window.location.href, false));
+
     $(document).on('click', '.btn-set', function () {
         const data = $(this).data();
+        const form = $('#form_budget');
         form.find('.is-invalid').removeClass('is-invalid');
         form.find('[name=department_id]').val(data.department);
         form.find('[name=amount]').val(data.amount || '');
@@ -173,20 +201,26 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // thousands separators while typing
-    form.find('.js-money').on('blur', function () {
+    $(document).on('blur', '#form_budget .js-money', function () {
         const n = parseFloat(this.value.replace(/,/g, ''));
         if (!isNaN(n)) this.value = peso(n);
-    }).on('input', function () {
+    }).on('input', '#form_budget .js-money', function () {
         const raw = this.value.replace(/[^0-9.]/g, '');
         const [w, d] = raw.split('.');
         this.value = (w || '').replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (d !== undefined ? '.' + d.slice(0, 2) : '');
     });
 
-    form.on('submit', function (e) {
+    $(document).on('submit', '#form_budget', function (e) {
         e.preventDefault();
+        const form = $(this);
         form.find('.is-invalid').removeClass('is-invalid');
         $.post('{{ route("procurement.budget.store") }}', form.serialize() + '&_token={{ csrf_token() }}')
-            .done((res) => { toastr.success(res.message, 'Saved'); setTimeout(() => window.location.reload(), 500); })
+            .done((res) => {
+                toastr.success(res.message, 'Saved');
+                // Refresh the table in place once the dialog has closed (it is swapped out with the view)
+                document.getElementById('BUDGET_MODAL').addEventListener('hidden.bs.modal', () => loadView(window.location.href, false), { once: true });
+                modal().hide();
+            })
             .fail(function (xhr) {
                 const res = xhr.responseJSON || {};
                 $.each(res.errors || {}, (k, m) => form.find('[name="' + k + '"]').addClass('is-invalid').siblings('.invalid-feedback').text(m[0]));
