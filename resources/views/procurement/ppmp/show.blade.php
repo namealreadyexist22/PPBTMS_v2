@@ -4,9 +4,6 @@
 @php
     $statusColors = ['draft' => 'secondary', 'submitted' => 'primary', 'returned' => 'warning',
                      'approved' => 'success', 'superseded' => 'dark'];
-    $returned = $ppmp->status === \App\Enums\PpmpStatus::Returned
-        ? $ppmp->signatories->where('role', 'returned')->sortByDesc('signed_at')->first()
-        : null;
     $budgetOver = $budgetRows->where('over', true)->isNotEmpty();
     $pesoC = fn ($c) => number_format($c / 100, 2);
 @endphp
@@ -17,6 +14,8 @@
     </a>
 </div>
 
+{{-- Redrawn in place after adding / editing / removing PAPs and projects (no full reload) --}}
+<div id="ppmp_view">
 {{-- Header --}}
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
     <div class="card-body p-4">
@@ -121,13 +120,6 @@
                 {{ $noScoping }} {{ \Illuminate\Support\Str::plural('project', $noScoping) }} still {{ $noScoping === 1 ? 'needs' : 'need' }} the Market Scoping Checklist (RA 12009 Sec. 10). Open a project and fill in its checklist; attach the market survey there too.
             </div>
         @endif
-        @if ($returned)
-            <div class="alert alert-warning small mt-3 mb-0">
-                <i class="fas fa-undo me-1"></i>
-                <strong>Returned by {{ $returned->name_snapshot }}</strong> on {{ $returned->signed_at->format('M d, Y h:i A') }}:
-                {{ $returned->remarks }}
-            </div>
-        @endif
         @if ($ppmp->status === \App\Enums\PpmpStatus::Superseded)
             <div class="alert alert-secondary small mt-3 mb-0">
                 <i class="fas fa-info-circle me-1"></i> This version was replaced by a newer approved amendment.
@@ -144,15 +136,6 @@
             <div>
                 <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation — FY {{ $ppmp->fiscal_year }}</h6>
                 @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-                @foreach ($budgetLimits as $fundValue => $limit)
-                    @php $left = $limit['available'] - $limit['mine']; @endphp
-                    <span class="badge rounded-pill {{ $left < 0 ? 'bg-danger' : 'bg-success' }} px-3 py-2" style="font-size: .75rem;">
-                        {{ \App\Enums\FundGroup::from($fundValue)->label() }}:
-                        @if ($left < 0) over by ₱{{ $pesoC(-$left) }} @else ₱{{ $pesoC($left) }} left to plan @endif
-                    </span>
-                @endforeach
             </div>
         </div>
         @if (! $department)
@@ -345,6 +328,8 @@
     </div>
 </div>
 
+</div>{{-- /#ppmp_view --}}
+
 <div id="modal-body"></div>
 @endsection
 
@@ -355,7 +340,32 @@ document.addEventListener('DOMContentLoaded', function () {
     const itemModalName = 'PPMP_ITEM_MODAL';
     let isModalOpen = false;
 
-    // POST/DELETE helper: on success show the message, then reload (or go to `redirect`)
+    // Redraw the header, budget and projects from the server, keeping the scroll position
+    function refreshView() {
+        const y = window.scrollY;
+        return $.get(window.location.href).done(function (html) {
+            const fresh = $('<div>').append($.parseHTML(html)).find('#ppmp_view');
+            if (!fresh.length) { window.location.reload(); return; }
+            $('#ppmp_view').replaceWith(fresh);
+            window.scrollTo(0, y);
+        }).fail(() => window.location.reload());
+    }
+    window.refreshPpmpView = refreshView;   // used by the distribution dialog
+
+    // Changes to PAPs / projects: show the message and redraw the tables in place
+    function sendEdit(url, data, method = 'POST') {
+        return $.ajax({
+            url: url, type: 'POST',
+            data: Object.assign({ _token: csrf, _method: method }, data || {}),
+            success: function (response) { toastr.success(response.message, 'Success'); refreshView(); },
+            error: function (xhr) {
+                const res = xhr.responseJSON || {};
+                toastr.error((res.errors ? Object.values(res.errors)[0][0] : null) || res.message || 'Something went wrong.', 'Error');
+            }
+        });
+    }
+
+    // Workflow (submit, return, amend): show the message, then reload (or go to `url`)
     function sendAction(url, data, method = 'POST') {
         return $.ajax({
             url: url,
@@ -423,7 +433,7 @@ document.addEventListener('DOMContentLoaded', function () {
             success: function (response) {
                 toastr.success(response.message, 'Success');
                 bootstrap.Modal.getInstance(document.getElementById(itemModalName)).hide();
-                setTimeout(function () { window.location.reload(); }, 500);
+                refreshView();
             },
             error: function (xhr) {
                 saveBtn.prop('disabled', false).html(originalBtnHtml);
@@ -490,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
             confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b',
             confirmButtonText: 'Yes, remove', reverseButtons: true
         }).then((result) => {
-            if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.items.destroy", $ppmp) }}', { id: itemId }, 'DELETE');
+            if (result.isConfirmed) sendEdit('{{ route("procurement.ppmp.items.destroy", $ppmp) }}', { id: itemId }, 'DELETE');
         });
     });
 
@@ -519,7 +529,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    $('#btn_add_pap').on('click', function (e) { e.preventDefault(); loadPapModal(); });
+    $(document).on('click', '#btn_add_pap', function (e) { e.preventDefault(); loadPapModal(); });
     $(document).on('click', '.btn-edit-pap', function (e) { e.preventDefault(); loadPapModal($(this).data('id')); });
 
     $(document).off('submit', '#form_ppmp_pap').on('submit', '#form_ppmp_pap', function (e) {
@@ -538,7 +548,7 @@ document.addEventListener('DOMContentLoaded', function () {
             success: function (response) {
                 toastr.success(response.message, 'Success');
                 bootstrap.Modal.getInstance(document.getElementById('PPMP_PAP_MODAL')).hide();
-                setTimeout(function () { window.location.reload(); }, 500);
+                refreshView();
             },
             error: function (xhr) {
                 $('#btn_save_pap').prop('disabled', false);
@@ -564,12 +574,12 @@ document.addEventListener('DOMContentLoaded', function () {
             title: 'Remove this PAP?', text: 'Only a PAP with no projects can be removed.', icon: 'warning', showCancelButton: true,
             confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b', confirmButtonText: 'Yes, remove', reverseButtons: true
         }).then((result) => {
-            if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.paps.destroy", $ppmp) }}', { id: papId }, 'DELETE');
+            if (result.isConfirmed) sendEdit('{{ route("procurement.ppmp.paps.destroy", $ppmp) }}', { id: papId }, 'DELETE');
         });
     });
 
     // ---------- Workflow ----------
-    $('#btn_submit').on('click', function () {
+    $(document).on('click', '#btn_submit', function () {
         Swal.fire({
             title: 'Submit for approval?',
             html: 'The PPMP will be locked and sent to <b>{{ $approver?->fullname ?? "the approving head" }}</b> to be combined into the Division PPMP.',
@@ -582,7 +592,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    $('#btn_return').on('click', function () {
+    $(document).on('click', '#btn_return', function () {
         Swal.fire({
             title: 'Return to office', input: 'textarea', inputPlaceholder: 'Reason for returning (required)',
             inputValidator: (value) => !value ? 'Please state the reason.' : undefined,
@@ -594,7 +604,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    $('#btn_amend').on('click', function () {
+    $(document).on('click', '#btn_amend', function () {
         const indicative = {{ $ppmp->type === \App\Enums\PpmpType::Indicative ? 'true' : 'false' }};
         Swal.fire({
             title: 'Amend this PPMP?',
@@ -613,7 +623,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    $('#btn_delete_ppmp').on('click', function () {
+    $(document).on('click', '#btn_delete_ppmp', function () {
         Swal.fire({
             title: 'Delete this draft PPMP?', text: 'All its procurement projects will be removed.',
             icon: 'warning', showCancelButton: true,

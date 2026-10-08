@@ -139,7 +139,11 @@
             type: 'POST', contentType: 'application/json',
             headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
             data: JSON.stringify({ rows: rows }),
-            success: (res) => { toastr.success(res.message); setTimeout(() => window.location.reload(), 500); },
+            success: (res) => {
+                toastr.success(res.message);
+                bootstrap.Modal.getInstance(document.getElementById('DISTRIBUTION_MODAL'))?.hide();
+                window.refreshPpmpView ? window.refreshPpmpView() : setTimeout(() => window.location.reload(), 500);
+            },
             error: (xhr) => {
                 const res = xhr.responseJSON || {};
                 toastr.error(res.message || Object.values(res.errors || {})[0]?.[0] || 'Could not save.');

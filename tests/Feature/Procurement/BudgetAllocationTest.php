@@ -232,7 +232,7 @@ class BudgetAllocationTest extends TestCase
         $this->actingAs($staff)->get(route('procurement.ppmp.show', $staffPpmp))->assertOk()
             ->assertSee('Over budget.')->assertSee('PPSPD — PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT budget, shared by its units')
             ->assertSee('id="btn_submit" disabled', false)
-            ->assertSee('over by ₱500,000.00')
+            ->assertDontSee('left to plan')
             ->assertSee('-500,000.00');
         $this->postJson(route('procurement.ppmp.submit', $staffPpmp))->assertStatus(422);
 
