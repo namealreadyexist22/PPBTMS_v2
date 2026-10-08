@@ -26,6 +26,7 @@
                 <h4 class="fw-bold mb-1">
                     {{ $ppmp->ppmp_no }}
                     <span class="badge bg-{{ $statusColors[$ppmp->status->value] ?? 'secondary' }} align-middle ms-1" style="font-size: .7rem;">{{ $ppmp->status->label() }}</span>
+                    <span class="badge {{ $ppmp->type === \App\Enums\PpmpType::Indicative ? 'bg-info text-dark' : 'bg-light text-dark border' }} align-middle" style="font-size: .7rem;">{{ $ppmp->type->label() }}</span>
                 </h4>
                 <div class="text-muted small">{{ $ppmp->office->label() }} · {{ $ppmp->region->label() }}</div>
             </div>
@@ -594,15 +595,21 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     $('#btn_amend').on('click', function () {
+        const indicative = {{ $ppmp->type === \App\Enums\PpmpType::Indicative ? 'true' : 'false' }};
         Swal.fire({
             title: 'Amend this PPMP?',
-            text: 'A new draft version will be created from this approved PPMP. This version stays in effect until the amendment is approved.',
+            html: 'A new draft version will be created from this approved PPMP. This version stays in effect until the amendment is approved.'
+                + (indicative ? '<div class="text-start small mt-3"><label class="fw-semibold mb-1">New version is</label>'
+                    + '<select id="amend_type" class="form-select form-select-sm">'
+                    + '<option value="final">Final PPMP (the GAA is approved)</option>'
+                    + '<option value="indicative">Still Indicative (changes to the indicative plan)</option></select></div>' : ''),
             input: 'textarea', inputPlaceholder: 'Reason for amendment (optional)',
             icon: 'question', showCancelButton: true,
             confirmButtonColor: '#0d6efd', cancelButtonColor: '#64748b',
-            confirmButtonText: 'Create amendment', reverseButtons: true
+            confirmButtonText: 'Create amendment', reverseButtons: true,
+            preConfirm: (remarks) => ({ remarks: remarks, type: indicative ? document.getElementById('amend_type').value : '' })
         }).then((result) => {
-            if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.amend", $ppmp) }}', { remarks: result.value });
+            if (result.isConfirmed) sendAction('{{ route("procurement.ppmp.amend", $ppmp) }}', result.value);
         });
     });
 

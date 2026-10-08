@@ -375,4 +375,21 @@ class PpmpWorkflowTest extends TestCase
         $this->assertSame($department->id, $manager->department->id);
         $this->assertNotContains($department->id, Office::assignableTo($admin)->pluck('id')->all());
     }
+
+    public function test_indicative_ppmp_is_amended_into_the_final(): void
+    {
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff, \App\Enums\PpmpType::Indicative);
+        $this->addLine($ppmp, $this->line(['is_epa' => true]));
+        $this->ppmps->submit($ppmp, $this->staff);
+        $ppmp = $this->ppmps->approve($ppmp->fresh(), $this->head);
+        $this->assertSame(\App\Enums\PpmpType::Indicative, $ppmp->type);
+
+        // Through the page: Amend -> "Final PPMP"
+        $this->staff->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('manage ppmp'));
+        $this->actingAs($this->staff)->postJson(route('procurement.ppmp.amend', $ppmp), ['type' => 'final', 'remarks' => 'GAA approved'])->assertOk();
+
+        $final = Ppmp::where('amended_from_id', $ppmp->id)->sole();
+        $this->assertSame(\App\Enums\PpmpType::Final, $final->type);
+        $this->assertTrue((bool) $final->items()->sole()->is_epa);   // EPA flag carried over
+    }
 }

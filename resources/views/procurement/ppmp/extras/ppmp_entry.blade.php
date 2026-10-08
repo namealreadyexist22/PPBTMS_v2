@@ -35,16 +35,32 @@
                         </div>
 
                         <div class="row g-3 mb-3">
-                            <div class="col-12">
+                            <div class="col-6">
                                 <label class="form-label small fw-semibold text-muted mb-1">Fiscal Year</label>
-                                <select name="fiscal_year" class="form-select form-select-sm" required>
+                                <select name="fiscal_year" class="form-select form-select-sm" required
+                                        onchange="this.form.type.value = parseInt(this.value, 10) > {{ now()->year }} ? 'indicative' : 'final'">
                                     @foreach ($years as $year)
                                         <option value="{{ $year }}" @selected($year === now()->year + 1)>{{ $year }}</option>
                                     @endforeach
                                 </select>
                                 <div class="invalid-feedback"></div>
                             </div>
-
+                            <div class="col-6">
+                                <label class="form-label small fw-semibold text-muted mb-1">Type</label>
+                                <select name="type" class="form-select form-select-sm">
+                                    @foreach ($types as $type)
+                                        {{-- Next year's PPMP is usually prepared before the GAA: Indicative --}}
+                                        <option value="{{ $type->value }}" @selected($type === \App\Enums\PpmpType::Indicative)>{{ $type->label() }}</option>
+                                    @endforeach
+                                </select>
+                                <div class="invalid-feedback"></div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-text mt-0">
+                                    <b>Indicative</b>: prepared from the budget proposal (NEP), before the GAA is approved. It goes to the Indicative APP and is the basis for <b>Early Procurement Activities (EPA)</b>; tick EPA on the projects to bid early.
+                                    <b>Final</b>: based on the approved budget (GAA). After the GAA, amend an approved Indicative PPMP into the Final.
+                                </div>
+                            </div>
                         </div>
 
                         <div class="alert alert-light border small py-2 mb-3">

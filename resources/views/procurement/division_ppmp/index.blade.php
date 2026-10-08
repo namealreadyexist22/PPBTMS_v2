@@ -135,8 +135,10 @@
                             <div class="col-6">
                                 <label class="form-label fw-semibold text-muted mb-1">Type</label>
                                 <select name="type" class="form-select form-select-sm">
+                                    {{-- Defaults to Indicative when the submitted section PPMPs are indicative --}}
+                                    @php $defaultType = $d['sections']->where('status', \App\Enums\PpmpStatus::Submitted)->contains(fn ($p) => $p->type === \App\Enums\PpmpType::Indicative) ? \App\Enums\PpmpType::Indicative : \App\Enums\PpmpType::Final; @endphp
                                     @foreach ($types as $type)
-                                        <option value="{{ $type->value }}" @selected($type === \App\Enums\PpmpType::Final)>{{ $type->label() }}</option>
+                                        <option value="{{ $type->value }}" @selected($type === $defaultType)>{{ $type->label() }}</option>
                                     @endforeach
                                 </select>
                             </div>

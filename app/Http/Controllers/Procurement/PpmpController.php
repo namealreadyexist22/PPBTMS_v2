@@ -411,7 +411,8 @@ class PpmpController extends Controller
         $this->authorizeEdit($request, $ppmp);
 
         try {
-            $copy = $this->ppmpService->amend($ppmp, $request->user(), null, $request->input('remarks'));
+            // An approved Indicative PPMP is amended into the Final one once the GAA is approved
+            $copy = $this->ppmpService->amend($ppmp, $request->user(), PpmpType::tryFrom((string) $request->input('type')), $request->input('remarks'));
 
             return response()->json([
                 'status'  => 'success',
