@@ -15,6 +15,8 @@
     </a>
 </div>
 
+{{-- Header and items are redrawn in place after item changes (no full reload) --}}
+<div id="pr_header" data-total="{{ number_format((float) $pr->total_amount, 2) }}">
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
     <div class="card-body p-4">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
@@ -104,6 +106,7 @@
         @endif
     </div>
 </div>
+</div>
 
 {{-- Details and signatories --}}
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
@@ -149,6 +152,7 @@
     </div>
 </div>
 
+<div id="pr_items">
 {{-- Items --}}
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white pt-3 pb-2 px-4 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #f1f5f9;">
@@ -213,6 +217,7 @@
         </div>
     @endif
 </div>
+</div>
 
 {{-- Print: set the signatories, then print --}}
 @if ($canPrintSign)
@@ -256,6 +261,27 @@ document.addEventListener('DOMContentLoaded', function () {
     function errorText(xhr) {
         const res = xhr.responseJSON || {};
         return res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Something went wrong.');
+    }
+
+    // Redraw the header (total, Submit button) and the items table from the server
+    function refreshView() {
+        const y = window.scrollY;
+        return $.get(window.location.href).done(function (html) {
+            const page = $('<div>').append($.parseHTML(html));
+            if (!page.find('#pr_items').length) { window.location.reload(); return; }
+            $('#pr_header').replaceWith(page.find('#pr_header'));
+            $('#pr_items').replaceWith(page.find('#pr_items'));
+            window.scrollTo(0, y);
+        }).fail(() => window.location.reload());
+    }
+
+    function sendEdit(url, data, method = 'POST') {
+        return $.ajax({
+            url: url, type: 'POST',
+            data: Object.assign({ _token: csrf, _method: method }, data || {}),
+            success: (res) => { toastr.success(res.message, 'Success'); refreshView(); },
+            error: (xhr) => toastr.error(errorText(xhr), 'Error')
+        });
     }
 
     function sendAction(url, data, method = 'POST') {
@@ -308,7 +334,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).fail(function (xhr) { isModalOpen = false; toastr.error(errorText(xhr), 'Error'); });
     }
 
-    $('#btn_add_line').on('click', () => loadLineModal());
+    $(document).on('click', '#btn_add_line', () => loadLineModal());
     $(document).on('click', '.btn-edit-line', function () { loadLineModal($(this).data('id')); });
 
     $(document).off('submit', '#form_request_line').on('submit', '#form_request_line', function (e) {
@@ -324,7 +350,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .done(function (res) {
                 toastr.success(res.message, 'Success');
                 bootstrap.Modal.getInstance(document.getElementById('REQUEST_LINE_MODAL')).hide();
-                setTimeout(() => window.location.reload(), 400);
+                refreshView();
             })
             .fail(function (xhr) {
                 $('#btn_save_line').prop('disabled', false);
@@ -346,17 +372,17 @@ document.addEventListener('DOMContentLoaded', function () {
     $(document).on('click', '.btn-delete-line', function () {
         const id = $(this).data('id');
         Swal.fire({ title: 'Remove this item?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Remove', reverseButtons: true })
-            .then((r) => { if (r.isConfirmed) sendAction('{{ route("procurement.requests.lines.destroy", $pr) }}', { id: id }, 'DELETE'); });
+            .then((r) => { if (r.isConfirmed) sendEdit('{{ route("procurement.requests.lines.destroy", $pr) }}', { id: id }, 'DELETE'); });
     });
 
     // ---------- Workflow ----------
-    $('#btn_submit').on('click', function () {
+    $(document).on('click', '#btn_submit', function () {
         Swal.fire({
             title: 'Submit this {{ $pr->kind->short() }}?',
             html: @if ($pr->revised_from_id)
                 'It replaces <b>{{ $pr->revisedFrom?->title() }}</b> and keeps its number. The PPMP charges change to this revision\'s amounts.'
             @else
-                'It gets its {{ $pr->kind->short() }} number and <b>₱{{ number_format((float) $pr->total_amount, 2) }}</b> is charged to the PPMP projects. It can no longer be edited, only revised or cancelled.'
+                'It gets its {{ $pr->kind->short() }} number and <b>₱' + $('#pr_header').data('total') + '</b> is charged to the PPMP projects. It can no longer be edited, only revised or cancelled.'
             @endif,
             icon: 'question', showCancelButton: true, confirmButtonColor: '#0d6efd', confirmButtonText: 'Submit', reverseButtons: true
         }).then((r) => {
@@ -367,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    $('#btn_revise').on('click', function () {
+    $(document).on('click', '#btn_revise', function () {
         Swal.fire({
             title: 'Revise {{ $pr->title() }}?',
             text: 'A draft revision with the same number and signatories is created. This one stays in effect until the revision is submitted.',
@@ -375,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).then((r) => { if (r.isConfirmed) sendAction('{{ route("procurement.requests.revise", $pr) }}'); });
     });
 
-    $('#btn_cancel').on('click', function () {
+    $(document).on('click', '#btn_cancel', function () {
         Swal.fire({
             title: 'Cancel {{ $pr->title() }}?', input: 'textarea', inputPlaceholder: 'Reason (required)',
             inputValidator: (v) => !v ? 'Please state the reason.' : undefined,
@@ -384,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).then((r) => { if (r.isConfirmed) sendAction('{{ route("procurement.requests.cancel", $pr) }}', { reason: r.value }); });
     });
 
-    $('#btn_delete').on('click', function () {
+    $(document).on('click', '#btn_delete', function () {
         Swal.fire({ title: 'Delete this draft?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Delete', reverseButtons: true })
             .then((r) => { if (r.isConfirmed) sendAction('{{ route("procurement.requests.destroy", $pr) }}', {}, 'DELETE'); });
     });

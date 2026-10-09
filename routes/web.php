@@ -214,6 +214,7 @@ use Illuminate\Support\Facades\Route;
             Route::post('ppmp/{ppmp}/submit', [PpmpController::class, 'submit'])->name('ppmp.submit');
             Route::post('ppmp/{ppmp}/return', [PpmpController::class, 'returnToOffice'])->name('ppmp.return');
             Route::post('ppmp/{ppmp}/amend', [PpmpController::class, 'amend'])->name('ppmp.amend');
+            Route::post('ppmp/{ppmp}/signatories', [PpmpController::class, 'signatories'])->name('ppmp.signatories');
 
             // Division PPMP: sections combined, approved by the division head -> PPMP No. 1, 2, 3...
             Route::get('division-ppmp', [DivisionPpmpController::class, 'index'])->name('division-ppmp.index');

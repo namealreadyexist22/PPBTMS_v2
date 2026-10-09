@@ -39,6 +39,11 @@
                         <i class="fas fa-clipboard-check me-1"></i> Print Checklists
                     </a>
                 @endif
+                @if ($canSetSignatories)
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#PPMP_SIGNATORIES_MODAL" title="Prepared by / Submitted by printed on the PPMP">
+                        <i class="fas fa-signature me-1"></i> Signatories
+                    </button>
+                @endif
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#PPMP_HISTORY_MODAL">
                     <i class="fas fa-history me-1"></i> History <span class="badge bg-secondary ms-1">{{ $ppmp->signatories->count() }}</span>
                 </button>
@@ -330,6 +335,47 @@
 
 </div>{{-- /#ppmp_view --}}
 
+{{-- Prepared by / Submitted by printed on the PPMP and its checklists --}}
+@if ($canSetSignatories)
+@php $current = ['prepared' => $ppmp->prepared_by_name, 'submitted' => $ppmp->submitted_by_name]; @endphp
+<div class="modal fade" id="PPMP_SIGNATORIES_MODAL" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <form class="modal-content border-0 shadow" id="form_ppmp_signatories" autocomplete="off">
+            <div class="modal-header bg-light py-3">
+                <h5 class="modal-title fw-bold"><i class="fas fa-signature me-2"></i>PPMP Signatories</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 small">
+                <p class="text-muted">Names printed on the PPMP and its Market Scoping Checklists. Leave a name blank to use the default: the person who prepared the PPMP, and the approving head. They carry over to amendments.</p>
+                <div class="row g-3">
+                    @foreach (['prepared' => ['Prepared by', 'Head of the end-user office or its authorized representative'], 'submitted' => ['Submitted by', 'Head of the end-user unit / approving head']] as $who => [$label, $hint])
+                        <div class="col-12"><div class="fw-semibold">{{ $label }} <span class="text-muted fw-normal">— {{ $hint }}</span></div></div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted mb-1">Printed name</label>
+                            <input type="text" name="{{ $who }}_by_name" class="form-control form-control-sm ppmp-signatory" list="ppmp_signatory_users" maxlength="255"
+                                   data-designation="{{ $who }}_by_designation" value="{{ $ppmp->{$who . '_by_name'} }}" placeholder="{{ $printSignatories[$who]['name'] ?? 'Name' }} (default)">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label text-muted mb-1">Designation</label>
+                            <input type="text" name="{{ $who }}_by_designation" class="form-control form-control-sm" maxlength="255"
+                                   value="{{ $ppmp->{$who . '_by_designation'} }}" placeholder="{{ $printSignatories[$who]['position'] ?? 'Designation' }}">
+                        </div>
+                    @endforeach
+                </div>
+                <datalist id="ppmp_signatory_users">
+                    @foreach ($signatoryUsers as $u)<option value="{{ $u->fullname }}">{{ $u->designation }}</option>@endforeach
+                </datalist>
+            </div>
+            <div class="modal-footer bg-light py-2">
+                <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-sm btn-primary px-3"><i class="fas fa-save me-1"></i> Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
+
+
 <div id="modal-body"></div>
 @endsection
 
@@ -351,6 +397,22 @@ document.addEventListener('DOMContentLoaded', function () {
         }).fail(() => window.location.reload());
     }
     window.refreshPpmpView = refreshView;   // used by the distribution dialog
+
+    // Signatories: picking a person fills in their designation
+    const signatoryDesignations = @json($canSetSignatories ? $signatoryUsers->pluck('designation', 'fullname') : []);
+    $(document).on('change', '.ppmp-signatory', function () {
+        const target = $('[name="' + $(this).data('designation') + '"]');
+        if (signatoryDesignations[this.value] && !target.val()) target.val(signatoryDesignations[this.value]);
+    });
+    $(document).on('submit', '#form_ppmp_signatories', function (e) {
+        e.preventDefault();
+        $.post('{{ route("procurement.ppmp.signatories", $ppmp) }}', $(this).serialize() + '&_token=' + csrf)
+            .done(function (res) {
+                toastr.success(res.message, 'Saved');
+                bootstrap.Modal.getInstance(document.getElementById('PPMP_SIGNATORIES_MODAL')).hide();
+            })
+            .fail((xhr) => toastr.error(xhr.responseJSON?.message || 'Could not save.', 'Error'));
+    });
 
     // Changes to PAPs / projects: show the message and redraw the tables in place
     function sendEdit(url, data, method = 'POST') {

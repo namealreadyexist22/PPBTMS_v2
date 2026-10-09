@@ -392,4 +392,31 @@ class PpmpWorkflowTest extends TestCase
         $this->assertSame(\App\Enums\PpmpType::Final, $final->type);
         $this->assertTrue((bool) $final->items()->sole()->is_epa);   // EPA flag carried over
     }
+
+    public function test_signatories_can_be_set_and_carry_over_to_amendments(): void
+    {
+        $ppmp = $this->approvedPpmp();
+        $this->staff->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('manage ppmp'));
+        $this->actingAs($this->staff);
+
+        // Default: the preparer and the approving head
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Senior Agriculturist')->assertSee('Regional Executive Director');
+
+        $this->postJson(route('procurement.ppmp.signatories', $ppmp), [
+            'prepared_by_name' => 'Ana B. Santos', 'prepared_by_designation' => 'Planning Officer III',
+            'submitted_by_name' => 'Pedro C. Reyes', 'submitted_by_designation' => 'OIC, Office of the RED',
+        ])->assertOk();
+
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()
+            ->assertSee('Ana B. Santos')->assertSee('Planning Officer III')->assertSee('Pedro C. Reyes')->assertDontSee('Regional Executive Director');
+        $this->get(route('procurement.ppmp.market-scoping', $ppmp))->assertOk()->assertSee('Ana B. Santos')->assertSee('Pedro C. Reyes');
+
+        $v2 = $this->ppmps->amend($ppmp->fresh(), $this->staff);
+        $this->assertSame('Pedro C. Reyes', $v2->submitted_by_name);
+
+        // Other offices cannot change them
+        $outsider = User::factory()->create(['office_id' => Office::create(['code' => '09000', 'name' => 'GAD'])->id]);
+        $outsider->givePermissionTo('manage ppmp');
+        $this->actingAs($outsider)->postJson(route('procurement.ppmp.signatories', $ppmp), ['prepared_by_name' => 'X'])->assertForbidden();
+    }
 }

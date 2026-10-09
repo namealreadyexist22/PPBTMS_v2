@@ -98,6 +98,10 @@ class PpmpController extends Controller
                             ->orderBy('version')
                             ->get(['uuid', 'ppmp_no', 'version', 'status']),
             'approver'   => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
+            'printSignatories' => $ppmp->printSignatories(),
+            // Suggestions: people of this office and the offices above it
+            'signatoryUsers'   => \App\Models\User::where('is_activated', true)->whereIn('office_id', $this->officeAndAbove($ppmp->office))->orderBy('fname')->get(['id', 'fullname', 'designation']),
+            'canSetSignatories' => $ppmp->isEditableBy($user),
             'division'   => $ppmp->office->consolidatingOffice(),
             // Budget allocations from this office up, and what is left to plan per fund
             'budgetRows'   => $budgetRows = app(BudgetAllocationService::class)->checkPpmp($ppmp),
@@ -111,9 +115,7 @@ class PpmpController extends Controller
         $this->authorizeView($request, $ppmp);
 
         $ppmp->load(['office', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'signatories']);
-        $approverId = $ppmp->office->approverId();
-        $approver = $approverId ? \App\Models\User::find($approverId) : null;
-        $prepared = $ppmp->latestSignatory('prepared');
+        $signatories = $ppmp->printSignatories();
 
         return view('procurement.ppmp.print', [
             'title'      => "PPMP {$ppmp->ppmp_no} (Section copy)",
@@ -124,8 +126,8 @@ class PpmpController extends Controller
             'paps'       => $ppmp->paps,
             'total'      => $ppmp->total_budget,
             'watermark'  => $ppmp->status === PpmpStatus::Approved ? 'SECTION COPY' : ($ppmp->status === PpmpStatus::Superseded ? 'SUPERSEDED' : 'DRAFT'),
-            'prepared'   => ['name' => $prepared?->name_snapshot, 'position' => $prepared?->designation_snapshot, 'date' => $prepared?->signed_at],
-            'submitted'  => ['name' => $approver?->fullname, 'position' => $approver?->designation, 'date' => null],
+            'prepared'   => $signatories['prepared'],
+            'submitted'  => $signatories['submitted'],
             'footer'     => "Section PPMP {$ppmp->ppmp_no} · {$ppmp->status->label()}",
         ]);
     }
@@ -313,12 +315,26 @@ class PpmpController extends Controller
 
     protected function marketScopingView(Ppmp $ppmp, \Illuminate\Support\Collection $items)
     {
+        $signatories = $ppmp->load('office')->printSignatories();
+
         return view('procurement.ppmp.market_scoping_print', [
-            'ppmp'     => $ppmp->load('office'),
+            'ppmp'     => $ppmp,
             'items'    => $items,
-            'prepared' => $ppmp->latestSignatory('prepared'),
-            'head'     => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
+            'prepared' => $signatories['prepared'],
+            'head'     => $signatories['submitted'],
         ]);
+    }
+
+    /** Prepared by / Submitted by printed on the PPMP; the home office may set them any time. */
+    public function signatories(Request $request, Ppmp $ppmp)
+    {
+        $this->authorizeEdit($request, $ppmp);
+        $data = $this->validateJson($request, array_fill_keys(Ppmp::SIGNATORY_FIELDS, ['nullable', 'string', 'max:255']));
+
+        $ppmp->update($data + ['updated_by' => $request->user()->id]);
+        activity()->causedBy($request->user())->performedOn($ppmp)->log("set the signatories of {$ppmp->ppmp_no}");
+
+        return response()->json(['status' => 'success', 'message' => 'Signatories saved.']);
     }
 
     /** Add / edit PAP modal (code + title). */
@@ -451,6 +467,16 @@ class PpmpController extends Controller
                 'left'   => $limit['available'] - $limit['mine'] + ($fund === $itemFund ? \App\Support\Money::toCents($item->estimated_budget) : 0),
                 'office' => $limit['department']->shortName(),
             ])->all();
+    }
+
+    protected function officeAndAbove(Office $office): array
+    {
+        $ids = [];
+        for ($o = $office; $o; $o = $o->parent) {
+            $ids[] = $o->id;
+        }
+
+        return $ids;
     }
 
     protected function attempt(Closure $action): JsonResponse

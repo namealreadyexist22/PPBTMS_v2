@@ -21,7 +21,8 @@ class Ppmp extends Model
 
     protected $fillable = [
         'uuid', 'ppmp_no', 'fiscal_year', 'office_id', 'region', 'type', 'version', 'amended_from_id',
-        'status', 'total_budget', 'remarks', 'submitted_at', 'approved_at', 'created_by', 'updated_by',
+        'status', 'total_budget', 'remarks', 'submitted_at',
+        'prepared_by_name', 'prepared_by_designation', 'submitted_by_name', 'submitted_by_designation', 'approved_at', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
@@ -52,6 +53,31 @@ class Ppmp extends Model
             ->logOnly(['status', 'type', 'total_budget', 'remarks'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
+    }
+
+    public const SIGNATORY_FIELDS = ['prepared_by_name', 'prepared_by_designation', 'submitted_by_name', 'submitted_by_designation'];
+
+    /**
+     * Prepared by / Submitted by as printed: the names set on the PPMP, else the person who
+     * prepared it and the approving head. ['name', 'position', 'date'].
+     */
+    public function printSignatories(): array
+    {
+        $prepared = $this->latestSignatory('prepared');
+        $head = ($id = $this->office->approverId()) ? User::find($id) : null;
+
+        return [
+            'prepared'  => [
+                'name'     => $this->prepared_by_name ?: $prepared?->name_snapshot,
+                'position' => $this->prepared_by_name ? $this->prepared_by_designation : $prepared?->designation_snapshot,
+                'date'     => $prepared?->signed_at,
+            ],
+            'submitted' => [
+                'name'     => $this->submitted_by_name ?: $head?->fullname,
+                'position' => $this->submitted_by_name ? $this->submitted_by_designation : $head?->designation,
+                'date'     => null,
+            ],
+        ];
     }
 
     public function getRouteKeyName(): string

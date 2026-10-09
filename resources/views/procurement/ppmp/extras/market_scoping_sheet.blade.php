@@ -15,7 +15,7 @@
     <table>
         <tr><td class="label">Name of Procuring Entity</td><td>{{ setting('agency_name', 'Sugar Regulatory Administration') }}</td></tr>
         <tr><td class="label">End-User / Implementing Unit</td><td>{{ $ppmp->office->name }}</td></tr>
-        <tr><td class="label">Name &amp; Designation of Representative</td><td>{{ $prepared?->name_snapshot }}{{ $prepared?->designation_snapshot ? ', ' . $prepared->designation_snapshot : '' }}</td></tr>
+        <tr><td class="label">Name &amp; Designation of Representative</td><td>{{ $prepared['name'] }}{{ $prepared['position'] ? ', ' . $prepared['position'] : '' }}</td></tr>
     </table>
 
     <h3>2. Project Overview</h3>
@@ -78,17 +78,17 @@
         <div class="sig">
             <div>Prepared by:</div>
             <div class="role" style="text-align: left;">Personnel-in-Charge, End-User or Implementing Unit</div>
-            <div class="name">{{ $prepared?->name_snapshot }}</div>
+            <div class="name">{{ $prepared['name'] }}</div>
             <div class="pos">[Signature over Printed Name]</div>
-            <div class="pos">{{ $prepared?->designation_snapshot ?: '[Position/Designation]' }}</div>
+            <div class="pos">{{ $prepared['position'] ?: '[Position/Designation]' }}</div>
             <div class="pos">Date: ______________</div>
         </div>
         <div class="sig">
             <div>Approved by:</div>
             <div class="role" style="text-align: left;">Head, End-User or Implementing Unit</div>
-            <div class="name">{{ $head?->fullname }}</div>
+            <div class="name">{{ $head['name'] }}</div>
             <div class="pos">[Signature over Printed Name]</div>
-            <div class="pos">{{ $head?->designation ?: '[Position/Designation]' }}</div>
+            <div class="pos">{{ $head['position'] ?: '[Position/Designation]' }}</div>
             <div class="pos">Date: ______________</div>
         </div>
     </div>

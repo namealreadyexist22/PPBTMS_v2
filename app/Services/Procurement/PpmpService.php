@@ -282,6 +282,8 @@ class PpmpService
                 'total_budget'    => $ppmp->total_budget,
                 'remarks'         => $remarks,
                 'created_by'      => $user->id,
+                // Signatories set on the PPMP carry over to the amendment
+                ...$ppmp->only(Ppmp::SIGNATORY_FIELDS),
                 'updated_by'      => $user->id,
             ]);
 
