@@ -321,19 +321,12 @@ class PurchaseRequestController extends Controller
         return $pairs;
     }
 
-    /** Signatory picker: names used before by the office, then people of the office and the offices above it. */
+    /** Signatory picker: names used before by the office first, then everyone (the office's people first). */
     protected function signatoryPeople(Office $office): array
     {
-        $people = collect($this->signatoryNames($office->id))->map(fn ($designation, $name) => ['name' => $name, 'designation' => $designation])->values();
+        $past = collect($this->signatoryNames($office->id))->map(fn ($designation, $name) => ['name' => $name, 'designation' => $designation, 'office' => null])->values();
 
-        $ids = [];
-        for ($o = $office; $o; $o = $o->parent) {
-            $ids[] = $o->id;
-        }
-
-        return $people->merge(User::where('is_activated', true)->whereIn('office_id', $ids)->orderBy('fname')->get(['fullname', 'designation'])
-            ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation]))
-            ->unique('name')->values()->all();
+        return $past->merge($office->signatoryPeople())->unique('name')->values()->all();
     }
 
     protected function linesOrError(PurchaseRequest $pr): \Illuminate\Support\Collection|string

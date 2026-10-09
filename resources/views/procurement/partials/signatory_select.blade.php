@@ -1,6 +1,6 @@
 {{--
     Searchable signatory name (Select2): pick a person to fill in their designation, or type any name.
-    Expects: $name, $value, $designationField (input name filled on pick), $people (each ['name', 'designation']),
+    Expects: $name, $value, $designationField (input name filled on pick), $people (each ['name', 'designation', 'office']),
              $placeholder (shown when blank, e.g. the default signatory).
 --}}
 @php $people = collect($people)->filter(fn ($p) => filled($p['name']))->unique('name')->values(); @endphp
@@ -10,7 +10,7 @@
         <option value="{{ $value }}" selected>{{ $value }}</option>
     @endif
     @foreach ($people as $person)
-        <option value="{{ $person['name'] }}" data-designation="{{ $person['designation'] }}" @selected($person['name'] === $value)>{{ $person['name'] }}</option>
+        <option value="{{ $person['name'] }}" data-designation="{{ $person['designation'] }}" data-office="{{ $person['office'] ?? '' }}" @selected($person['name'] === $value)>{{ $person['name'] }}</option>
     @endforeach
 </select>
 @once
@@ -30,8 +30,9 @@
                     matcher: function (params, data) {
                         const term = (params.term || '').trim().toLowerCase();
                         if (!term) return data;
-                        const designation = data.element ? (data.element.dataset.designation || '') : '';
-                        return (data.text + ' ' + designation).toLowerCase().includes(term) ? data : null;
+                        const el = data.element;
+                        const extra = el ? (el.dataset.designation || '') + ' ' + (el.dataset.office || '') : '';
+                        return (data.text + ' ' + extra).toLowerCase().includes(term) ? data : null;
                     },
                     // A typed name not in the list comes last, so Enter picks the matching person first
                     createTag: function (params) {
@@ -41,8 +42,10 @@
                     insertTag: function (data, tag) { data.push(tag); },
                     templateResult: function (data) {
                         if (data.newTag) return $('<span class="text-muted">').text('Use "' + data.text + '"');
-                        if (!data.element || !data.element.dataset.designation) return data.text;
-                        return $('<div>').append($('<div>').text(data.text), $('<div class="small text-muted">').text(data.element.dataset.designation));
+                        const el = data.element;
+                        const sub = el ? [el.dataset.designation, el.dataset.office].filter(Boolean).join(' · ') : '';
+                        if (!sub) return data.text;
+                        return $('<div>').append($('<div>').text(data.text), $('<div class="small text-muted">').text(sub));
                     },
                 }).on('select2:select', function (e) {
                     const designation = e.params.data.element ? e.params.data.element.dataset.designation : null;

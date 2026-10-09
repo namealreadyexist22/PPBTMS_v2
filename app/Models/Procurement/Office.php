@@ -33,6 +33,26 @@ class Office extends Model
         return $this->acronym ?: ($this->code ?: $this->name);
     }
 
+    /**
+     * Everyone who can be picked as a signatory: all active users, those of this office and the
+     * offices above it (and their heads) first, then the rest by name. Each ['name', 'designation', 'office'].
+     */
+    public function signatoryPeople(array $extraOfficeIds = []): array
+    {
+        $chain = $extraOfficeIds;
+        $heads = [];
+        for ($office = $this; $office; $office = $office->parent) {
+            $chain[] = $office->id;
+            $heads[] = $office->head_user_id;
+        }
+
+        return \App\Models\User::where('is_activated', true)->with('office')->orderBy('fname')->orderBy('lname')
+            ->get(['id', 'fullname', 'designation', 'office_id'])
+            ->sortBy(fn ($u) => in_array($u->office_id, $chain) || in_array($u->id, $heads) ? 0 : 1)
+            ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation, 'office' => $u->office?->acronym ?: $u->office?->name])
+            ->values()->all();
+    }
+
     /** For dropdowns, without the office number: "MIS — MIS SECTION", or just the name. */
     public function displayName(): string
     {

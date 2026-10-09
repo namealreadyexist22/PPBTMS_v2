@@ -100,7 +100,7 @@ class PpmpController extends Controller
             'approver'   => ($id = $ppmp->office->approverId()) ? \App\Models\User::find($id) : null,
             'printSignatories' => $ppmp->printSignatories(),
             // Signatory suggestions: people of this office and the offices above it
-            'signatoryPeople'  => $this->peopleOf($this->officeAndAbove($ppmp->office)),
+            'signatoryPeople'  => $ppmp->office->signatoryPeople(),
             'canSetSignatories' => $ppmp->isEditableBy($user),
             'division'   => $ppmp->office->consolidatingOffice(),
             // Budget allocations from this office up, and what is left to plan per fund
@@ -467,23 +467,6 @@ class PpmpController extends Controller
                 'left'   => $limit['available'] - $limit['mine'] + ($fund === $itemFund ? \App\Support\Money::toCents($item->estimated_budget) : 0),
                 'office' => $limit['department']->shortName(),
             ])->all();
-    }
-
-    /** Active users of the given offices, for signatory pickers: [['name', 'designation'], ...]. */
-    protected function peopleOf(array $officeIds): array
-    {
-        return \App\Models\User::where('is_activated', true)->whereIn('office_id', $officeIds)->orderBy('fname')
-            ->get(['fullname', 'designation'])->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation])->all();
-    }
-
-    protected function officeAndAbove(Office $office): array
-    {
-        $ids = [];
-        for ($o = $office; $o; $o = $o->parent) {
-            $ids[] = $o->id;
-        }
-
-        return $ids;
     }
 
     protected function attempt(Closure $action): JsonResponse

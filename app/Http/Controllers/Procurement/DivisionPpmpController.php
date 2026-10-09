@@ -83,7 +83,7 @@ class DivisionPpmpController extends Controller
             'canSetSignatories' => $divisionPpmp->signatoriesEditableBy($request->user()),
             'printSignatories'  => $divisionPpmp->printSignatories(),
             // Signatory suggestions: the division's people, the offices above it and the head
-            'signatoryPeople'   => $this->signatoryPeople($divisionPpmp->office),
+            'signatoryPeople'   => $divisionPpmp->office->signatoryPeople($divisionPpmp->office->consolidatedOfficeIds()),
             'history'      => DivisionPpmp::where('office_id', $divisionPpmp->office_id)->where('fiscal_year', $divisionPpmp->fiscal_year)->where('region', $divisionPpmp->region)->orderBy('ppmp_number')->get(),
         ]);
     }
@@ -181,19 +181,6 @@ class DivisionPpmpController extends Controller
         activity()->causedBy($request->user())->performedOn($divisionPpmp)->log("set the signatories of PPMP No. {$divisionPpmp->ppmp_number} ({$divisionPpmp->office->shortName()})");
 
         return response()->json(['status' => 'success', 'message' => 'Signatories saved.']);
-    }
-
-    protected function signatoryPeople(Office $office): array
-    {
-        $ids = $office->consolidatedOfficeIds();
-        for ($o = $office->parent; $o; $o = $o->parent) {
-            $ids[] = $o->id;
-        }
-
-        return User::where('is_activated', true)
-            ->where(fn ($q) => $q->whereIn('office_id', $ids)->orWhere('id', $office->head_user_id))
-            ->orderBy('fname')->get(['fullname', 'designation'])
-            ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation])->all();
     }
 
     /** Office name, marked VISAYAS for a Visayas Division PPMP. */
