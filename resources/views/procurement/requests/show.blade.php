@@ -245,9 +245,6 @@
     </div>
 @endif
 
-<datalist id="signatory_names">
-    @foreach ($names as $name => $designation)<option value="{{ $name }}" data-designation="{{ $designation }}"></option>@endforeach
-</datalist>
 <div id="modal-body"></div>
 @endsection
 
@@ -255,7 +252,6 @@
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = '{{ csrf_token() }}';
-    const designations = @json($names);
     let isModalOpen = false;
 
     function errorText(xhr) {
@@ -296,11 +292,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Picking a name used before fills in its designation
-    $(document).on('change', '.signatory-name', function () {
-        const target = $('[name="' + $(this).data('designation') + '"]');
-        if (designations[this.value] && !target.val()) target.val(designations[this.value]);
-    });
 
     $('#form_header').on('submit', function (e) {
         e.preventDefault();

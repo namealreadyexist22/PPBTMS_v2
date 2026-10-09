@@ -114,7 +114,7 @@ class PurchaseRequestController extends Controller
                 : collect(),
             'jrTypes'      => config('procurement.jr_types'),
             'lines'        => $canEdit && $pr->isEditable() ? $this->linesOrError($pr) : collect(),
-            'names'        => $this->signatoryNames($pr->office_id),
+            'people'       => $this->signatoryPeople($pr->office),
         ]);
     }
 
@@ -319,6 +319,21 @@ class PurchaseRequestController extends Controller
         }
 
         return $pairs;
+    }
+
+    /** Signatory picker: names used before by the office, then people of the office and the offices above it. */
+    protected function signatoryPeople(Office $office): array
+    {
+        $people = collect($this->signatoryNames($office->id))->map(fn ($designation, $name) => ['name' => $name, 'designation' => $designation])->values();
+
+        $ids = [];
+        for ($o = $office; $o; $o = $o->parent) {
+            $ids[] = $o->id;
+        }
+
+        return $people->merge(User::where('is_activated', true)->whereIn('office_id', $ids)->orderBy('fname')->get(['fullname', 'designation'])
+            ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation]))
+            ->unique('name')->values()->all();
     }
 
     protected function linesOrError(PurchaseRequest $pr): \Illuminate\Support\Collection|string

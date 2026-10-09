@@ -222,6 +222,7 @@ use Illuminate\Support\Facades\Route;
             Route::get('division-ppmp/preview/{office}', [DivisionPpmpController::class, 'preview'])->name('division-ppmp.preview');
             Route::get('division-ppmp/{divisionPpmp}', [DivisionPpmpController::class, 'show'])->name('division-ppmp.show');
             Route::get('division-ppmp/{divisionPpmp}/print', [DivisionPpmpController::class, 'print'])->name('division-ppmp.print');
+            Route::post('division-ppmp/{divisionPpmp}/signatories', [DivisionPpmpController::class, 'signatories'])->name('division-ppmp.signatories');
 
             Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
                 ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');

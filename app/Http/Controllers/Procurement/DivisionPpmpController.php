@@ -80,6 +80,10 @@ class DivisionPpmpController extends Controller
         return view('procurement.division_ppmp.show', [
             'divisionPpmp' => $divisionPpmp,
             'paps'         => $this->papsOf($divisionPpmp->ppmps),
+            'canSetSignatories' => $divisionPpmp->signatoriesEditableBy($request->user()),
+            'printSignatories'  => $divisionPpmp->printSignatories(),
+            // Signatory suggestions: the division's people, the offices above it and the head
+            'signatoryPeople'   => $this->signatoryPeople($divisionPpmp->office),
             'history'      => DivisionPpmp::where('office_id', $divisionPpmp->office_id)->where('fiscal_year', $divisionPpmp->fiscal_year)->where('region', $divisionPpmp->region)->orderBy('ppmp_number')->get(),
         ]);
     }
@@ -122,8 +126,7 @@ class DivisionPpmpController extends Controller
         $this->authorizeView($request, $divisionPpmp);
         $divisionPpmp->load(['office', 'ppmps', 'signatories']);
 
-        $prepared = $divisionPpmp->latestSignatory('prepared');
-        $submitted = $divisionPpmp->latestSignatory('submitted');
+        $signatories = $divisionPpmp->printSignatories();
 
         return view('procurement.ppmp.print', [
             'title'      => "PPMP No. {$divisionPpmp->ppmp_number} - {$divisionPpmp->office->name}",
@@ -134,8 +137,8 @@ class DivisionPpmpController extends Controller
             'paps'       => $this->papsOf($divisionPpmp->ppmps),
             'total'      => $divisionPpmp->total_budget,
             'watermark'  => $divisionPpmp->isCurrent() ? null : 'SUPERSEDED',
-            'prepared'   => ['name' => $prepared?->name_snapshot, 'position' => $prepared?->designation_snapshot, 'date' => null],
-            'submitted'  => ['name' => $submitted?->name_snapshot, 'position' => $submitted?->designation_snapshot, 'date' => null],
+            'prepared'   => $signatories['prepared'],
+            'submitted'  => $signatories['submitted'],
             'footer'     => "Division PPMP No. {$divisionPpmp->ppmp_number} · approved " . $divisionPpmp->approved_at?->format('m/d/Y'),
         ]);
     }
@@ -164,6 +167,33 @@ class DivisionPpmpController extends Controller
             'submitted'  => ['name' => $head?->fullname, 'position' => $head?->designation, 'date' => null],
             'footer'     => "Preview of PPMP No. {$next} · not yet approved",
         ]);
+    }
+
+    /** Prepared by / Submitted by printed on this Division PPMP; carried over to the next number. */
+    public function signatories(Request $request, DivisionPpmp $divisionPpmp)
+    {
+        if (! $divisionPpmp->signatoriesEditableBy($request->user())) {
+            return response()->json(['status' => 'error', 'message' => 'Only the division head or the division office can change its signatories.'], 403);
+        }
+
+        $data = $this->validateJson($request, array_fill_keys(Ppmp::SIGNATORY_FIELDS, ['nullable', 'string', 'max:255']));
+        $divisionPpmp->update($data);
+        activity()->causedBy($request->user())->performedOn($divisionPpmp)->log("set the signatories of PPMP No. {$divisionPpmp->ppmp_number} ({$divisionPpmp->office->shortName()})");
+
+        return response()->json(['status' => 'success', 'message' => 'Signatories saved.']);
+    }
+
+    protected function signatoryPeople(Office $office): array
+    {
+        $ids = $office->consolidatedOfficeIds();
+        for ($o = $office->parent; $o; $o = $o->parent) {
+            $ids[] = $o->id;
+        }
+
+        return User::where('is_activated', true)
+            ->where(fn ($q) => $q->whereIn('office_id', $ids)->orWhere('id', $office->head_user_id))
+            ->orderBy('fname')->get(['fullname', 'designation'])
+            ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation])->all();
     }
 
     /** Office name, marked VISAYAS for a Visayas Division PPMP. */

@@ -419,4 +419,32 @@ class PpmpWorkflowTest extends TestCase
         $outsider->givePermissionTo('manage ppmp');
         $this->actingAs($outsider)->postJson(route('procurement.ppmp.signatories', $ppmp), ['prepared_by_name' => 'X'])->assertForbidden();
     }
+
+    public function test_division_ppmp_signatories_can_be_set_and_carry_to_the_next_number(): void
+    {
+        $divisions = app(\App\Services\Procurement\DivisionPpmpService::class);
+        $ppmp = $this->ppmps->create($this->office, 2027, $this->staff);
+        $this->addLine($ppmp, $this->line());
+        $this->ppmps->submit($ppmp, $this->staff);
+        $no1 = $divisions->approve($this->office, 2027, \App\Enums\Region::Lm, $this->head, $this->staff);
+
+        $this->head->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('manage ppmp'));
+        $this->actingAs($this->head)->get(route('procurement.division-ppmp.show', $no1))->assertOk()->assertSee('DIVISION_SIGNATORIES_MODAL', false);
+        $this->postJson(route('procurement.division-ppmp.signatories', $no1), [
+            'prepared_by_name' => 'Ana B. Santos', 'prepared_by_designation' => 'Planning Officer III',
+            'submitted_by_name' => 'Pedro C. Reyes', 'submitted_by_designation' => 'OIC, Office of the RED',
+        ])->assertOk();
+        $this->get(route('procurement.division-ppmp.print', $no1))->assertOk()->assertSee('Ana B. Santos')->assertSee('Pedro C. Reyes')->assertDontSee('Regional Executive Director');
+
+        // Amend and approve again: PPMP No. 2 keeps the signatories
+        $v2 = $this->ppmps->amend($ppmp->fresh(), $this->staff);
+        $this->ppmps->submit($v2, $this->staff);
+        $no2 = $divisions->approve($this->office, 2027, \App\Enums\Region::Lm, $this->head, $this->staff);
+        $this->assertSame(2, $no2->ppmp_number);
+        $this->assertSame('Pedro C. Reyes', $no2->submitted_by_name);
+
+        // Someone outside the division cannot change them
+        $outsider = User::factory()->create(['office_id' => Office::create(['code' => '09000', 'name' => 'GAD'])->id]);
+        $this->actingAs($outsider)->postJson(route('procurement.division-ppmp.signatories', $no2), ['prepared_by_name' => 'X'])->assertForbidden();
+    }
 }

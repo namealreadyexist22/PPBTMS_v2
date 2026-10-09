@@ -28,7 +28,30 @@ class DivisionPpmp extends Model
     protected $fillable = [
         'uuid', 'office_id', 'region', 'fiscal_year', 'ppmp_number', 'type', 'status',
         'total_budget', 'remarks', 'approved_at', 'created_by',
+        'prepared_by_name', 'prepared_by_designation', 'submitted_by_name', 'submitted_by_designation',
     ];
+
+    /** Prepared by / Submitted by as printed: the names set on it, else the ones signed at approval. */
+    public function printSignatories(): array
+    {
+        $out = [];
+        foreach (['prepared', 'submitted'] as $role) {
+            $signed = $this->latestSignatory($role);
+            $out[$role] = [
+                'name'     => $this->{"{$role}_by_name"} ?: $signed?->name_snapshot,
+                'position' => $this->{"{$role}_by_name"} ? $this->{"{$role}_by_designation"} : $signed?->designation_snapshot,
+                'date'     => null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** The division head, or anyone assigned to the division office itself. */
+    public function signatoriesEditableBy(User $user): bool
+    {
+        return $user->hasRole('Super Admin') || (int) $this->office->head_user_id === (int) $user->id || (int) $user->office_id === (int) $this->office_id;
+    }
 
     protected function casts(): array
     {

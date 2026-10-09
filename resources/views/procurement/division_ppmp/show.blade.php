@@ -1,7 +1,7 @@
 @extends('BackEnd.layouts.master')
 
 @section('content')
-@php $prepared = $divisionPpmp->latestSignatory('prepared'); $submitted = $divisionPpmp->latestSignatory('submitted'); @endphp
+
 
 <div class="mb-3">
     <a href="{{ route('procurement.division-ppmp.index', ['fy' => $divisionPpmp->fiscal_year]) }}" class="text-decoration-none small text-muted">
@@ -20,7 +20,12 @@
                 </h4>
                 <div class="text-muted small">{{ $divisionPpmp->office->label() }} · {{ $divisionPpmp->region->label() }} ({{ $divisionPpmp->region->bac() }})</div>
             </div>
-            <a href="{{ route('procurement.division-ppmp.print', $divisionPpmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Print</a>
+            <div class="d-flex gap-2">
+                @if ($canSetSignatories)
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#DIVISION_SIGNATORIES_MODAL"><i class="fas fa-signature me-1"></i> Signatories</button>
+                @endif
+                <a href="{{ route('procurement.division-ppmp.print', $divisionPpmp) }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Print</a>
+            </div>
         </div>
         <hr class="my-3">
         <div class="row g-3 small">
@@ -31,7 +36,7 @@
                     <a href="{{ route('procurement.division-ppmp.show', $h) }}" class="badge {{ $h->id === $divisionPpmp->id ? 'bg-dark' : 'bg-light text-dark border' }} text-decoration-none">{{ $h->ppmp_number }}</a>
                 @endforeach
             </div>
-            <div class="col-6 col-md-3"><div class="text-muted">Prepared by / Submitted by</div><div class="fw-semibold">{{ $prepared?->name_snapshot }} / {{ $submitted?->name_snapshot }}</div></div>
+            <div class="col-6 col-md-3"><div class="text-muted">Prepared by / Submitted by</div><div class="fw-semibold">{{ $printSignatories['prepared']['name'] }} / {{ $printSignatories['submitted']['name'] }}</div></div>
             <div class="col-12 col-md-3 text-md-end"><div class="text-muted">Total Budget</div><div class="fw-bold fs-5">₱ {{ number_format((float) $divisionPpmp->total_budget, 2) }}</div></div>
         </div>
     </div>
@@ -77,4 +82,12 @@
         </table>
     </div>
 </div>
+@if ($canSetSignatories)
+    @include('procurement.partials.signatories_modal', [
+        'modalId' => 'DIVISION_SIGNATORIES_MODAL', 'action' => route('procurement.division-ppmp.signatories', $divisionPpmp), 'record' => $divisionPpmp,
+        'defaults' => collect(['prepared', 'submitted'])->mapWithKeys(fn ($r) => [$r => ['name' => $divisionPpmp->latestSignatory($r)?->name_snapshot, 'position' => $divisionPpmp->latestSignatory($r)?->designation_snapshot]])->all(),
+        'people' => $signatoryPeople, 'reloadOnSave' => true,
+        'note' => 'Names printed on this Division PPMP. They carry over to the next PPMP number.',
+    ])
+@endif
 @endsection

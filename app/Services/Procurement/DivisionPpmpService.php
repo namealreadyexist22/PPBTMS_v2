@@ -119,6 +119,8 @@ class DivisionPpmpService
                 'remarks'      => $remarks,
                 'approved_at'  => now(),
                 'created_by'   => $head->id,
+                // Signatories set on the previous number carry over
+                ...($previous?->only(Ppmp::SIGNATORY_FIELDS) ?? []),
             ]);
             $division->ppmps()->attach($sections->pluck('id'));
 
