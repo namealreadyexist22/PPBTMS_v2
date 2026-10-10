@@ -204,7 +204,7 @@ class StandardItemTest extends TestCase
         $this->assertEquals(12, $item->distributions()->sum('quantity'));
 
         // Not on the PPMP print; shown as a count on the page
-        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('Distribution (2)');
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('Distribution: 2 offices');
         $this->get(route('procurement.ppmp.print', $ppmp))->assertDontSee('Atty. Reyes');
 
         // Still editable after approval; follows the project into an amendment

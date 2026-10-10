@@ -77,6 +77,20 @@ class StorePpmpItemRequest extends FormRequest
             'remarks'              => ['nullable', 'string', 'max:1000'],
 
             // GPPB Market Scoping Checklist
+            ...self::marketScopingRules(),
+
+            // New files (market survey, specifications, ...), each with its kind
+            'attachments'      => ['nullable', 'array', 'max:10'],
+            'attachments.*'    => ['file', 'max:' . config('market_scoping.max_file_kb'), 'mimes:' . implode(',', config('market_scoping.allowed_types'))],
+            'attachment_kinds'   => ['nullable', 'array'],
+            'attachment_kinds.*' => [Rule::in(array_keys(config('market_scoping.attachment_kinds')))],
+        ];
+    }
+
+    /** GPPB Market Scoping Checklist; also saved on its own from the project's menu. */
+    public static function marketScopingRules(): array
+    {
+        return [
             'market_scoping'                              => ['nullable', 'array'],
             'market_scoping.period_from'                  => ['nullable', 'date_format:Y-m'],
             'market_scoping.period_to'                    => ['nullable', 'date_format:Y-m', 'after_or_equal:market_scoping.period_from'],
@@ -86,12 +100,6 @@ class StorePpmpItemRequest extends FormRequest
             'market_scoping.parameters'                   => ['nullable', 'array'],
             'market_scoping.parameters.*.answer'          => ['nullable', Rule::in(array_keys(config('market_scoping.answers')))],
             'market_scoping.parameters.*.recommendation'  => ['nullable', 'string', 'max:1000'],
-
-            // New files (market survey, specifications, ...), each with its kind
-            'attachments'      => ['nullable', 'array', 'max:10'],
-            'attachments.*'    => ['file', 'max:' . config('market_scoping.max_file_kb'), 'mimes:' . implode(',', config('market_scoping.allowed_types'))],
-            'attachment_kinds'   => ['nullable', 'array'],
-            'attachment_kinds.*' => [Rule::in(array_keys(config('market_scoping.attachment_kinds')))],
         ];
     }
 

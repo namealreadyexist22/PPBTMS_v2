@@ -245,12 +245,23 @@ class PpmpPageTest extends TestCase
         \Illuminate\Support\Facades\Storage::disk('local')->assertExists($attachment->path);
 
         // Shown on the page, downloadable, printable checklist
-        $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Market scoping complete')->assertSee('canvass.pdf');
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Market Scoping Checklist: complete')->assertSee('canvass.pdf');
         $this->get(route('procurement.ppmp.attachments.show', [$ppmp, $attachment]))->assertOk();
         $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertOk()
             ->assertSee('MARKET SCOPING CHECKLIST')->assertSee('From 08/2026 To 09/2026')->assertSee('ok cost')->assertSee('canvass.pdf')
             ->assertSee('Use of data from PhilGEPS or agency websites')->assertSee('f. Identified Risk/s')->assertSee('Approved by:');
         $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Market Scoping Checklist')->assertSee('Market survey / price quotations');
+
+        // The checklist on its own, from the project's menu: open, change, save
+        $this->get(route('procurement.ppmp.items.market-scoping.entry', [$ppmp, $item]))->assertOk()->assertSee('MARKET_SCOPING_MODAL', false)->assertSee('ok cost');
+        $this->postJson(route('procurement.ppmp.items.market-scoping.store', [$ppmp, $item]), ['market_scoping' => ['period_from' => '2026-09', 'period_to' => '2026-08']])
+            ->assertStatus(422)->assertJsonValidationErrors('market_scoping.period_to');
+        $this->postJson(route('procurement.ppmp.items.market-scoping.store', [$ppmp, $item]), ['market_scoping' => [
+            'period_from' => '2026-07', 'period_to' => '2026-09', 'activities' => ['consultations'], 'parameters' => $parameters,
+        ]])->assertOk();
+        $this->assertSame('2026-07', $item->fresh()->market_scoping['period_from']);
+        $this->assertSame('canvass.pdf', $item->fresh()->attachments()->sole()->original_name);   // project untouched
+        $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertSee('From 07/2026 To 09/2026');
 
         // Print all: every project's checklist, one sheet each (second project has none filled yet)
         $service->addItem($ppmp, array_merge($this->project($pap->id), ['description' => 'Supply of UPS', 'proc_start' => '2027-02-01', 'proc_end' => '2027-04-01', 'estimated_budget' => '20000']));

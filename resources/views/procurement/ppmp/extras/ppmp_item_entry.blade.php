@@ -1,13 +1,5 @@
-<style>
-    .ppmp-item-dialog { max-width: min(1400px, 96vw); }
-    .ppmp-item-side { background: #f8fafc; border-left: 1px solid #e2e8f0; padding-top: .75rem; }
-    @media (min-width: 992px) {
-        .ppmp-item-dialog .modal-body { overflow: hidden; }
-        .ppmp-item-col { max-height: calc(100vh - 250px); overflow-y: auto; padding-bottom: .5rem; }
-    }
-</style>
 <div class="modal fade" id="{{ $modalName }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl ppmp-item-dialog">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow">
 
             <div class="modal-header bg-light py-3 border-bottom border-light">
@@ -32,9 +24,6 @@
                         <i class="fas fa-exclamation-triangle me-1"></i> <span>Please correct the highlighted errors below.</span>
                     </div>
 
-                    <div class="row g-4">
-                        {{-- Project details --}}
-                        <div class="col-lg-7 ppmp-item-col">
                     {{-- 1. Procurement project --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Procurement Project</small>
                     <div class="row g-3 mb-3">
@@ -209,6 +198,8 @@
                     {{-- Budget allocation left for this PPMP, before and after this project --}}
                     <div id="budget_left" class="alert py-2 px-3 small mb-3 d-none"></div>
 
+                    <div class="small text-muted mb-3"><i class="fas fa-clipboard-check me-1"></i>The Market Scoping Checklist is filled in from the project's <i class="fas fa-ellipsis-h"></i> menu in the table, after saving.</div>
+
                     {{-- 6. Attachments (market survey, specifications, ...) --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;"><i class="fas fa-paperclip me-1"></i> Attached Supporting Documents</small>
                     @if ($item && $item->attachments->isNotEmpty())
@@ -236,70 +227,6 @@
                         <label class="form-label small fw-semibold text-muted mb-1">Remarks</label>
                         <textarea name="remarks" class="form-control form-control-sm" rows="2">{{ $item->remarks ?? '' }}</textarea>
                         <div class="invalid-feedback"></div>
-                    </div>
-                        </div>
-
-                        <div class="col-lg-5 ppmp-item-col ppmp-item-side">
-                    {{-- 5. GPPB Market Scoping Checklist (side panel) --}}
-                    @php
-                        $ms = $item->market_scoping ?? [];
-                        $msDone = $item?->marketScopingComplete();
-                    @endphp
-                    <div class="d-flex align-items-center justify-content-between mb-2">
-                        <small class="text-uppercase fw-bold text-secondary" style="font-size: 0.72rem;">
-                        <i class="fas fa-clipboard-check me-1"></i> Market Scoping Checklist <span class="fw-normal text-muted">(GPPB, RA 12009 Sec. 10)</span>
-                        </small>
-                        <span class="badge {{ $msDone ? 'bg-success' : 'bg-light text-dark border' }}">{{ $msDone ? 'Complete' : 'Not complete' }}</span>
-                    </div>
-                    <div id="ms_body">
-                        <div class="row g-3 mb-2">
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold text-muted mb-1">Period of market scoping — from</label>
-                                <input type="month" name="market_scoping[period_from]" class="form-control form-control-sm" value="{{ $ms['period_from'] ?? '' }}">
-                                <div class="invalid-feedback"></div>
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label small fw-semibold text-muted mb-1">to</label>
-                                <input type="month" name="market_scoping[period_to]" class="form-control form-control-sm" value="{{ $ms['period_to'] ?? '' }}">
-                                <div class="invalid-feedback"></div>
-                            </div>
-                            <div class="col-12 small text-muted mt-1">Agency, end-user, project name, budget and delivery are taken from this project.</div>
-                        </div>
-
-                        <div class="small fw-semibold text-muted mb-1">Market scoping activity/ies conducted <span class="fw-normal">(check all that apply)</span></div>
-                        @foreach (config('market_scoping.activities') as $key => [$label, $docs])
-                            <div class="form-check small mb-1">
-                                <input class="form-check-input" type="checkbox" name="market_scoping[activities][]" value="{{ $key }}" id="ms_act_{{ $key }}" @checked(in_array($key, $ms['activities'] ?? []))>
-                                <label class="form-check-label" for="ms_act_{{ $key }}">{{ $label }}
-                                    <span class="d-block text-muted" style="font-size: .72rem;">Documentation: {{ $docs }}</span>
-                                </label>
-                            </div>
-                        @endforeach
-                        <input type="text" name="market_scoping[activity_other]" class="form-control form-control-sm mt-1 mb-3" value="{{ $ms['activity_other'] ?? '' }}" placeholder="Other analogous market scoping activity/ies undertaken (specify)">
-
-
-                        <div class="small fw-semibold text-muted mb-2">Parameters considered and recommendations</div>
-                        @foreach (config('market_scoping.parameters') as $key => [$label, $question])
-                        <div class="border rounded-2 p-2 mb-2 bg-white">
-                            <div class="small fw-semibold">{{ $label }}</div>
-                            <div class="text-muted mb-1" style="font-size: .72rem;">{{ $question }}</div>
-                            <div class="row g-2">
-                                <div class="col-4">
-                                    <select name="market_scoping[parameters][{{ $key }}][answer]" class="form-select form-select-sm" aria-label="Considered?">
-                                        <option value="">Considered?</option>
-                                        @foreach (config('market_scoping.answers') as $value => $answer)
-                                            <option value="{{ $value }}" @selected(($ms['parameters'][$key]['answer'] ?? null) === $value)>{{ $answer }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div class="col-8">
-                                    <input type="text" name="market_scoping[parameters][{{ $key }}][recommendation]" class="form-control form-control-sm" placeholder="Recommendation" value="{{ $ms['parameters'][$key]['recommendation'] ?? '' }}">
-                                </div>
-                            </div>
-                        </div>
-                        @endforeach
-                    </div>
-                        </div>
                     </div>
                 </div>
 

@@ -295,6 +295,35 @@ class PpmpController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Distribution saved.']);
     }
 
+    /** Market Scoping Checklist dialog of one project, opened from its menu. */
+    public function marketScopingEntry(Request $request, Ppmp $ppmp, PpmpItem $item)
+    {
+        $this->authorizeView($request, $ppmp);
+        abort_unless($item->ppmp_id === $ppmp->id, 404);
+
+        return view('procurement.ppmp.extras.ppmp_market_scoping_entry', [
+            'ppmp'    => $ppmp,
+            'item'    => $item,
+            'canEdit' => $ppmp->status->isEditable() && $ppmp->isEditableBy($request->user()),
+        ]);
+    }
+
+    public function marketScopingStore(Request $request, Ppmp $ppmp, PpmpItem $item)
+    {
+        $this->authorizeEdit($request, $ppmp);
+        abort_unless($item->ppmp_id === $ppmp->id, 404);
+        $data = $this->validateJson($request, StorePpmpItemRequest::marketScopingRules(), [], [
+            'market_scoping.period_from' => 'market scoping period (from)',
+            'market_scoping.period_to'   => 'market scoping period (to)',
+        ]);
+
+        return $this->attempt(function () use ($item, $data) {
+            $this->ppmpService->saveMarketScoping($item, $data['market_scoping'] ?? []);
+
+            return 'Market Scoping Checklist saved.';
+        });
+    }
+
     /** GPPB Market Scoping Checklist of one procurement project, printable. */
     public function marketScopingPrint(Request $request, Ppmp $ppmp, PpmpItem $item)
     {

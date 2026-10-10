@@ -181,7 +181,7 @@
 @endif
 
 {{-- Procurement projects, grouped by PAP --}}
-@php $colspan = $canEdit ? 11 : 10; $n = 0; @endphp
+@php $colspan = 11; $n = 0; @endphp
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
         <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>PAPs and Procurement Projects ({{ $ppmp->paps->count() }} PAP, {{ $ppmp->items->count() }} projects)</h6>
@@ -192,7 +192,6 @@
                 <thead class="table-light">
                     <tr class="text-nowrap">
                         <th class="ps-4">#</th>
-                        @if ($canEdit)<th></th>@endif
                         <th style="min-width: 240px;">Procurement Project</th>
                         <th>Type</th>
                         <th>Qty &amp; Specs</th>
@@ -201,13 +200,14 @@
                         <th title="Start and end of procurement activity">Proc. Period</th>
                         <th>Delivery</th>
                         <th title="Source of Funds">Funds</th>
-                        <th class="text-end pe-4">Estimated Budget</th>
+                        <th class="text-end">Estimated Budget</th>
+                        <th class="pe-3" style="width: 44px;"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse ($ppmp->paps as $pap)
                         <tr class="table-secondary">
-                            <td colspan="{{ $colspan - 1 }}" class="ps-4 fw-bold">
+                            <td colspan="{{ $colspan - 2 }}" class="ps-4 fw-bold">
                                 PAP CODE: {{ $pap->code }} - {{ $pap->title }}
                                 @if ($canEdit)
                                     <button class="btn btn-sm btn-link p-0 ms-2 btn-add-item" data-pap="{{ $pap->id }}" title="Add a project under this PAP"><i class="fas fa-plus-circle"></i> Add Project</button>
@@ -215,40 +215,43 @@
                                     <button class="btn btn-sm btn-link p-0 ms-1 text-danger btn-delete-pap" data-id="{{ $pap->id }}" title="Remove PAP"><i class="fas fa-trash-alt"></i></button>
                                 @endif
                             </td>
-                            <td class="text-end fw-bold text-nowrap pe-4">{{ number_format($pap->items->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
+                            <td class="text-end fw-bold text-nowrap">{{ number_format($pap->items->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
+                            <td></td>
                         </tr>
                         @forelse ($pap->items as $item)
                             <tr>
                                 <td class="ps-4 text-muted">{{ ++$n }}</td>
-                                @if ($canEdit)
-                                    <td class="text-nowrap">
-                                        <button class="btn btn-sm btn-link p-0 me-2 btn-edit-item" data-id="{{ $item->id }}" title="Edit"><i class="fas fa-edit"></i></button>
-                                        <button class="btn btn-sm btn-link p-0 text-danger btn-delete-item" data-id="{{ $item->id }}" title="Remove"><i class="fas fa-trash-alt"></i></button>
-                                    </td>
-                                @endif
                                 <td>
                                     {{ $item->description }}
-                                    <div class="mt-1 d-flex flex-wrap gap-1 align-items-center">
-                                        @if ($item->is_epa)<span class="badge bg-info text-dark" title="Early Procurement Activity (RA 12009 Sec. 12): no award until the funds are effective">EPA</span>@endif
-                                        @if ($item->item_id)<span class="badge bg-light text-dark border" title="Standard item: unit, price and specs from the catalog"><i class="fas fa-tag me-1"></i>Standard item</span>@endif
+                                    {{-- Status icons: hover for what each one is --}}
+                                    @php $msComplete = $item->marketScopingComplete(); @endphp
+                                    <div class="mt-1 d-flex flex-wrap gap-1 align-items-center ppmp-chips">
+                                        @if ($item->is_epa)<span class="badge bg-info text-dark" data-bs-toggle="tooltip" title="Early Procurement Activity (RA 12009 Sec. 12): no award until the funds are effective">EPA</span>@endif
+                                        @if ($item->item_id)<span class="badge bg-light text-dark border" data-bs-toggle="tooltip" title="Standard item: unit, price and specs from the catalog"><i class="fas fa-tag"></i></span>@endif
+                                        <a href="#" class="badge text-decoration-none btn-market-scoping {{ $msComplete ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' }}"
+                                           data-url="{{ route('procurement.ppmp.items.market-scoping.entry', [$ppmp, $item]) }}"
+                                           data-bs-toggle="tooltip" title="Market Scoping Checklist: {{ $msComplete ? 'complete' : 'not complete' }}"><i class="fas fa-clipboard-check"></i></a>
                                         @if ($item->quantity !== null)
-                                            <a href="#" class="badge bg-light text-dark border text-decoration-none btn-distribution" data-url="{{ route('procurement.ppmp.items.distribution', [$ppmp, $item]) }}" title="Which offices get these items">
-                                                <i class="fas fa-people-carry me-1"></i>Distribution{{ $item->distributions->isNotEmpty() ? ' (' . $item->distributions->count() . ')' : '' }}
+                                            <a href="#" class="badge bg-light text-dark border text-decoration-none btn-distribution" data-url="{{ route('procurement.ppmp.items.distribution', [$ppmp, $item]) }}"
+                                               data-bs-toggle="tooltip" title="Distribution: {{ $item->distributions->isNotEmpty() ? $item->distributions->count() . ' ' . \Illuminate\Support\Str::plural('office', $item->distributions->count()) : 'not set' }}">
+                                                <i class="fas fa-people-carry"></i>@if ($item->distributions->isNotEmpty()) {{ $item->distributions->count() }}@endif
                                             </a>
                                         @endif
-                                        <a href="{{ route('procurement.ppmp.items.market-scoping', [$ppmp, $item]) }}" target="_blank"
-                                           class="badge text-decoration-none {{ $item->marketScopingComplete() ? 'bg-success-subtle text-success border' : 'bg-warning-subtle text-dark border' }}"
-                                           title="Print the Market Scoping Checklist"><i class="fas fa-clipboard-check me-1"></i>Market scoping {{ $item->marketScopingComplete() ? 'complete' : 'not complete' }}</a>
-                                        @foreach ($item->attachments as $attachment)
-                                            <a href="{{ route('procurement.ppmp.attachments.show', [$ppmp, $attachment]) }}" target="_blank" class="badge bg-light text-dark border text-decoration-none" title="{{ $attachment->kindLabel() }}">
-                                                <i class="fas fa-paperclip me-1"></i>{{ \Illuminate\Support\Str::limit($attachment->original_name, 28) }}
-                                            </a>
-                                        @endforeach
-                                        @if ($item->supporting_documents)<span class="text-muted small"><i class="fas fa-sticky-note me-1"></i>{{ $item->supporting_documents }}</span>@endif
+                                        @if ($item->attachments->isNotEmpty())
+                                            <span class="dropdown">
+                                                <a href="#" class="badge bg-light text-dark border text-decoration-none" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}'
+                                                   title="Attachments: {{ $item->attachments->pluck('original_name')->join(', ') }}"><i class="fas fa-paperclip"></i> {{ $item->attachments->count() }}</a>
+                                                <ul class="dropdown-menu shadow small">
+                                                    @foreach ($item->attachments as $attachment)
+                                                        <li><a class="dropdown-item" href="{{ route('procurement.ppmp.attachments.show', [$ppmp, $attachment]) }}" target="_blank">
+                                                            <i class="fas fa-file me-1 text-muted"></i>{{ \Illuminate\Support\Str::limit($attachment->original_name, 40) }} <span class="text-muted">· {{ $attachment->kindLabel() }}</span></a></li>
+                                                    @endforeach
+                                                </ul>
+                                            </span>
+                                        @endif
+                                        @if ($item->supporting_documents)<span class="badge bg-light text-muted border" data-bs-toggle="tooltip" title="{{ $item->supporting_documents }}"><i class="fas fa-sticky-note"></i></span>@endif
+                                        @if ($item->remarks)<span class="badge bg-light text-muted border" data-bs-toggle="tooltip" title="Remarks: {{ $item->remarks }}"><i class="fas fa-comment-alt"></i></span>@endif
                                     </div>
-                                    @if ($item->remarks)
-                                        <div class="text-muted"><i class="fas fa-comment-alt me-1"></i>{{ $item->remarks }}</div>
-                                    @endif
                                 </td>
                                 <td class="text-nowrap" title="{{ $item->project_type->label() }}">{{ ucfirst(\Illuminate\Support\Str::before($item->project_type->label(), ' ')) }}</td>
                                 <td style="min-width: 120px;">
@@ -272,11 +275,30 @@
                                     {{ $item->fundSource->code }}
                                     <span class="badge {{ match ($item->allotment_class) { \App\Enums\AllotmentClass::Co => 'bg-warning-subtle text-warning-emphasis', \App\Enums\AllotmentClass::Semi => 'bg-info-subtle text-info-emphasis', default => 'bg-light text-dark' } }} border">{{ $item->allotment_class->short() }}</span>
                                 </td>
-                                <td class="text-end text-nowrap fw-semibold pe-4">
+                                <td class="text-end text-nowrap fw-semibold">
                                     {{ number_format((float) $item->estimated_budget, 2) }}
                                     @if ((float) $item->committed_amount > 0)
                                         <div class="text-muted fw-normal" title="Charged by PRs">PR: {{ number_format((float) $item->committed_amount, 2) }}</div>
                                     @endif
+                                </td>
+                                <td class="pe-3 text-end">
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-light border py-0 px-2" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}' aria-label="Actions"><i class="fas fa-ellipsis-h"></i></button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow small">
+                                            @if ($canEdit)
+                                                <li><a class="dropdown-item btn-edit-item" href="#" data-id="{{ $item->id }}"><i class="fas fa-edit me-2 text-primary"></i>Edit project</a></li>
+                                            @endif
+                                            <li><a class="dropdown-item btn-market-scoping" href="#" data-url="{{ route('procurement.ppmp.items.market-scoping.entry', [$ppmp, $item]) }}"><i class="fas fa-clipboard-check me-2 text-success"></i>Market Scoping Checklist</a></li>
+                                            <li><a class="dropdown-item" href="{{ route('procurement.ppmp.items.market-scoping', [$ppmp, $item]) }}" target="_blank"><i class="fas fa-print me-2 text-muted"></i>Print checklist</a></li>
+                                            @if ($item->quantity !== null)
+                                                <li><a class="dropdown-item btn-distribution" href="#" data-url="{{ route('procurement.ppmp.items.distribution', [$ppmp, $item]) }}"><i class="fas fa-people-carry me-2 text-muted"></i>Distribution</a></li>
+                                            @endif
+                                            @if ($canEdit)
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li><a class="dropdown-item text-danger btn-delete-item" href="#" data-id="{{ $item->id }}"><i class="fas fa-trash-alt me-2"></i>Remove</a></li>
+                                            @endif
+                                        </ul>
+                                    </div>
                                 </td>
                             </tr>
                         @empty
@@ -295,8 +317,9 @@
                 @if ($ppmp->items->isNotEmpty())
                     <tfoot class="table-light">
                         <tr>
-                            <td colspan="{{ $colspan - 1 }}" class="text-end fw-bold ps-4">TOTAL BUDGET</td>
-                            <td class="text-end fw-bold text-nowrap pe-4">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
+                            <td colspan="{{ $colspan - 2 }}" class="text-end fw-bold ps-4">TOTAL BUDGET</td>
+                            <td class="text-end fw-bold text-nowrap">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
+                            <td></td>
                         </tr>
                     </tfoot>
                 @endif
@@ -355,13 +378,21 @@ document.addEventListener('DOMContentLoaded', function () {
     const itemModalName = 'PPMP_ITEM_MODAL';
     let isModalOpen = false;
 
+    // Hover hints on the project icons
+    function initTooltips() {
+        document.querySelectorAll('#ppmp_view [data-bs-toggle="tooltip"]').forEach((el) => bootstrap.Tooltip.getOrCreateInstance(el));
+    }
+    initTooltips();
+
     // Redraw the header, budget and projects from the server, keeping the scroll position
     function refreshView() {
         const y = window.scrollY;
         return $.get(window.location.href).done(function (html) {
             const fresh = $('<div>').append($.parseHTML(html)).find('#ppmp_view');
             if (!fresh.length) { window.location.reload(); return; }
+            $('.tooltip').remove();
             $('#ppmp_view').replaceWith(fresh);
+            initTooltips();
             window.scrollTo(0, y);
         }).fail(() => window.location.reload());
     }
@@ -467,9 +498,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         input.siblings('.invalid-feedback').text(messages[0]);
                         if (!input.siblings('.invalid-feedback').length) toastr.error(messages[0]);
                     });
-                    if (Object.keys(res.errors).some((k) => k.startsWith('market_scoping'))) {
-                        document.getElementById('ms_body')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }
                 } else if (xhr.status === 422 && res.message) {
                     errorSummary.removeClass('d-none').find('span').text(res.message);
                 } else {
@@ -477,6 +505,44 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+    });
+
+    // Market Scoping Checklist of a project (from its menu or its checklist icon)
+    $(document).on('click', '.btn-market-scoping', function (e) {
+        e.preventDefault();
+        if (isModalOpen) return;
+        isModalOpen = true;
+        bootstrap.Tooltip.getInstance(this)?.hide();
+        $.get($(this).data('url'), function (html) {
+            $('#modal-body').html(html);
+            const el = document.getElementById('MARKET_SCOPING_MODAL');
+            new bootstrap.Modal(el).show();
+            el.addEventListener('hidden.bs.modal', function () { isModalOpen = false; $('#modal-body').html(''); });
+        }).fail(function (xhr) { isModalOpen = false; toastr.error(xhr.responseJSON?.message ?? 'Could not open the checklist.', 'Error'); });
+    });
+
+    $(document).off('submit', '#form_market_scoping').on('submit', '#form_market_scoping', function (e) {
+        e.preventDefault();
+        const form = $(this);
+        const btn = $('#btn_save_ms').prop('disabled', true);
+        form.find('.is-invalid').removeClass('is-invalid');
+        $('#ms_error_summary').addClass('d-none');
+        $.post(btn.data('url'), form.serialize() + '&_token=' + csrf)
+            .done(function (res) {
+                toastr.success(res.message, 'Saved');
+                bootstrap.Modal.getInstance(document.getElementById('MARKET_SCOPING_MODAL')).hide();
+                refreshView();
+            })
+            .fail(function (xhr) {
+                btn.prop('disabled', false);
+                const res = xhr.responseJSON || {};
+                $('#ms_error_summary').removeClass('d-none').find('span').text(res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Something went wrong.'));
+                $.each(res.errors || {}, function (key, messages) {
+                    const parts = key.split('.');
+                    const input = form.find('[name="' + parts[0] + parts.slice(1).map((p) => '[' + p + ']').join('') + '"]');
+                    input.addClass('is-invalid').siblings('.invalid-feedback').text(messages[0]);
+                });
+            });
     });
 
     // Distribution: which offices get the project's items

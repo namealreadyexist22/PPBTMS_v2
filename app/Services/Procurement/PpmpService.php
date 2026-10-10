@@ -150,6 +150,15 @@ class PpmpService
         });
     }
 
+    /** Save a project's Market Scoping Checklist on its own (draft / returned PPMPs). */
+    public function saveMarketScoping(PpmpItem $item, array $marketScoping): PpmpItem
+    {
+        $this->assertEditable($item->ppmp);
+        $item->update(['market_scoping' => $marketScoping]);
+
+        return $item;
+    }
+
     public function removeItem(PpmpItem $item): void
     {
         $ppmp = $item->ppmp;
