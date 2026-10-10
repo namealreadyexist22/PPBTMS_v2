@@ -468,7 +468,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (!input.siblings('.invalid-feedback').length) toastr.error(messages[0]);
                     });
                     if (Object.keys(res.errors).some((k) => k.startsWith('market_scoping'))) {
-                        bootstrap.Collapse.getOrCreateInstance(document.getElementById('ms_body'), { toggle: false }).show();
+                        document.getElementById('ms_body')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     }
                 } else if (xhr.status === 422 && res.message) {
                     errorSummary.removeClass('d-none').find('span').text(res.message);
