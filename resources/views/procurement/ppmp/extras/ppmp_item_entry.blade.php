@@ -46,7 +46,7 @@
                                 <div class="alert alert-secondary small py-2 px-3 mt-2 mb-0 d-none" id="standard_item_info"></div>
                             </div>
                         @endif
-                        <div class="col-md-12">
+                        <div class="col-md-8">
                             <label class="form-label small fw-semibold text-muted mb-1">PAP</label>
                             <select name="ppmp_pap_id" class="form-select form-select-sm" required>
                                 @foreach ($paps as $pap)
@@ -55,12 +55,7 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-8">
-                            <label class="form-label small fw-semibold text-muted mb-1">General Description and Objective</label>
-                            <textarea name="description" class="form-control form-control-sm" rows="2" required
-                                placeholder="e.g. Procurement of office supplies for the operations of the Planning Section">{{ $item->description ?? '' }}</textarea>
-                            <div class="invalid-feedback"></div>
-                        </div>
+
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold text-muted mb-1">Type of Project</label>
                             <select name="project_type" class="form-select form-select-sm" required>
@@ -70,6 +65,14 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
+
+                        <div class="col-md-12">
+                            <label class="form-label small fw-semibold text-muted mb-1">General Description and Objective</label>
+                            <textarea name="description" class="form-control form-control-sm" rows="2" style="resize: none;" required
+                                placeholder="e.g. Procurement of office supplies for the operations of the Planning Section">{{ $item->description ?? '' }}</textarea>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        
                     </div>
 
                     {{-- 2. Quantity and size --}}
@@ -96,9 +99,30 @@
                                 value="{{ $item?->unit_cost !== null ? number_format((float) $item->unit_cost, 2) : '' }}" placeholder="0.00">
                             <div class="invalid-feedback"></div>
                         </div>
+
                         <div class="col-md-5">
-                            <label class="form-label small fw-semibold text-muted mb-1">Size / brief specs <span class="fw-normal">(optional, printed on the PPMP)</span></label>
-                            <textarea name="quantity_size" class="form-control form-control-sm" rows="2" placeholder="e.g. 3.5&quot; HDD, SATA, 7200 RPM">{{ $item->quantity_size ?? '' }}</textarea>
+                            <label class="form-label small fw-semibold text-muted mb-1">
+                                Estimated Budget / ABA (PHP)
+                            </label>
+                            <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end js-money" required
+                                value="{{ $item ? number_format((float) $item->estimated_budget, 2) : '' }}" placeholder="0.00">
+                            <div class="invalid-feedback"></div>
+                            <div class="form-text" id="budget_formula"></div>
+                            @if ($item && (float) $item->committed_amount > 0)
+                                <div class="form-text text-warning">Already charged by PRs: {{ number_format((float) $item->committed_amount, 2) }}. The budget cannot go below this.</div>
+                            @endif
+                        </div>
+                        
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label small fw-semibold text-muted mb-1">
+                                Size / brief specs <span class="fw-normal">(optional, printed on the PPMP)
+
+                                </span>
+                            
+                            </label>
+                            <textarea name="quantity_size" class="form-control form-control-sm" rows="2" style="resize: none;" placeholder="e.g. 3.5&quot; HDD, SATA, 7200 RPM">{{ $item->quantity_size ?? '' }}</textarea>
                             <div class="invalid-feedback"></div>
                             <div class="form-text">Full specifications, TOR or scope of work: attach the file below.</div>
                         </div>
@@ -168,16 +192,7 @@
                             <div class="invalid-feedback"></div>
                             <div class="form-text" id="allotment_hint"></div>
                         </div>
-                        <div class="col-md-5">
-                            <label class="form-label small fw-semibold text-muted mb-1">Estimated Budget / ABA (PHP)</label>
-                            <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end js-money" required
-                                value="{{ $item ? number_format((float) $item->estimated_budget, 2) : '' }}" placeholder="0.00">
-                            <div class="invalid-feedback"></div>
-                            <div class="form-text" id="budget_formula"></div>
-                            @if ($item && (float) $item->committed_amount > 0)
-                                <div class="form-text text-warning">Already charged by PRs: {{ number_format((float) $item->committed_amount, 2) }}. The budget cannot go below this.</div>
-                            @endif
-                        </div>
+                        
                     </div>
 
                     {{-- Budget allocation left for this PPMP, before and after this project --}}
