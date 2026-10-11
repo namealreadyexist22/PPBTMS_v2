@@ -20,6 +20,10 @@
                 @endif
 
                 <div class="modal-body p-4">
+
+                    {{-- Budget allocation left for this PPMP, before and after this project --}}
+                    <div id="budget_left" class="alert py-2 px-3 small mb-3 d-none"></div>
+
                     <div id="item_error_summary" class="alert alert-danger d-none py-2 px-3 small rounded mb-3 shadow-sm">
                         <i class="fas fa-exclamation-triangle me-1"></i> <span>Please correct the highlighted errors below.</span>
                     </div>
@@ -131,17 +135,8 @@
                     {{-- 3. Procurement details --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Procurement Details</small>
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold text-muted mb-1">Recommended Mode of Procurement</label>
-                            <select name="procurement_mode_id" class="form-select form-select-sm" required>
-                                <option value="">Choose...</option>
-                                @foreach ($modes as $mode)
-                                    <option value="{{ $mode->id }}" @selected(($item->procurement_mode_id ?? null) == $mode->id)>{{ $mode->name }}</option>
-                                @endforeach
-                            </select>
-                            <div class="invalid-feedback"></div>
-                        </div>
-                        <div class="col-md-6 d-flex align-items-end flex-wrap">
+
+                        <div class="col-md-12 d-flex align-items-end flex-wrap">
                             <div class="form-check form-switch mb-1">
                                 <input class="form-check-input" type="checkbox" name="pre_proc_conference" value="1" id="pre_proc_conference"
                                     @checked($item->pre_proc_conference ?? false)>
@@ -152,26 +147,35 @@
                                 <label class="form-check-label small" for="is_epa" title="RA 12009 Sec. 12: may start before the budget is approved, once the Indicative APP is approved; no award until the funds are effective">Early Procurement Activity (EPA)</label>
                             </div>
                         </div>
-                        <div class="col-md-4">
+
+                        <div class="col-md-12">
+                            <label class="form-label small fw-semibold text-muted mb-1">Recommended Mode of Procurement</label>
+                            <select name="procurement_mode_id" class="form-select form-select-sm" required>
+                                <option value="">Choose...</option>
+                                @foreach ($modes as $mode)
+                                    <option value="{{ $mode->id }}" @selected(($item->procurement_mode_id ?? null) == $mode->id)>{{ $mode->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        
+                        <div class="col-md-6">
                             <label class="form-label small fw-semibold text-muted mb-1">Start of Procurement Activity</label>
                             <input type="month" name="proc_start" class="form-control form-control-sm" required value="{{ $item?->proc_start?->format('Y-m') ?? $ppmp->fiscal_year . '-01' }}">
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label small fw-semibold text-muted mb-1">End of Procurement Activity</label>
                             <input type="month" name="proc_end" class="form-control form-control-sm" required value="{{ $item?->proc_end?->format('Y-m') ?? $ppmp->fiscal_year . '-01' }}">
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-4">
+
+                        <div class="col-md-6">
                             <label class="form-label small fw-semibold text-muted mb-1">Expected Delivery / Implementation</label>
                             <input type="text" name="delivery_period" class="form-control form-control-sm" value="{{ $item->delivery_period ?? '' }}" placeholder="e.g. March {{ $ppmp->fiscal_year }}">
                             <div class="invalid-feedback"></div>
                         </div>
-                    </div>
 
-                    {{-- 4. Funding --}}
-                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Funding</small>
-                    <div class="row g-3 mb-3">
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold text-muted mb-1">Source of Funds</label>
                             <select name="fund_source_id" class="form-select form-select-sm" required>
@@ -182,7 +186,7 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label class="form-label small fw-semibold text-muted mb-1">Allotment Class</label>
                             <select name="allotment_class" class="form-select form-select-sm" required>
                                 @foreach ($allotments as $allotment)
@@ -192,13 +196,10 @@
                             <div class="invalid-feedback"></div>
                             <div class="form-text" id="allotment_hint"></div>
                         </div>
-                        
+
                     </div>
 
-                    {{-- Budget allocation left for this PPMP, before and after this project --}}
-                    <div id="budget_left" class="alert py-2 px-3 small mb-3 d-none"></div>
-
-                    <div class="small text-muted mb-3"><i class="fas fa-clipboard-check me-1"></i>The Market Scoping Checklist is filled in from the project's <i class="fas fa-ellipsis-h"></i> menu in the table, after saving.</div>
+                    {{-- <div class="small text-muted mb-3"><i class="fas fa-clipboard-check me-1"></i>The Market Scoping Checklist is filled in from the project's <i class="fas fa-ellipsis-h"></i> menu in the table, after saving.</div> --}}
 
                     {{-- 6. Attachments (market survey, specifications, ...) --}}
                     <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;"><i class="fas fa-paperclip me-1"></i> Attached Supporting Documents</small>
@@ -220,7 +221,7 @@
                     @endif
                     <div id="new_attachments"></div>
                     <button type="button" class="btn btn-sm btn-outline-secondary mb-1" id="btn_add_attachment"><i class="fas fa-plus me-1"></i> Attach a file</button>
-                    <div class="form-text mb-3">PDF, image, Word or Excel, up to {{ config('market_scoping.max_file_kb') / 1024 }} MB each. Files are saved with the project.</div>
+                    <div class="form-text mb-3">PDF up to {{ config('market_scoping.max_file_kb') / 1024 }} MB each. Files are saved with the project.</div>
 
                     {{-- 7. Remarks --}}
                     <div class="mb-1">
