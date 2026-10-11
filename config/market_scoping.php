@@ -44,5 +44,5 @@ return [
     ],
 
     'max_file_kb'   => 10240,   // 10 MB per file
-    'allowed_types' => ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'],
+    'allowed_types' => ['pdf'],   // supporting documents are attached as PDF only
 ];

@@ -103,6 +103,11 @@ class StorePpmpItemRequest extends FormRequest
         ];
     }
 
+    public function messages(): array
+    {
+        return ['attachments.*.mimes' => 'Attach PDF files only (scan or save Word / Excel / images as PDF first).'];
+    }
+
     public function attributes(): array
     {
         return [

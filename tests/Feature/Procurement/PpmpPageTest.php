@@ -278,6 +278,14 @@ class PpmpPageTest extends TestCase
             'attachments' => [\Illuminate\Http\UploadedFile::fake()->create('virus.exe', 10)],
         ]), ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors(['attachments.0', 'market_scoping.period_to']);
 
+        // Only PDF: a Word file or an image is refused too
+        foreach (['specs.docx', 'quotation.jpg'] as $name) {
+            $this->post(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, [
+                'id' => $item->id, 'attachments' => [\Illuminate\Http\UploadedFile::fake()->create($name, 10)],
+            ]), ['Accept' => 'application/json'])->assertStatus(422)
+                ->assertJsonPath('errors', fn ($errors) => str_contains($errors['attachments.0'][0], 'PDF files only'));
+        }
+
         // Outsiders cannot download
         $this->actingAs($this->outsider)->get(route('procurement.ppmp.attachments.show', [$ppmp, $attachment]))->assertForbidden();
 
