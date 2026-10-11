@@ -2,15 +2,17 @@
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow">
 
-            <div class="modal-header bg-light py-3 border-bottom border-light">
+            <div class="modal-header bg-primary py-3 border-bottom border-light">
                 <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
                     @if ($item)
                         <i class="fas fa-edit text-warning me-2"></i> Edit Procurement Project
                     @else
-                        <i class="fas fa-plus-circle text-primary me-2"></i> Add Procurement Project
+                        <i class="fas fa-plus-circle text-light me-2"></i> 
+                        <label for="" class="text-light">
+                        Add Procurement Project</label> 
                     @endif
                 </h5>
-                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close shadow-none bg-light" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
 
             <form id="form_ppmp_item" autocomplete="off" novalidate enctype="multipart/form-data">
@@ -80,7 +82,7 @@
                     </div>
 
                     {{-- 2. Quantity and size --}}
-                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Quantity and Size (QTY and Specs)</small>
+                    {{-- <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Quantity and Size (QTY and Specs)</small> --}}
                     <div class="row g-3 mb-3">
                         <div class="col-md-2">
                             <label class="form-label small fw-semibold text-muted mb-1">Quantity</label>
@@ -111,10 +113,14 @@
                             <input type="text" inputmode="decimal" name="estimated_budget" class="form-control form-control-sm text-end js-money" required
                                 value="{{ $item ? number_format((float) $item->estimated_budget, 2) : '' }}" placeholder="0.00">
                             <div class="invalid-feedback"></div>
-                            <div class="form-text" id="budget_formula"></div>
+                            
                             @if ($item && (float) $item->committed_amount > 0)
                                 <div class="form-text text-warning">Already charged by PRs: {{ number_format((float) $item->committed_amount, 2) }}. The budget cannot go below this.</div>
                             @endif
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="form-text" id="budget_formula"></div>
                         </div>
                         
                     </div>
@@ -170,7 +176,7 @@
                             <div class="invalid-feedback"></div>
                         </div>
 
-                        <div class="col-md-6">
+                        <div class="col-md-5">
                             <label class="form-label small fw-semibold text-muted mb-1">Expected Delivery / Implementation</label>
                             <input type="text" name="delivery_period" class="form-control form-control-sm" value="{{ $item->delivery_period ?? '' }}" placeholder="e.g. March {{ $ppmp->fiscal_year }}">
                             <div class="invalid-feedback"></div>
@@ -186,7 +192,7 @@
                             </select>
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-md-3">
                             <label class="form-label small fw-semibold text-muted mb-1">Allotment Class</label>
                             <select name="allotment_class" class="form-select form-select-sm" required>
                                 @foreach ($allotments as $allotment)
@@ -226,7 +232,7 @@
                     {{-- 7. Remarks --}}
                     <div class="mb-1">
                         <label class="form-label small fw-semibold text-muted mb-1">Remarks</label>
-                        <textarea name="remarks" class="form-control form-control-sm" rows="2">{{ $item->remarks ?? '' }}</textarea>
+                        <textarea name="remarks" class="form-control form-control-sm" rows="2" style="resize: none;">{{ $item->remarks ?? '' }}</textarea>
                         <div class="invalid-feedback"></div>
                     </div>
                 </div>
