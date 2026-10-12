@@ -66,6 +66,11 @@ class StandardItemTest extends TestCase
         $this->assertSame(['ICT-0001', 'ICT-0002', 'ITEM-0001'], Item::orderBy('id')->pluck('code')->all());
         $this->get(route('procurement.items.entry'))->assertOk()->assertSee('ITEM-0002');
 
+        // Listed by code; search and category narrow the list
+        $this->get(route('procurement.items.index'))->assertSeeInOrder(['ICT-0001', 'ICT-0002', 'ITEM-0001']);
+        $this->get(route('procurement.items.index', ['q' => 'paper']))->assertSee('Bond paper')->assertDontSee('LED Smart TV');
+        $this->get(route('procurement.items.index', ['category' => $ict]))->assertSee('Laptop')->assertDontSee('Bond paper');
+        $this->get(route('procurement.items.index', ['q' => 'zzz']))->assertSee('No items match the search.');
         $this->get(route('procurement.items.index'))->assertOk()->assertSee('ICT-0001')->assertSee('₱50,000.00')->assertSee('TWG-ICT Res. 2026-03');
 
         // Editing keeps the code; it can be corrected but must stay unique

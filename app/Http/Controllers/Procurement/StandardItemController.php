@@ -25,7 +25,7 @@ class StandardItemController extends Controller
         $items = Item::with(['unit', 'category'])->withCount('ppmpItems')
             ->when($request->filled('category'), fn ($q) => $q->where('item_category_id', $request->integer('category')))
             ->when($request->filled('q'), fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%' . $request->input('q') . '%')->orWhere('code', 'like', '%' . $request->input('q') . '%')))
-            ->orderByDesc('is_active')->orderBy('name')->get();
+            ->orderBy('code')->get();
 
         return view('procurement.items.index', [
             'items'      => $items,

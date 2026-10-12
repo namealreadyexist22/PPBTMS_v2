@@ -9,13 +9,11 @@
     <button class="btn btn-sm btn-success btn-item-entry"><i class="fas fa-plus me-1"></i> Add Standard Item</button>
 </div>
 
-{{-- Redrawn in place after adding, editing or deleting an item (no full reload) --}}
-<div id="items_view">
 <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white px-4 py-3" style="border-bottom: 1px solid #f1f5f9;">
-        <form method="GET" class="d-flex flex-wrap gap-2">
+        <form method="GET" class="d-flex flex-wrap gap-2" id="items_filter">
             <input type="search" name="q" value="{{ request('q') }}" class="form-control form-control-sm" placeholder="Search code or name…" style="width: 240px;">
-            <select name="category" class="form-select form-select-sm" style="width: 220px;" onchange="this.form.submit()">
+            <select name="category" class="form-select form-select-sm" style="width: 220px;">
                 <option value="">All categories</option>
                 @foreach ($categories as $category)
                     <option value="{{ $category->id }}" @selected(request('category') == $category->id)>{{ $category->name }}</option>
@@ -24,6 +22,8 @@
             <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-search"></i></button>
         </form>
     </div>
+    {{-- Redrawn in place on search / filter and after adding, editing or deleting (no full reload) --}}
+    <div id="items_view">
     <div class="table-responsive">
         <table class="table table-sm table-hover align-middle small mb-0">
             <thead class="table-light">
@@ -59,14 +59,14 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-tags fa-2x mb-2 d-block opacity-50"></i>No standard items yet.</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-tags fa-2x mb-2 d-block opacity-50"></i>{{ request()->filled('q') || request()->filled('category') ? 'No items match the search.' : 'No standard items yet.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
     <div class="small text-muted px-4 py-2">Changing a standard cost or specs does not change PPMP projects already saved; they take the new values when re-saved (e.g. in an amendment). Items used by projects can be deactivated but not deleted.</div>
+    </div>{{-- /#items_view --}}
 </div>
-</div>{{-- /#items_view --}}
 
 {{-- Full specifications of one item --}}
 <div class="modal fade" id="SPECS_MODAL" tabindex="-1" aria-hidden="true">
@@ -93,13 +93,31 @@
 @push('script')
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
-    // Redraw the items table from the server (same search and category filter)
-    function refreshView() {
-        return $.get(window.location.href).done(function (html) {
+    // Redraw the items table from the server; the search box keeps its focus while typing
+    let pending = null;
+    function refreshView(url = window.location.href) {
+        pending?.abort();
+        $('#items_view').css('opacity', .6);
+        pending = $.get(url).done(function (html) {
             const fresh = $('<div>').append($.parseHTML(html)).find('#items_view');
             fresh.length ? $('#items_view').replaceWith(fresh) : window.location.reload();
-        }).fail(() => window.location.reload());
+        }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.reload(); })
+          .always(() => $('#items_view').css('opacity', ''));
+        return pending;
     }
+
+    // Search and category filter: redraw without reloading, keep the URL in step (refresh / Back work)
+    function applyFilter() {
+        const params = new URLSearchParams();
+        $('#items_filter').serializeArray().forEach((f) => { if (f.value.trim()) params.set(f.name, f.value.trim()); });
+        const url = '{{ route("procurement.items.index") }}' + (params.toString() ? '?' + params : '');
+        history.replaceState(null, '', url);
+        refreshView(url);
+    }
+    let typing = null;
+    $('#items_filter').on('submit', function (e) { e.preventDefault(); clearTimeout(typing); applyFilter(); });
+    $('#items_filter [name=q]').on('input', function () { clearTimeout(typing); typing = setTimeout(applyFilter, 300); });
+    $('#items_filter [name=category]').on('change', applyFilter);
 
     $(document).on('click', '.btn-view-specs', function () {
         const data = $(this).data();
