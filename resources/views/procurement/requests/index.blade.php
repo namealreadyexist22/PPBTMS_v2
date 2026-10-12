@@ -11,14 +11,14 @@
                     <h5 class="m-0 fw-bold text-dark" style="font-size: 1.05rem;">
                         <i class="fas fa-file-invoice text-muted me-2"></i>Purchase &amp; Job Requests
                     </h5>
-                    <button id="btn_add" class="btn btn-sm text-white fw-medium shadow-sm px-3" style="background-color: #10b981; border-color: #10b981; border-radius: 6px;">
-                        <i class="fas fa-plus me-1"></i>New {{ $kind->short() }}
+                    <button id="btn_add" data-kind="{{ $kind->value }}" class="btn btn-sm text-white fw-medium shadow-sm px-3" style="background-color: #10b981; border-color: #10b981; border-radius: 6px;">
+                        <i class="fas fa-plus me-1"></i>New <span id="btn_add_kind">{{ $kind->short() }}</span>
                     </button>
                 </div>
-                <ul class="nav nav-tabs border-0">
+                <ul class="nav nav-tabs border-0" id="requests_tabs">
                     @foreach (RequestKind::cases() as $tab)
                         <li class="nav-item">
-                            <a class="nav-link {{ $tab === $kind ? 'active fw-semibold' : 'text-muted' }}" href="{{ route('procurement.requests.index', ['kind' => $tab->value]) }}">
+                            <a class="nav-link request-tab {{ $tab === $kind ? 'active fw-semibold' : 'text-muted' }}" data-kind="{{ $tab->value }}" data-short="{{ $tab->short() }}" href="{{ route('procurement.requests.index', ['kind' => $tab->value]) }}">
                                 {{ $tab->label() }} <span class="badge bg-light text-dark border ms-1">{{ $counts[$tab->value] ?? 0 }}</span>
                             </a>
                         </li>
@@ -27,13 +27,13 @@
             </div>
 
             <div class="card-body px-4 pb-4 pt-3">
-                <form class="row g-2 mb-3" method="GET">
+                <form class="row g-2 mb-3" method="GET" id="requests_filter">
                     <input type="hidden" name="kind" value="{{ $kind->value }}">
                     <div class="col-12 col-md-5">
                         <input type="search" name="q" value="{{ $search }}" class="form-control form-control-sm" placeholder="Search number or purpose">
                     </div>
                     <div class="col-8 col-md-3">
-                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <select name="status" class="form-select form-select-sm">
                             <option value="">All (except superseded)</option>
                             @foreach (RequestStatus::cases() as $s)
                                 <option value="{{ $s->value }}" @selected($status === $s)>{{ $s->label() }}</option>
@@ -43,6 +43,8 @@
                     <div class="col-4 col-md-2"><button class="btn btn-sm btn-outline-secondary w-100"><i class="fas fa-search me-1"></i>Filter</button></div>
                 </form>
 
+                {{-- Redrawn in place on tab, search, status and page changes (no full reload) --}}
+                <div id="requests_view">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle small mb-0">
                         <thead class="table-light">
@@ -70,12 +72,13 @@
                                     <td class="text-center"><span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted py-4">No {{ strtolower($kind->label()) }}s yet.</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
                 <div class="mt-3">{{ $requests->links() }}</div>
+                </div>{{-- /#requests_view --}}
             </div>
         </div>
     </div>
@@ -89,11 +92,50 @@ document.addEventListener('DOMContentLoaded', function () {
     let isModalOpen = false;
     const modalName = 'REQUEST_ENTRY_MODAL';
 
+    // Tabs, search, status and pages: redraw the list without reloading; the URL follows (refresh / Back keep it)
+    let pending = null;
+    function loadList(url) {
+        pending?.abort();
+        $('#requests_view').css('opacity', .6);
+        history.replaceState(null, '', url);
+        pending = $.get(url).done(function (html) {
+            const fresh = $('<div>').append($.parseHTML(html)).find('#requests_view');
+            fresh.length ? $('#requests_view').replaceWith(fresh) : window.location.reload();
+        }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.href = url; })
+          .always(() => $('#requests_view').css('opacity', ''));
+    }
+    function applyFilter() {
+        const params = new URLSearchParams();
+        $('#requests_filter').serializeArray().forEach((f) => { if (f.value.trim()) params.set(f.name, f.value.trim()); });
+        loadList('{{ route("procurement.requests.index") }}?' + params);
+    }
+    let typing = null;
+    $('#requests_filter').on('submit', function (e) { e.preventDefault(); clearTimeout(typing); applyFilter(); });
+    $('#requests_filter [name=q]').on('input', function () { clearTimeout(typing); typing = setTimeout(applyFilter, 300); });
+    $('#requests_filter [name=status]').on('change', applyFilter);
+
+    $(document).on('click', '.request-tab', function (e) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+        e.preventDefault();
+        if ($(this).hasClass('active')) return;
+        $('.request-tab').removeClass('active fw-semibold').addClass('text-muted');
+        $(this).addClass('active fw-semibold').removeClass('text-muted');
+        $('#requests_filter [name=kind]').val($(this).data('kind'));
+        $('#btn_add').data('kind', $(this).data('kind'));
+        $('#btn_add_kind').text($(this).data('short'));
+        applyFilter();
+    });
+
+    $(document).on('click', '#requests_view .pagination a', function (e) {
+        e.preventDefault();
+        loadList(this.href);
+    });
+
     $('#btn_add').on('click', function (e) {
         e.preventDefault();
         if (isModalOpen) return;
         isModalOpen = true;
-        $.get('{{ route("procurement.requests.entry", ["kind" => $kind->value]) }}', function (html) {
+        $.get('{{ route("procurement.requests.entry") }}', { kind: $(this).data('kind') }, function (html) {
             $('#modal-body').html(html);
             const el = document.getElementById(modalName);
             new bootstrap.Modal(el).show();
