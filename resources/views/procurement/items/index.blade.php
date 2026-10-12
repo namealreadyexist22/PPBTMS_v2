@@ -9,6 +9,8 @@
     <button class="btn btn-sm btn-success btn-item-entry"><i class="fas fa-plus me-1"></i> Add Standard Item</button>
 </div>
 
+{{-- Redrawn in place after adding, editing or deleting an item (no full reload) --}}
+<div id="items_view">
 <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white px-4 py-3" style="border-bottom: 1px solid #f1f5f9;">
         <form method="GET" class="d-flex flex-wrap gap-2">
@@ -35,11 +37,17 @@
                         <td>{{ $item->category?->name ?? '—' }}</td>
                         <td>{{ $item->unit?->name }}</td>
                         <td class="text-end text-nowrap fw-semibold">{{ $item->isStandard() ? '₱' . number_format((float) $item->standard_unit_cost, 2) : '—' }}</td>
-                        <td style="max-width: 320px;">
-                            <div style="white-space: pre-line;">{{ \Illuminate\Support\Str::limit($item->specifications, 160) ?: '—' }}</div>
-                            @if ($item->twg_reference || $item->twg_approved_at)
-                                <div class="text-muted mt-1"><i class="fas fa-stamp me-1"></i>{{ $item->twg_reference }}{{ $item->twg_approved_at ? ' · ' . $item->twg_approved_at->format('M d, Y') : '' }}</div>
+                        <td>
+                            @php $twg = trim($item->twg_reference . ($item->twg_approved_at ? ' · ' . $item->twg_approved_at->format('M d, Y') : ''), ' ·'); @endphp
+                            @if ($item->specifications)
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 btn-view-specs"
+                                        data-title="{{ $item->code }} — {{ $item->name }}" data-specs="{{ $item->specifications }}" data-twg="{{ $twg }}">
+                                    <i class="fas fa-eye me-1"></i>View specs
+                                </button>
+                            @else
+                                <span class="text-muted">—</span>
                             @endif
+                            @if ($twg)<div class="text-muted mt-1 text-nowrap"><i class="fas fa-stamp me-1"></i>{{ $twg }}</div>@endif
                         </td>
                         <td class="text-center">{{ $item->ppmp_items_count }}</td>
                         <td class="text-center"><span class="badge {{ $item->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $item->is_active ? 'Active' : 'Inactive' }}</span></td>
@@ -56,12 +64,49 @@
     </div>
     <div class="small text-muted px-4 py-2">Changing a standard cost or specs does not change PPMP projects already saved; they take the new values when re-saved (e.g. in an amendment). Items used by projects can be deactivated but not deleted.</div>
 </div>
+</div>{{-- /#items_view --}}
+
+{{-- Full specifications of one item --}}
+<div class="modal fade" id="SPECS_MODAL" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light py-3">
+                <div>
+                    <h5 class="modal-title fw-bold"><i class="fas fa-list-alt text-muted me-2"></i>Specifications (TWG)</h5>
+                    <div class="small text-muted" id="specs_title"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4 small">
+                <div id="specs_body" style="white-space: pre-line;"></div>
+                <div class="text-muted mt-3 d-none" id="specs_twg"><i class="fas fa-stamp me-1"></i><span></span></div>
+            </div>
+            <div class="modal-footer bg-light py-2"><button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
 <div id="modal-body"></div>
 @endsection
 
 @push('script')
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
+    // Redraw the items table from the server (same search and category filter)
+    function refreshView() {
+        return $.get(window.location.href).done(function (html) {
+            const fresh = $('<div>').append($.parseHTML(html)).find('#items_view');
+            fresh.length ? $('#items_view').replaceWith(fresh) : window.location.reload();
+        }).fail(() => window.location.reload());
+    }
+
+    $(document).on('click', '.btn-view-specs', function () {
+        const data = $(this).data();
+        $('#specs_title').text(data.title);
+        $('#specs_body').text(data.specs);
+        $('#specs_twg').toggleClass('d-none', !data.twg).find('span').text(data.twg || '');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('SPECS_MODAL')).show();
+    });
+
     $(document).on('click', '.btn-item-entry', function () {
         $.get('{{ route("procurement.items.entry") }}', $(this).data('id') ? { id: $(this).data('id') } : {}, function (html) {
             $('#modal-body').html(html);
@@ -76,7 +121,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const form = $(this);
         form.find('.is-invalid').removeClass('is-invalid');
         $.post('{{ route("procurement.items.store") }}', form.serialize())
-            .done((res) => { toastr.success(res.message, 'Saved'); setTimeout(() => window.location.reload(), 500); })
+            .done((res) => {
+                toastr.success(res.message, 'Saved');
+                bootstrap.Modal.getInstance(document.getElementById('ITEM_MODAL'))?.hide();
+                refreshView();
+            })
             .fail(function (xhr) {
                 const res = xhr.responseJSON || {};
                 $.each(res.errors || {}, (k, m) => form.find('[name="' + k + '"]').addClass('is-invalid').siblings('.invalid-feedback').text(m[0]));
@@ -89,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
         Swal.fire({ title: 'Delete this item?', text: 'Only items no PPMP project uses can be deleted.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Delete' }).then((r) => {
             if (!r.isConfirmed) return;
             $.ajax({ url: '{{ route("procurement.items.destroy") }}', type: 'POST', data: { _token: '{{ csrf_token() }}', _method: 'DELETE', id: id } })
-                .done((res) => { toastr.success(res.message); setTimeout(() => window.location.reload(), 500); })
+                .done((res) => { toastr.success(res.message); refreshView(); })
                 .fail((xhr) => Swal.fire({ icon: 'error', title: 'Not deleted', text: xhr.responseJSON?.message ?? 'Something went wrong.' }));
         });
     });
