@@ -33,7 +33,9 @@
                 @forelse ($items as $item)
                     <tr class="{{ $item->is_active ? '' : 'text-muted' }}">
                         <td class="ps-4 fw-semibold text-nowrap">{{ $item->code }}</td>
-                        <td>{{ $item->name }}<div class="text-muted">{{ $item->project_type?->label() }}</div></td>
+                        <td>{{ $item->name }}
+                            {{-- <div class="text-muted">{{ $item->project_type?->label() }}</div> --}}
+                        </td>
                         <td>{{ $item->category?->name ?? '—' }}</td>
                         <td>{{ $item->unit?->name }}</td>
                         <td class="text-end text-nowrap fw-semibold">{{ $item->isStandard() ? '₱' . number_format((float) $item->standard_unit_cost, 2) : '—' }}</td>
