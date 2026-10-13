@@ -32,7 +32,7 @@
                     <div class="col-12 col-md-5">
                         <input type="search" name="q" value="{{ $search }}" class="form-control form-control-sm" placeholder="Search number or purpose">
                     </div>
-                    <div class="col-8 col-md-3">
+                    <div class="col-12 col-md-3">
                         <select name="status" class="form-select form-select-sm">
                             <option value="">All (except superseded)</option>
                             @foreach (RequestStatus::cases() as $s)
@@ -40,7 +40,6 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-4 col-md-2"><button class="btn btn-sm btn-outline-secondary w-100"><i class="fas fa-search me-1"></i>Filter</button></div>
                 </form>
 
                 {{-- Redrawn in place on tab, search, status and page changes (no full reload) --}}

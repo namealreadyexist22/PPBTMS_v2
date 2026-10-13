@@ -19,7 +19,6 @@
                     <option value="{{ $category->id }}" @selected(request('category') == $category->id)>{{ $category->name }}</option>
                 @endforeach
             </select>
-            <button class="btn btn-sm btn-outline-secondary"><i class="fas fa-search"></i></button>
         </form>
     </div>
     {{-- Redrawn in place on search / filter and after adding, editing or deleting (no full reload) --}}
