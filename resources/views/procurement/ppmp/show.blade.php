@@ -139,8 +139,12 @@
     <div class="card border-0 shadow-sm mb-3 {{ $budgetOver ? 'border border-danger' : '' }}" style="border-radius: 12px; overflow: hidden;" id="budget_card">
         <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
             <div>
-                <h6 class="m-0 fw-bold"><i class="fas fa-coins text-muted me-2"></i>Budget Allocation — FY {{ $ppmp->fiscal_year }}</h6>
-                @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif
+                <h6 class="m-0 fw-bold">
+                    <i class="fas fa-coins text-muted me-2"></i>
+                    Budget Allocation — FY {{ $ppmp->fiscal_year }}
+                    <i class="far fa-question-circle"></i>
+                </h6>
+                {{-- @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif --}}
             </div>
         </div>
         @if (! $department)
@@ -290,7 +294,7 @@
                                 <td>{{ $item->delivery_period }}</td>
                                 <td class="text-nowrap" title="{{ $item->fundSource->name }} · {{ $item->allotment_class->label() }}">
                                     {{ $item->fundSource->code }}
-                                    <span class="badge {{ match ($item->allotment_class) { \App\Enums\AllotmentClass::Co => 'bg-warning-subtle text-warning-emphasis', \App\Enums\AllotmentClass::Semi => 'bg-info-subtle text-info-emphasis', default => 'bg-light text-dark' } }} border">{{ $item->allotment_class->short() }}</span>
+                                    {{-- <span class="badge {{ match ($item->allotment_class) { \App\Enums\AllotmentClass::Co => 'bg-warning-subtle text-warning-emphasis', \App\Enums\AllotmentClass::Semi => 'bg-info-subtle text-info-emphasis', default => 'bg-light text-dark' } }} border">{{ $item->allotment_class->short() }}</span> --}}
                                 </td>
                                 <td class="text-end text-nowrap fw-semibold">
                                     {{ number_format((float) $item->estimated_budget, 2) }}
