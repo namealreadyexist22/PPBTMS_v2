@@ -453,4 +453,25 @@ class PurchaseRequestTest extends TestCase
         $this->actingAs($outsider)->get(route('procurement.requests.show', $pr))->assertForbidden();
         $this->actingAs($this->head)->get(route('procurement.requests.show', $pr))->assertOk();   // head of the division above
     }
+
+    public function test_a_visayas_request_uses_the_visayas_ppmp_of_the_same_office(): void
+    {
+        // The office also has an approved Visayas PPMP for the same year, with its own PAP
+        $vis = $this->ppmps->create($this->section, 2026, $this->staff, \App\Enums\PpmpType::Final, null, \App\Enums\Region::Vis);
+        $visPap = $this->ppmps->addPap($vis, $this->ppmps->suggestPapCode($vis), 'VIS ICT');
+        $router = $this->ppmps->addItem($vis, $this->project($visPap->id, 'Router (VIS)', 4, '2500'));
+        $this->ppmps->submit($vis, $this->staff);
+        $this->ppmps->approve($vis->fresh(), $this->head);
+
+        $pr = $this->requests->create(RequestKind::Pr, $visPap->fresh(), $this->staff, $this->signed());
+        $lines = $this->requests->availableLines($pr);
+        $this->assertSame(['Router (VIS)'], $lines->pluck('description')->all());
+
+        $this->requests->saveLine($pr, $this->line($router, 3, '2500'));
+        $this->assertEquals('7500.00', $pr->fresh()->total_amount);
+
+        // The Luzon/Mindanao request still sees its own projects
+        $lm = $this->draft();
+        $this->assertContains('Hard Drive (4 TB)', $this->requests->availableLines($lm)->pluck('description')->all());
+    }
 }

@@ -27,7 +27,6 @@
     #pr_items .card-header::after { content: none; }
     /* Edit / Remove stay in view when the table scrolls sideways (narrow screens) */
     #pr_items .pr-actions { position: sticky; right: 0; z-index: 1; }
-    #pr_items .pr-actions::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; border-left: var(--bs-border-width) solid var(--bs-border-color); }
     .pr-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     /* Item modal: the form sits between .modal-content and .modal-body, so it joins the flex column
        (the body scrolls and the footer stays, fullscreen on phones) */
@@ -153,7 +152,7 @@
 {{-- Details and signatories --}}
 <div class="card border-0 shadow-sm pr-card mb-3">
     <div class="card-header bg-white py-3 px-4" style="border-bottom: 1px solid #f1f5f9;">
-        <h6 class="m-0 fw-bold"><i class="fas fa-pen text-muted me-2"></i>Details</h6>
+        <h6 class="m-0 fw-bold"><i class="fas {{ $canEdit ? 'fa-pen' : 'fa-file-alt' }} text-muted me-2"></i>Details</h6>
     </div>
     <div class="card-body px-4">
         <form id="form_header" autocomplete="off">
@@ -161,12 +160,17 @@
             <fieldset class="border-0 p-0 m-0" @disabled(! $canEdit)>
                 <div class="pr-label mb-2">Request</div>
                 <div class="row g-3">
-                    <div class="{{ $jr ? 'col-lg-8' : 'col-lg-6' }}">
+                    <div class="{{ $jr ? 'col-lg-9' : 'col-lg-6' }}">
                         <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
-                        <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
+                        @if ($canEdit)
+                            <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
+                        @else
+                            {{-- Read-only: the whole purpose as text, however long --}}
+                            <div class="small" style="white-space: pre-line;">{{ $pr->purpose ?: '—' }}</div>
+                        @endif
                     </div>
                     @if ($jr)
-                        <div class="col-lg-4">
+                        <div class="col-lg-3">
                             <label class="form-label small fw-semibold text-muted mb-1">JR Type</label>
                             <select name="jr_type" class="form-select form-select-sm">
                                 <option value="">Choose…</option>
@@ -225,7 +229,8 @@
             @endif
         </div>
     @else
-        <div class="table-responsive">
+        {{-- md and up: the table; phones get the stacked list below --}}
+        <div class="table-responsive d-none d-md-block">
             <table class="table table-hover align-middle small mb-0">
                 <thead class="table-light">
                     <tr class="text-nowrap">
@@ -265,13 +270,44 @@
                 </tbody>
                 <tfoot class="table-light">
                     <tr>
-                        {{-- Phones: the amount is repeated next to the label (the amount column is scrolled off to the right) --}}
-                        <td colspan="5" class="ps-4 fw-bold text-start text-md-end">{{ $jr ? 'ABC' : 'TOTAL' }}<span class="d-md-none ms-2">{{ number_format((float) $pr->total_amount, 2) }}</span></td>
+                        <td colspan="5" class="ps-4 fw-bold text-end">{{ $jr ? 'ABC' : 'TOTAL' }}</td>
                         <td @class(['text-end fw-bold', 'pe-4' => $cols === 6])>{{ number_format((float) $pr->total_amount, 2) }}</td>
                         @if ($cols - 6 > 0)<td colspan="{{ $cols - 6 }}" class="pe-4"></td>@endif
                     </tr>
                 </tfoot>
             </table>
+        </div>
+
+        {{-- Phones: one block per item, so the description is not hidden behind a scrolled table --}}
+        <div class="list-group list-group-flush small d-md-none">
+            @foreach ($pr->items as $line)
+                <div class="list-group-item px-3 py-3">
+                    <div class="d-flex align-items-start gap-2">
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <div class="fw-semibold">{{ $line->description }}</div>
+                            @if ($line->ppmpItem)<div class="text-muted"><i class="fas fa-diagram-project me-1"></i>{{ $line->ppmpItem->description }}</div>@endif
+                        </div>
+                        @if ($canEdit)
+                            <div class="text-nowrap flex-shrink-0">
+                                <button class="btn btn-sm btn-light border btn-edit-line" data-id="{{ $line->id }}" title="Edit" aria-label="Edit item"><i class="fas fa-pen"></i></button>
+                                <button class="btn btn-sm btn-light border text-danger btn-delete-line" data-id="{{ $line->id }}" title="Remove" aria-label="Remove item"><i class="fas fa-trash-alt"></i></button>
+                            </div>
+                        @endif
+                    </div>
+                    @if ($line->specifications)<div class="text-muted fst-italic mt-1" style="white-space: pre-line;">{{ \Illuminate\Support\Str::limit($line->specifications, 300) }}</div>@endif
+                    @if ($jr && $line->nature_of_work)
+                        <div class="mt-2"><div class="pr-label">Nature of Work</div><div style="white-space: pre-line;">{{ $line->nature_of_work }}</div></div>
+                    @endif
+                    <div class="d-flex align-items-baseline justify-content-between gap-2 mt-2">
+                        <span class="text-muted">@if ($line->stock_no){{ $line->stock_no }} · @endif<span class="text-nowrap">{{ trim(rtrim(rtrim(number_format((float) $line->quantity, 2), '0'), '.') . ' ' . $line->unit) }} × ₱{{ number_format((float) $line->unit_cost, 2) }}</span></span>
+                        <span class="fw-semibold text-nowrap">₱{{ number_format((float) $line->total_cost, 2) }}</span>
+                    </div>
+                </div>
+            @endforeach
+            <div class="list-group-item px-3 py-2 bg-body-tertiary d-flex justify-content-between fw-bold">
+                <span>{{ $jr ? 'ABC' : 'TOTAL' }}</span>
+                <span class="text-nowrap">₱{{ number_format((float) $pr->total_amount, 2) }}</span>
+            </div>
         </div>
     @endif
 </div>
@@ -280,8 +316,8 @@
 @if ($canEdit && ! $papMissing && $lines->isNotEmpty())
     <div class="card border-0 shadow-sm pr-card overflow-hidden mb-3">
         <div class="card-header bg-white py-3 px-4" style="border-bottom: 1px solid #f1f5f9;">
-            <h6 class="m-0 fw-bold"><i class="fas fa-chart-bar text-muted me-2"></i>Left to request under <span class="text-nowrap">{{ $pr->pap->code }}</span></h6>
-            <div class="small text-muted mt-1">Approved PPMP, less submitted requests and this draft.</div>
+            <h6 class="m-0 fw-bold d-flex gap-2"><i class="fas fa-chart-bar text-muted mt-1"></i><span>Left to request under <span class="text-nowrap">{{ $pr->pap->code }}</span></span></h6>
+            <div class="small text-muted mt-1 ms-4">Approved PPMP, less submitted requests and this draft.</div>
         </div>
         <div class="list-group list-group-flush small">
             @foreach ($lines as $project)
@@ -295,7 +331,7 @@
                     $done = $budgetLeft <= 0;
                 @endphp
                 <div class="list-group-item px-4 py-3 {{ $done ? 'bg-body-tertiary text-muted' : '' }}">
-                    <div class="row g-2 align-items-center">
+                    <div class="row gx-4 gy-2 align-items-center">
                         {{-- One row from xl: below that the sidebar leaves too little width for four columns --}}
                         <div class="col-xl-4">
                             <div class="fw-semibold pr-clamp" title="{{ $project->description }}">{{ $project->description }}</div>

@@ -331,7 +331,9 @@ class PurchaseRequestService
     /** The PAP with the same code in the office's currently approved PPMP. */
     protected function currentPap(PurchaseRequest $request): PpmpPap
     {
+        // Same office, year and region (an office can have an approved LM and an approved VIS PPMP)
         $ppmp = Ppmp::where('office_id', $request->office_id)->where('fiscal_year', $request->fiscal_year)
+            ->where('region', $request->ppmp->region)
             ->where('status', PpmpStatus::Approved)->first();
         $pap = $ppmp?->paps()->where('code', $request->pap->code)->first();
 
