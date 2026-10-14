@@ -230,7 +230,7 @@ class BudgetAllocationTest extends TestCase
         $staff->update(['is_activated' => 1]);
         $staff->givePermissionTo('manage ppmp');
         $this->actingAs($staff)->get(route('procurement.ppmp.show', $staffPpmp))->assertOk()
-            ->assertSee('Over budget.')->assertSee('PPSPD — PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT budget, shared by its units')
+            ->assertSee('Over budget.')->assertSee('How the budget is checked')
             ->assertSee('id="btn_submit" disabled', false)
             ->assertDontSee('left to plan')
             ->assertSee('-500,000.00');

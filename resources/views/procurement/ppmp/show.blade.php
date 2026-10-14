@@ -142,7 +142,9 @@
                 <h6 class="m-0 fw-bold">
                     <i class="fas fa-coins text-muted me-2"></i>
                     Budget Allocation — FY {{ $ppmp->fiscal_year }}
-                    <i class="far fa-question-circle"></i>
+                    <a tabindex="0" role="button" class="text-muted ms-1" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right"
+                       title="How the budget is checked"
+                       data-bs-content="The budget covers MOOE, CO and semi-expendable together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served."><i class="far fa-question-circle"></i></a>
                 </h6>
                 {{-- @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif --}}
             </div>
@@ -179,7 +181,6 @@
                     </tbody>
                 </table>
             </div>
-            <div class="small text-muted px-4 py-2">The budget covers MOOE, CO and semi-expendable together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served.</div>
         @endif
     </div>
 @endif
@@ -403,6 +404,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Hover hints on the project icons
     function initTooltips() {
         document.querySelectorAll('#ppmp_view [data-bs-toggle="tooltip"]').forEach((el) => bootstrap.Tooltip.getOrCreateInstance(el));
+        document.querySelectorAll('#ppmp_view [data-bs-toggle="popover"]').forEach((el) => bootstrap.Popover.getOrCreateInstance(el));
     }
     initTooltips();
 
@@ -412,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return $.get(window.location.href).done(function (html) {
             const fresh = $('<div>').append($.parseHTML(html)).find('#ppmp_view');
             if (!fresh.length) { window.location.reload(); return; }
-            $('.tooltip').remove();
+            $('.tooltip, .popover').remove();
             $('#ppmp_view').replaceWith(fresh);
             initTooltips();
             window.scrollTo(0, y);
