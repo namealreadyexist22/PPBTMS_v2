@@ -273,4 +273,18 @@ class StandardItemTest extends TestCase
             ->assertStatus(422)->assertJson(['message' => 'Only LM offices can receive items of this PPMP.']);
         $this->postJson($url, ['rows' => [['office_id' => $gad->id, 'quantity' => 2]]])->assertOk();
     }
+
+    public function test_ppmp_page_and_print_group_projects_by_allotment_class(): void
+    {
+        $service = app(PpmpService::class);
+        $ppmp = $service->create($this->mis, 2027, $this->staff);
+        $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'ICT');
+        foreach ([['Supply of bond paper', 'mooe', '30000'], ['Desktop computers', 'co', '450000'], ['Multi-function printer', 'semi', '20000'], ['Network printer', 'co', '160000']] as [$description, $class, $budget]) {
+            $service->addItem($ppmp, $this->line(['ppmp_pap_id' => $pap->id, 'description' => $description, 'allotment_class' => $class, 'estimated_budget' => $budget]));
+        }
+
+        $order = ['Capital Outlay (CO)', 'Desktop computers', 'Network printer', 'Semi-Expendable', 'Multi-function printer', 'MOOE', 'Supply of bond paper'];
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSeeInOrder($order)->assertSee('610,000.00');
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSeeInOrder($order)->assertSee('610,000.00')->assertSee('660,000.00');
+    }
 }

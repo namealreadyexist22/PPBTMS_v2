@@ -15,7 +15,12 @@
         ? rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') . ' '
             . ($item->unit ? \Illuminate\Support\Str::plural($item->unit->name, (float) $item->quantity == 1 ? 1 : 2) : '')
         : null;
-    $lastItemId = $paps->flatMap->items->last()?->id;
+    // Projects of a PAP grouped by allotment class: CO, Semi-Expendable, MOOE
+    $classOrder = ['co' => 0, 'semi' => 1, 'mooe' => 2];
+    $classGroups = fn ($pap) => $pap->items
+        ->sortBy(fn ($i) => [$classOrder[$i->allotment_class?->value] ?? 9, $i->sort_order, $i->id])
+        ->groupBy(fn ($i) => $i->allotment_class?->value ?? '');
+    $lastItemId = optional($paps->last(fn ($pap) => $pap->items->isNotEmpty()), fn ($pap) => $classGroups($pap)->flatten()->last()?->id);
 @endphp
 <!DOCTYPE html>
 <html lang="en">
@@ -58,6 +63,8 @@
         table.ppmp tr { page-break-inside: avoid; }
         table.ppmp .colno th { font-weight: normal; font-style: italic; background: #fff; font-size: 7pt; padding: 1px; }
         table.ppmp tr.pap td { background: #d9d9d9; font-weight: bold; text-align: left; font-style: normal; }
+        table.ppmp tr.class-row td { background: #f2f2f2; font-weight: bold; font-style: italic; text-align: left; font-size: 7.5pt; }
+        table.ppmp tr.class-row td.r { text-align: right; }
         table.ppmp tr.total td { font-weight: bold; border: 1px solid #000; }
         table.ppmp tbody.keep { break-inside: avoid; page-break-inside: avoid; }
 
@@ -148,7 +155,14 @@
         <tbody>
             @forelse ($paps as $pap)
                 <tr class="pap"><td colspan="12">PAP CODE: {{ $pap->code }} - {{ $pap->title }}</td></tr>
-                @foreach ($pap->items as $item)
+                @foreach ($classGroups($pap) as $classKey => $classItems)
+                    @php $class = \App\Enums\AllotmentClass::tryFrom($classKey); @endphp
+                    <tr class="class-row">
+                        <td colspan="9">{{ $class?->label() ?? 'No allotment class' }}</td>
+                        <td class="r">{{ $peso($classItems->sum(fn ($i) => (float) $i->estimated_budget)) }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                @foreach ($classItems as $item)
                     @if ($item->id === $lastItemId)
                         </tbody><tbody class="keep">{{-- last row + total stay on one page --}}
                     @endif
@@ -173,6 +187,7 @@
                         </td>
                         <td class="c">@if ($item->is_epa)Early Procurement Activity<br>@endif{{ $item->remarks }}</td>
                     </tr>
+                @endforeach
                 @endforeach
             @empty
                 <tr><td colspan="12" style="text-align: center; padding: 14px;">No procurement projects.</td></tr>
