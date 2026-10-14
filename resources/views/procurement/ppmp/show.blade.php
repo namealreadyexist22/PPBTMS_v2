@@ -218,7 +218,24 @@
                             <td class="text-end fw-bold text-nowrap">{{ number_format($pap->items->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
                             <td></td>
                         </tr>
-                        @forelse ($pap->items as $item)
+                        {{-- Projects grouped by allotment class within the PAP: CO, Semi-Expendable, MOOE --}}
+                        @php
+                            $classOrder = ['co' => 0, 'semi' => 1, 'mooe' => 2];
+                            $classGroups = $pap->items
+                                ->sortBy(fn ($i) => [$classOrder[$i->allotment_class?->value] ?? 9, $i->sort_order, $i->id])
+                                ->groupBy(fn ($i) => $i->allotment_class?->value ?? '');
+                        @endphp
+                        @forelse ($classGroups as $classKey => $classItems)
+                            @php $class = \App\Enums\AllotmentClass::tryFrom($classKey); @endphp
+                            <tr class="ppmp-class-row">
+                                <td colspan="{{ $colspan - 2 }}" class="ps-4 py-1 text-uppercase fw-semibold text-muted" style="font-size: .7rem; letter-spacing: .4px; background: #f8fafc;">
+                                    <span class="badge {{ match ($class) { \App\Enums\AllotmentClass::Co => 'bg-warning-subtle text-warning-emphasis', \App\Enums\AllotmentClass::Semi => 'bg-info-subtle text-info-emphasis', default => 'bg-light text-dark' } }} border me-1">{{ $class?->short() ?? '—' }}</span>
+                                    {{ $class?->label() ?? 'No allotment class' }} · {{ $classItems->count() }} {{ \Illuminate\Support\Str::plural('project', $classItems->count()) }}
+                                </td>
+                                <td class="text-end text-nowrap py-1 fw-semibold text-muted" style="background: #f8fafc;">{{ number_format($classItems->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
+                                <td style="background: #f8fafc;"></td>
+                            </tr>
+                            @foreach ($classItems as $item)
                             <tr>
                                 <td class="ps-4 text-muted">{{ ++$n }}</td>
                                 <td>
@@ -301,6 +318,7 @@
                                     </div>
                                 </td>
                             </tr>
+                            @endforeach
                         @empty
                             <tr><td colspan="{{ $colspan }}" class="ps-5 text-muted fst-italic">No projects under this PAP yet.</td></tr>
                         @endforelse

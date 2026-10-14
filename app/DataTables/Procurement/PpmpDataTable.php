@@ -20,6 +20,9 @@ class PpmpDataTable extends DataTable
     {
         return (new EloquentDataTable($query))
             ->addColumn('office', fn ($row) => $row->office?->shortName())
+            // Search also finds the office by acronym, name or number
+            ->filterColumn('office', fn ($query, $keyword) => $query->whereHas('office', fn ($o) => $o
+                ->where('acronym', 'like', "%{$keyword}%")->orWhere('name', 'like', "%{$keyword}%")->orWhere('code', 'like', "%{$keyword}%")))
             ->editColumn('region', fn ($row) => $row->region->short())
             ->editColumn('type', fn ($row) => $row->type->label())
             ->editColumn('total_budget', fn ($row) => number_format($row->total_budget, 2))
@@ -49,7 +52,7 @@ class PpmpDataTable extends DataTable
             Column::make('ppmp_no')->title('PPMP No.'),
             Column::make('fiscal_year')->title('FY'),
             Column::make('region')->title('Region'),
-            Column::computed('office')->title('Office'),
+            Column::make('office')->title('Office')->orderable(false)->searchable(true),
             Column::make('type')->title('Type'),
             Column::make('version')->title('Ver.')->addClass('text-center'),
             Column::make('total_budget')->title('Total Budget')->addClass('text-end'),
