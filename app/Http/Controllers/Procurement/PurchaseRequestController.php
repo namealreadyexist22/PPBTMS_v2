@@ -148,28 +148,32 @@ class PurchaseRequestController extends Controller
         $this->authorizeEdit($request, $purchaseRequest);
         $line = $request->filled('id') ? $purchaseRequest->items()->findOrFail($request->id) : null;
 
+        // What each project may still take on this line (editing: this line's own share counts back)
         try {
-            $projects = $this->service->availableLines($purchaseRequest);
+            $projects = $this->service->availableLines($purchaseRequest, $line);
         } catch (ProcurementException $e) {
             $this->deny($request, $e->getMessage());
         }
-
-        // What each project may still take on this line: remaining + this line's own amount when editing
-        $own = $line ? \App\Support\Money::toCents($line->total_cost) : 0;
 
         return view('procurement.requests.extras.request_line_entry', [
             'modalName' => 'REQUEST_LINE_MODAL',
             'pr'        => $purchaseRequest,
             'line'      => $line,
+            // Editing: the line's project in the current PPMP (by line_uuid: an amendment gives the projects new ids)
+            'selected'  => $line ? $projects->firstWhere('line_uuid', $line->line_uuid)?->id
+                : $projects->firstWhere('id', $request->integer('project'))?->id,
             'projects'  => $projects->map(fn ($p) => [
-                'id'          => $p->id,
-                'description' => $p->description,
-                'unit'        => $p->unit?->name,
-                'unit_cost'   => $p->unit_cost !== null ? (float) $p->unit_cost : null,
-                'standard'    => (bool) $p->item?->isStandard(),
-                'specs'       => $p->item?->specifications,
-                'mode'        => $p->procurementMode?->name,
-                'remaining'   => ($p->remaining_cents + ($line && $line->line_uuid === $p->line_uuid ? $own : 0)) / 100,
+                'id'            => $p->id,
+                'description'   => $p->description,
+                'unit'          => $p->unit?->name,
+                'unit_cost'     => $p->unit_cost !== null ? (float) $p->unit_cost : null,
+                'standard'      => (bool) $p->item?->isStandard(),
+                'specs'         => $p->item?->specifications,
+                'mode'          => $p->procurementMode?->name,
+                'remaining'     => $p->remaining_cents / 100,
+                'budget'        => $p->budget_cents / 100,
+                'planned_qty'   => $p->planned_hundredths === null ? null : $p->planned_hundredths / 100,
+                'remaining_qty' => $p->remaining_hundredths === null ? null : $p->remaining_hundredths / 100,
             ])->values(),
         ]);
     }

@@ -7,7 +7,39 @@
     $jr = $pr->kind === RequestKind::Jr;
     $canPrintSign = $canManage && in_array($pr->status, [RequestStatus::Draft, RequestStatus::Submitted], true);
     $papMissing = is_string($lines);
+    // Quantities in hundredths of a unit ("7.5", "8")
+    $qty = fn ($h) => rtrim(rtrim(number_format($h / 100, 2), '0'), '.');
+    // Share used, as on the Budget page: green, amber from 90%, red when over
+    $usedPct = fn ($left, $total) => $total > 0 ? (int) max(0, min(100, round(($total - $left) / $total * 100))) : 100;
+    $barColor = fn ($left, $pct) => $left < 0 ? 'bg-danger' : ($pct >= 90 ? 'bg-warning' : 'bg-success');
 @endphp
+
+<style>
+    .pr-card { border-radius: 12px; }
+    .pr-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; color: var(--bs-secondary-color); }
+    .pr-stat { border: var(--bs-border-width) solid var(--bs-border-color); border-radius: var(--bs-border-radius-lg); padding: .5rem 1rem; height: 100%; }
+    .pr-bar { height: 6px; }
+    .pr-ico, .pr-empty-ico { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; background-color: var(--bs-primary-bg-subtle); color: var(--bs-primary); }
+    .pr-ico { width: 36px; height: 36px; border-radius: var(--bs-border-radius-lg); }
+    .pr-empty-ico { width: 56px; height: 56px; border-radius: 50%; font-size: 1.4rem; }
+    #pr_items .table > thead th { font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; color: var(--bs-secondary-color); }
+    /* AdminLTE's clearfix would be an extra flex item (and gap) after the Add Item button */
+    #pr_items .card-header::after { content: none; }
+    /* Edit / Remove stay in view when the table scrolls sideways (narrow screens) */
+    #pr_items .pr-actions { position: sticky; right: 0; z-index: 1; }
+    #pr_items .pr-actions::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; border-left: var(--bs-border-width) solid var(--bs-border-color); }
+    .pr-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    /* Item modal: the form sits between .modal-content and .modal-body, so it joins the flex column
+       (the body scrolls and the footer stays, fullscreen on phones) */
+    #form_request_line { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    /* Read-only: show the values as text */
+    #form_header fieldset:disabled .form-control,
+    #form_header fieldset:disabled .form-select { background: transparent; border-color: transparent; box-shadow: none; padding-left: 0; resize: none; }
+    #form_header fieldset:disabled .select2-container { pointer-events: none; }
+    #form_header fieldset:disabled .select2-selection { background: transparent !important; border-color: transparent !important; padding-left: 0 !important; }
+    #form_header fieldset:disabled .select2-selection__clear,
+    #form_header fieldset:disabled .select2-selection__arrow { display: none; }
+</style>
 
 <div class="mb-3">
     <a href="{{ route('procurement.requests.index', ['kind' => $pr->kind->value]) }}" class="text-decoration-none small text-muted">
@@ -17,113 +49,124 @@
 
 {{-- Header and items are redrawn in place after item changes (no full reload) --}}
 <div id="pr_header" data-total="{{ number_format((float) $pr->total_amount, 2) }}">
-<div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
+<div class="card border-0 shadow-sm pr-card mb-3">
     <div class="card-body p-4">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
             <div>
-                <div class="small text-muted text-uppercase fw-semibold" style="letter-spacing: .5px;">{{ $pr->kind->label() }} · {{ $pr->procurementLabel() }}</div>
+                <div class="pr-label">{{ $pr->kind->label() }} · {{ $pr->procurementLabel() }}</div>
                 <h4 class="fw-bold mb-1">
                     {{ $pr->kind->short() }} {{ $pr->request_no ?? '(not yet numbered)' }}
-                    @if ($pr->revision)<span class="badge bg-info text-dark align-middle" style="font-size: .7rem;">Rev. {{ $pr->revision }}</span>@endif
-                    <span class="badge bg-{{ $pr->status->color() }} align-middle" style="font-size: .7rem;">{{ $pr->status->label() }}</span>
+                    @if ($pr->revision)<span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle align-middle" style="font-size: .7rem;">Rev. {{ $pr->revision }}</span>@endif
+                    @php $c = $pr->status->color(); @endphp
+                    <span class="badge rounded-pill bg-{{ $c }}-subtle text-{{ $c }}-emphasis border border-{{ $c }}-subtle align-middle" style="font-size: .7rem;">{{ $pr->status->label() }}</span>
                 </h4>
                 <div class="text-muted small">{{ $pr->office->pathLabel() }}</div>
             </div>
 
-            <div class="d-flex flex-wrap gap-2">
+            {{-- Phones: the buttons share one full-width row --}}
+            <div class="d-flex flex-wrap gap-2 col-12 col-md-auto">
                 @if ($canPrintSign)
-                    <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#PRINT_MODAL"><i class="fas fa-print me-1"></i> Print</button>
+                    <button class="btn btn-sm btn-outline-secondary flex-fill flex-md-grow-0" data-bs-toggle="modal" data-bs-target="#PRINT_MODAL"><i class="fas fa-print me-1"></i> Print</button>
                 @else
-                    <a href="{{ route('procurement.requests.print', $pr) }}" target="_blank" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Print</a>
+                    <a href="{{ route('procurement.requests.print', $pr) }}" target="_blank" class="btn btn-sm btn-outline-secondary flex-fill flex-md-grow-0"><i class="fas fa-print me-1"></i> Print</a>
                 @endif
                 @if ($canEdit)
-                    <button class="btn btn-sm btn-primary" id="btn_submit" @disabled($pr->items->isEmpty())><i class="fas fa-paper-plane me-1"></i> Submit</button>
-                    <button class="btn btn-sm btn-outline-danger" id="btn_delete"><i class="fas fa-trash-alt me-1"></i> Delete Draft</button>
+                    <button class="btn btn-sm btn-outline-danger flex-fill flex-md-grow-0" id="btn_delete"><i class="fas fa-trash-alt me-1"></i> Delete Draft</button>
+                    <button class="btn btn-sm btn-primary flex-fill flex-md-grow-0" id="btn_submit" @disabled($pr->items->isEmpty())><i class="fas fa-paper-plane me-1"></i> Submit</button>
                 @endif
                 @if ($canManage && $pr->status === RequestStatus::Submitted)
                     @if ($openRevision)
-                        <a href="{{ route('procurement.requests.show', $openRevision) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-code-branch me-1"></i> Open Rev. {{ $openRevision->revision }} (draft)</a>
+                        <a href="{{ route('procurement.requests.show', $openRevision) }}" class="btn btn-sm btn-outline-primary flex-fill flex-md-grow-0"><i class="fas fa-code-branch me-1"></i> Open Rev. {{ $openRevision->revision }} (draft)</a>
                     @else
-                        <button class="btn btn-sm btn-outline-primary" id="btn_revise"><i class="fas fa-code-branch me-1"></i> Revise</button>
+                        <button class="btn btn-sm btn-outline-primary flex-fill flex-md-grow-0" id="btn_revise"><i class="fas fa-code-branch me-1"></i> Revise</button>
                     @endif
-                    <button class="btn btn-sm btn-outline-danger" id="btn_cancel"><i class="fas fa-ban me-1"></i> Cancel</button>
+                    <button class="btn btn-sm btn-outline-danger flex-fill flex-md-grow-0" id="btn_cancel"><i class="fas fa-ban me-1"></i> Cancel</button>
                 @endif
             </div>
         </div>
 
-        <hr class="my-3">
-
-        <div class="row g-3 small">
-            <div class="col-12 col-md-4">
-                <div class="text-muted">Charge to</div>
-                <div class="fw-semibold">{{ $pr->pap->label() }}</div>
-                <a href="{{ route('procurement.ppmp.show', $pr->ppmp) }}" class="text-decoration-none">PPMP {{ $pr->ppmp->ppmp_no }}</a> · FY {{ $pr->fiscal_year }}
-            </div>
-            <div class="col-6 col-md-2">
-                <div class="text-muted">Date</div>
-                <div class="fw-semibold">{{ $pr->submitted_at?->format('M d, Y') ?? 'On submit' }}</div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="text-muted">Revisions</div>
-                <div>
-                    @forelse ($revisions as $rev)
-                        @if ($rev->uuid === $pr->uuid)
-                            <span class="badge bg-dark">{{ $rev->revision ? 'Rev. ' . $rev->revision : 'Original' }}</span>
-                        @else
-                            <a href="{{ route('procurement.requests.show', $rev->uuid) }}" class="badge bg-light text-dark border text-decoration-none" title="{{ $rev->status->label() }}">{{ $rev->revision ? 'Rev. ' . $rev->revision : 'Original' }}</a>
-                        @endif
-                    @empty
-                        <span class="text-muted">—</span>
-                    @endforelse
+        <div class="row g-2 mt-3 small">
+            <div class="col-12 col-md-5">
+                <div class="pr-stat">
+                    <div class="pr-label">Charge to</div>
+                    <div class="fw-semibold">{{ $pr->pap->label() }}</div>
+                    <div><a href="{{ route('procurement.ppmp.show', $pr->ppmp) }}" class="text-decoration-none">PPMP {{ $pr->ppmp->ppmp_no }}</a> · FY {{ $pr->fiscal_year }}</div>
                 </div>
             </div>
-            <div class="col-12 col-md-3 text-md-end">
-                <div class="text-muted">{{ $jr ? 'ABC' : 'Total' }}</div>
-                <div class="fw-bold fs-5">₱ {{ number_format((float) $pr->total_amount, 2) }}</div>
+            <div class="col-6 col-md-2">
+                <div class="pr-stat">
+                    <div class="pr-label">Date</div>
+                    <div class="fw-semibold">{{ $pr->submitted_at?->format('M d, Y') ?? 'On submit' }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-2">
+                <div class="pr-stat">
+                    <div class="pr-label">Revisions</div>
+                    <div class="fw-semibold d-flex flex-wrap gap-1">
+                        @forelse ($revisions as $rev)
+                            @if ($rev->uuid === $pr->uuid)
+                                <span class="badge rounded-pill bg-dark">{{ $rev->revision ? 'Rev. ' . $rev->revision : 'Original' }}</span>
+                            @else
+                                <a href="{{ route('procurement.requests.show', $rev->uuid) }}" class="badge rounded-pill bg-light text-dark border text-decoration-none" title="{{ $rev->status->label() }}">{{ $rev->revision ? 'Rev. ' . $rev->revision : 'Original' }}</a>
+                            @endif
+                        @empty
+                            <span class="text-muted fw-normal">—</span>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-3">
+                <div class="pr-stat text-md-end bg-primary-subtle border-primary-subtle">
+                    <div class="pr-label">{{ $jr ? 'ABC' : 'Total' }}</div>
+                    <div class="fs-5 fw-bold">₱ {{ number_format((float) $pr->total_amount, 2) }}</div>
+                </div>
             </div>
         </div>
 
         @if ($pr->status === RequestStatus::Draft && $pr->revised_from_id)
-            <div class="alert alert-info small mt-3 mb-0">
-                <i class="fas fa-code-branch me-1"></i> Revision of <a href="{{ route('procurement.requests.show', $pr->revisedFrom) }}">{{ $pr->revisedFrom->title() }}</a>. It keeps the number and the signatories;
-                when submitted, it replaces the request before it and the PPMP charges are updated to this revision's amounts. Have it signed again by the same signatories.
+            <div class="alert alert-info d-flex gap-2 align-items-start border-0 small mt-3 mb-0">
+                <i class="fas fa-code-branch mt-1"></i>
+                <div>Revision of <a href="{{ route('procurement.requests.show', $pr->revisedFrom) }}">{{ $pr->revisedFrom->title() }}</a>. It keeps the number and the signatories;
+                when submitted, it replaces the request before it and the PPMP charges are updated to this revision's amounts. Have it signed again by the same signatories.</div>
             </div>
         @endif
         @if ($pr->status === RequestStatus::Submitted)
-            <div class="alert alert-success small mt-3 mb-0">
-                <i class="fas fa-check-circle me-1"></i> Submitted {{ $pr->submitted_at->format('M d, Y h:i A') }}. ₱{{ number_format((float) $pr->total_amount, 2) }} is charged to the PPMP projects.
-                To change it, use <strong>Revise</strong>; to drop it, <strong>Cancel</strong> (the amount goes back to the PPMP).
+            <div class="alert alert-success d-flex gap-2 align-items-start border-0 small mt-3 mb-0">
+                <i class="fas fa-check-circle mt-1"></i>
+                <div>Submitted {{ $pr->submitted_at->format('M d, Y h:i A') }}. ₱{{ number_format((float) $pr->total_amount, 2) }} is charged to the PPMP projects.
+                To change it, use <strong>Revise</strong>; to drop it, <strong>Cancel</strong> (the amount goes back to the PPMP).</div>
             </div>
         @endif
         @if ($pr->status === RequestStatus::Superseded)
-            <div class="alert alert-secondary small mt-3 mb-0"><i class="fas fa-info-circle me-1"></i> Replaced by a newer revision.</div>
+            <div class="alert alert-secondary d-flex gap-2 align-items-start border-0 small mt-3 mb-0"><i class="fas fa-info-circle mt-1"></i><div>Replaced by a newer revision.</div></div>
         @endif
         @if ($pr->status === RequestStatus::Cancelled)
-            <div class="alert alert-danger small mt-3 mb-0"><i class="fas fa-ban me-1"></i> Cancelled {{ $pr->cancelled_at?->format('M d, Y') }}: {{ $pr->cancel_reason }}</div>
+            <div class="alert alert-danger d-flex gap-2 align-items-start border-0 small mt-3 mb-0"><i class="fas fa-ban mt-1"></i><div>Cancelled {{ $pr->cancelled_at?->format('M d, Y') }}: {{ $pr->cancel_reason }}</div></div>
         @endif
         @if ($canEdit && $papMissing)
-            <div class="alert alert-warning small mt-3 mb-0"><i class="fas fa-exclamation-triangle me-1"></i> {{ $lines }}</div>
+            <div class="alert alert-warning d-flex gap-2 align-items-start border-0 small mt-3 mb-0"><i class="fas fa-exclamation-triangle mt-1"></i><div>{{ $lines }}</div></div>
         @endif
     </div>
 </div>
 </div>
 
 {{-- Details and signatories --}}
-<div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
-    <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
+<div class="card border-0 shadow-sm pr-card mb-3">
+    <div class="card-header bg-white py-3 px-4" style="border-bottom: 1px solid #f1f5f9;">
         <h6 class="m-0 fw-bold"><i class="fas fa-pen text-muted me-2"></i>Details</h6>
     </div>
     <div class="card-body px-4">
         <form id="form_header" autocomplete="off">
             @csrf
             <fieldset class="border-0 p-0 m-0" @disabled(! $canEdit)>
+                <div class="pr-label mb-2">Request</div>
                 <div class="row g-3">
-                    <div class="col-md-{{ $jr ? 8 : 6 }}">
+                    <div class="{{ $jr ? 'col-lg-8' : 'col-lg-6' }}">
                         <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
                         <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
                     </div>
                     @if ($jr)
-                        <div class="col-md-4">
+                        <div class="col-lg-4">
                             <label class="form-label small fw-semibold text-muted mb-1">JR Type</label>
                             <select name="jr_type" class="form-select form-select-sm">
                                 <option value="">Choose…</option>
@@ -133,19 +176,27 @@
                             </select>
                         </div>
                     @else
-                        <div class="col-md-3">
+                        <div class="col-6 col-lg-3">
                             <label class="form-label small fw-semibold text-muted mb-1">SAI No.</label>
-                            <input type="text" name="sai_no" class="form-control form-control-sm" value="{{ $pr->sai_no }}" maxlength="50">
+                            <input type="text" name="sai_no" class="form-control form-control-sm" value="{{ $pr->sai_no }}" maxlength="50" @if (! $canEdit) placeholder="—" @endif>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-6 col-lg-3">
                             <label class="form-label small fw-semibold text-muted mb-1">SAI Date</label>
-                            <input type="date" name="sai_date" class="form-control form-control-sm" value="{{ $pr->sai_date?->format('Y-m-d') }}">
+                            {{-- Read-only and blank: plain text, not the browser's mm/dd/yyyy --}}
+                            <input type="{{ $canEdit || $pr->sai_date ? 'date' : 'text' }}" name="sai_date" class="form-control form-control-sm" value="{{ $pr->sai_date?->format('Y-m-d') }}" @if (! $canEdit) placeholder="—" @endif>
                         </div>
                     @endif
-                    @include('procurement.requests.extras.signatory_fields', ['prefix' => ''])
+                </div>
+
+                <div class="pr-label mt-4 mb-2">Signatories</div>
+                {{-- align-items-end: the inputs line up when a label wraps --}}
+                <div class="row g-3 align-items-end">
+                    @include('procurement.requests.extras.signatory_fields', ['prefix' => '', 'col' => 'col-sm-6 col-xl-3'])
                 </div>
                 @if ($canEdit)
-                    <div class="text-end mt-3"><button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save Details</button></div>
+                    <div class="d-flex justify-content-end border-top pt-3 mt-3">
+                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save Details</button>
+                    </div>
                 @endif
             </fieldset>
         </form>
@@ -153,70 +204,147 @@
 </div>
 
 <div id="pr_items">
+@php $cols = 6 + ($jr ? 1 : 0) + ($canEdit ? 1 : 0); @endphp
 {{-- Items --}}
-<div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
-    <div class="card-header bg-white pt-3 pb-2 px-4 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #f1f5f9;">
-        <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>Items ({{ $pr->items->count() }})</h6>
+<div class="card border-0 shadow-sm pr-card overflow-hidden mb-3">
+    <div class="card-header bg-white py-3 px-4 d-flex align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
+        <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>Items</h6>
+        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">{{ $pr->items->count() }}</span>
         @if ($canEdit && ! $papMissing)
-            <button class="btn btn-sm btn-success" id="btn_add_line"><i class="fas fa-plus me-1"></i> Add Item</button>
+            <button class="btn btn-sm btn-primary ms-auto" id="btn_add_line"><i class="fas fa-plus me-1"></i> Add Item</button>
         @endif
     </div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle small mb-0">
-            <thead class="table-light">
-                <tr class="text-nowrap">
-                    <th class="ps-4">{{ $jr ? 'Property No.' : 'Stock No.' }}</th>
-                    <th>Unit</th>
-                    <th>Item Description</th>
-                    <th class="text-end">Qty</th>
-                    <th class="text-end">Unit Cost</th>
-                    <th class="text-end">Total</th>
-                    @if ($jr)<th>Nature of Work</th>@endif
-                    <th>PPMP project</th>
-                    @if ($canEdit)<th class="text-center pe-4" style="width: 80px;"></th>@endif
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($pr->items as $line)
-                    <tr>
-                        <td class="ps-4">{{ $line->stock_no }}</td>
-                        <td>{{ $line->unit }}</td>
-                        <td>
-                            <div class="fw-semibold">{{ $line->description }}</div>
-                            @if ($line->specifications)<div class="text-muted fst-italic" style="white-space: pre-line;">{{ \Illuminate\Support\Str::limit($line->specifications, 300) }}</div>@endif
-                        </td>
-                        <td class="text-end">{{ rtrim(rtrim(number_format((float) $line->quantity, 2), '0'), '.') }}</td>
-                        <td class="text-end">{{ number_format((float) $line->unit_cost, 2) }}</td>
-                        <td class="text-end fw-semibold">{{ number_format((float) $line->total_cost, 2) }}</td>
-                        @if ($jr)<td style="white-space: pre-line;">{{ $line->nature_of_work }}</td>@endif
-                        <td class="text-muted">{{ $line->ppmpItem?->description }}</td>
-                        @if ($canEdit)
-                            <td class="text-center pe-4 text-nowrap">
-                                <button class="btn btn-link btn-sm p-0 me-2 btn-edit-line" data-id="{{ $line->id }}" title="Edit"><i class="fas fa-pen"></i></button>
-                                <button class="btn btn-link btn-sm p-0 text-danger btn-delete-line" data-id="{{ $line->id }}" title="Remove"><i class="fas fa-trash-alt"></i></button>
-                            </td>
-                        @endif
-                    </tr>
-                @empty
-                    <tr><td colspan="9" class="text-center text-muted py-4">No items yet.@if ($canEdit) Add the items to request; similar items (e.g. hard drives, RAM, RJ45) can go in one {{ $pr->kind->short() }}.@endif</td></tr>
-                @endforelse
-            </tbody>
-            @if ($pr->items->isNotEmpty())
-                <tfoot class="table-light">
-                    <tr><td colspan="5" class="ps-4 fw-bold text-end">{{ $jr ? 'ABC' : 'TOTAL' }}</td><td class="text-end fw-bold">{{ number_format((float) $pr->total_amount, 2) }}</td><td colspan="3"></td></tr>
-                </tfoot>
+    {{-- Empty: outside the table, so on phones it fits the card instead of the scrolled table width --}}
+    @if ($pr->items->isEmpty())
+        <div class="py-5 px-4 text-center">
+            <span class="pr-empty-ico mb-3"><i class="fas fa-box-open"></i></span>
+            <div class="fw-semibold">No items yet.</div>
+            @if ($canEdit)<div class="text-muted small">Add the items to request; similar items (e.g. hard drives, RAM, RJ45) can go in one {{ $pr->kind->short() }}.</div>@endif
+            @if ($canEdit && ! $papMissing)
+                <button class="btn btn-sm btn-outline-primary js-add-line mt-3"><i class="fas fa-plus me-1"></i> Add the first item</button>
             @endif
-        </table>
-    </div>
-    @if ($canEdit && ! $papMissing && $lines->isNotEmpty())
-        <div class="px-4 py-2 small text-muted border-top">
-            Left to request under {{ $pr->pap->code }}:
-            @foreach ($lines as $project)
-                <span class="badge bg-light text-dark border me-1">{{ \Illuminate\Support\Str::limit($project->description, 40) }}: ₱{{ number_format($project->remaining_cents / 100, 2) }}</span>
-            @endforeach
+        </div>
+    @else
+        <div class="table-responsive">
+            <table class="table table-hover align-middle small mb-0">
+                <thead class="table-light">
+                    <tr class="text-nowrap">
+                        <th class="ps-4">{{ $jr ? 'Property No.' : 'Stock No.' }}</th>
+                        <th>Unit</th>
+                        <th>Item Description</th>
+                        <th class="text-end">Qty</th>
+                        <th class="text-end">Unit Cost</th>
+                        {{-- Read-only (no actions column): the last column mirrors the 24px left inset --}}
+                        <th @class(['text-end', 'pe-4' => ! $jr && ! $canEdit])>Total</th>
+                        @if ($jr)<th @class(['pe-4' => ! $canEdit])>Nature of Work</th>@endif
+                        @if ($canEdit)<th class="text-end pe-4 pr-actions" style="width: 96px;"><span class="visually-hidden">Actions</span></th>@endif
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($pr->items as $line)
+                        <tr>
+                            <td class="ps-4 text-nowrap">{{ $line->stock_no }}</td>
+                            <td>{{ $line->unit }}</td>
+                            <td style="min-width: 180px;">
+                                <div class="fw-semibold">{{ $line->description }}</div>
+                                @if ($line->ppmpItem)<div class="text-muted small"><i class="fas fa-diagram-project me-1"></i>{{ $line->ppmpItem->description }}</div>@endif
+                                @if ($line->specifications)<div class="text-muted fst-italic mt-1" style="white-space: pre-line;">{{ \Illuminate\Support\Str::limit($line->specifications, 300) }}</div>@endif
+                            </td>
+                            <td class="text-end">{{ rtrim(rtrim(number_format((float) $line->quantity, 2), '0'), '.') }}</td>
+                            <td class="text-end">{{ number_format((float) $line->unit_cost, 2) }}</td>
+                            <td @class(['text-end fw-semibold', 'pe-4' => ! $jr && ! $canEdit])>{{ number_format((float) $line->total_cost, 2) }}</td>
+                            @if ($jr)<td @class(['pe-4' => ! $canEdit]) style="white-space: pre-line;">{{ $line->nature_of_work }}</td>@endif
+                            @if ($canEdit)
+                                <td class="text-end pe-4 text-nowrap pr-actions">
+                                    <button class="btn btn-sm btn-light border btn-edit-line" data-id="{{ $line->id }}" title="Edit" aria-label="Edit item"><i class="fas fa-pen"></i></button>
+                                    <button class="btn btn-sm btn-light border text-danger btn-delete-line" data-id="{{ $line->id }}" title="Remove" aria-label="Remove item"><i class="fas fa-trash-alt"></i></button>
+                                </td>
+                            @endif
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tfoot class="table-light">
+                    <tr>
+                        {{-- Phones: the amount is repeated next to the label (the amount column is scrolled off to the right) --}}
+                        <td colspan="5" class="ps-4 fw-bold text-start text-md-end">{{ $jr ? 'ABC' : 'TOTAL' }}<span class="d-md-none ms-2">{{ number_format((float) $pr->total_amount, 2) }}</span></td>
+                        <td @class(['text-end fw-bold', 'pe-4' => $cols === 6])>{{ number_format((float) $pr->total_amount, 2) }}</td>
+                        @if ($cols - 6 > 0)<td colspan="{{ $cols - 6 }}" class="pe-4"></td>@endif
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     @endif
 </div>
+
+{{-- What each PPMP project of the PAP still has: quantity and budget --}}
+@if ($canEdit && ! $papMissing && $lines->isNotEmpty())
+    <div class="card border-0 shadow-sm pr-card overflow-hidden mb-3">
+        <div class="card-header bg-white py-3 px-4" style="border-bottom: 1px solid #f1f5f9;">
+            <h6 class="m-0 fw-bold"><i class="fas fa-chart-bar text-muted me-2"></i>Left to request under <span class="text-nowrap">{{ $pr->pap->code }}</span></h6>
+            <div class="small text-muted mt-1">Approved PPMP, less submitted requests and this draft.</div>
+        </div>
+        <div class="list-group list-group-flush small">
+            @foreach ($lines as $project)
+                @php
+                    $unit = $project->unit?->name;
+                    $budgetLeft = $project->remaining_cents;
+                    $budgetPct = $usedPct($budgetLeft, $project->budget_cents);
+                    $qtyLeft = $project->remaining_hundredths;
+                    $planned = $project->planned_hundredths;
+                    $qtyPct = $qtyLeft === null ? 0 : $usedPct($qtyLeft, $planned);
+                    $done = $budgetLeft <= 0;
+                @endphp
+                <div class="list-group-item px-4 py-3 {{ $done ? 'bg-body-tertiary text-muted' : '' }}">
+                    <div class="row g-2 align-items-center">
+                        {{-- One row from xl: below that the sidebar leaves too little width for four columns --}}
+                        <div class="col-xl-4">
+                            <div class="fw-semibold pr-clamp" title="{{ $project->description }}">{{ $project->description }}</div>
+                            <div class="text-muted">{{ collect([$project->procurementMode?->name, $unit])->filter()->implode(' · ') }}</div>
+                            @if ($done)
+                                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle mt-1">Fully requested</span>
+                            @elseif ($qtyLeft !== null && $qtyLeft < 0)
+                                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle mt-1">Over quantity</span>
+                            @elseif ($qtyLeft === 0)
+                                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-1">Quantity used up</span>
+                            @endif
+                        </div>
+                        <div class="col-sm-6 col-xl-3">
+                            <div class="pr-label mb-1">Quantity</div>
+                            @if ($qtyLeft === null)
+                                <span class="badge text-bg-light border">Lot · no quantity limit</span>
+                            @else
+                                @if ($qtyLeft < 0)
+                                    <div class="text-danger"><strong>{{ trim($qty(-$qtyLeft) . ' ' . $unit) }} over</strong> · planned {{ $qty($planned) }}</div>
+                                @else
+                                    <div><strong>{{ $qty($qtyLeft) }}</strong> of {{ trim($qty($planned) . ' ' . $unit) }} left</div>
+                                @endif
+                                <div class="progress pr-bar mt-1" title="{{ $qtyPct }}% used">
+                                    <div class="progress-bar {{ $barColor($qtyLeft, $qtyPct) }}" style="width: {{ $qtyPct }}%"></div>
+                                </div>
+                            @endif
+                        </div>
+                        <div class="col-sm-6 col-xl-4">
+                            <div class="pr-label mb-1">Budget</div>
+                            @if ($budgetLeft < 0)
+                                <div class="text-danger"><strong>₱{{ number_format(-$budgetLeft / 100, 2) }} over</strong> of ₱{{ number_format($project->budget_cents / 100, 2) }}</div>
+                            @else
+                                <div><strong>₱{{ number_format($budgetLeft / 100, 2) }}</strong> of ₱{{ number_format($project->budget_cents / 100, 2) }} left</div>
+                            @endif
+                            <div class="progress pr-bar mt-1" title="{{ $budgetPct }}% used">
+                                <div class="progress-bar {{ $barColor($budgetLeft, $budgetPct) }}" style="width: {{ $budgetPct }}%"></div>
+                            </div>
+                        </div>
+                        <div class="col-xl-1 text-xl-end">
+                            <button class="btn btn-sm btn-outline-primary js-add-line" data-project="{{ $project->id }}" title="Add item from this project" aria-label="Add item from {{ $project->description }}" @disabled($done)>
+                                <i class="fas fa-plus"></i><span class="d-xl-none ms-1">Add item</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+@endif
 </div>
 
 {{-- Print: set the signatories, then print --}}
@@ -224,17 +352,20 @@
     <div class="modal fade" id="PRINT_MODAL" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-light py-3">
-                    <h5 class="modal-title fw-bold"><i class="fas fa-print text-primary me-2"></i>Print {{ $pr->title() }}</h5>
+                <div class="modal-header bg-white py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="pr-ico"><i class="fas fa-print"></i></span>
+                        <h5 class="modal-title fw-bold mb-0">Print {{ $pr->title() }}</h5>
+                    </div>
                     <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <form id="form_print" autocomplete="off">
                     @csrf
                     <div class="modal-body p-4">
                         <p class="small text-muted">Signatories printed on the form. They are saved with the {{ $pr->kind->short() }} and kept on its revisions.</p>
-                        <div class="row g-3">@include('procurement.requests.extras.signatory_fields', ['prefix' => 'p_'])</div>
+                        <div class="row g-3">@include('procurement.requests.extras.signatory_fields', ['prefix' => 'p_', 'col' => 'col-sm-6'])</div>
                     </div>
-                    <div class="modal-footer bg-light py-2">
+                    <div class="modal-footer bg-body-tertiary py-2">
                         <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
                         <a href="{{ route('procurement.requests.print', $pr) }}" target="_blank" class="btn btn-sm btn-outline-secondary">Print without saving</a>
                         <button type="submit" class="btn btn-sm btn-primary px-3"><i class="fas fa-print me-1"></i> Save &amp; Print</button>
@@ -314,18 +445,21 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // ---------- Items ----------
-    function loadLineModal(id = null) {
+    // id: edit that line; project: a new line on that PPMP project (from "Left to request")
+    function loadLineModal(id = null, project = null) {
         if (isModalOpen) return;
         isModalOpen = true;
-        $.get('{{ route("procurement.requests.lines.entry", $pr) }}', id ? { id: id } : {}, function (html) {
+        $.get('{{ route("procurement.requests.lines.entry", $pr) }}', id ? { id: id } : (project ? { project: project } : {}), function (html) {
             $('#modal-body').html(html);
             const el = document.getElementById('REQUEST_LINE_MODAL');
             new bootstrap.Modal(el).show();
+            // Deferred: AdminLTE focuses the modal's first button (the close button) on shown
+            el.addEventListener('shown.bs.modal', () => setTimeout(() => $(id ? '#form_request_line [name=quantity]' : '#form_request_line [name=ppmp_item_id]').trigger('focus')));
             el.addEventListener('hidden.bs.modal', function () { isModalOpen = false; $('#modal-body').html(''); });
         }).fail(function (xhr) { isModalOpen = false; toastr.error(errorText(xhr), 'Error'); });
     }
 
-    $(document).on('click', '#btn_add_line', () => loadLineModal());
+    $(document).on('click', '#btn_add_line, .js-add-line', function () { loadLineModal(null, $(this).data('project') || null); });
     $(document).on('click', '.btn-edit-line', function () { loadLineModal($(this).data('id')); });
 
     $(document).off('submit', '#form_request_line').on('submit', '#form_request_line', function (e) {

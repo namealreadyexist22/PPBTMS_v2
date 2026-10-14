@@ -20,6 +20,7 @@ use Database\Seeders\ProcurementLookupSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PurchaseRequestTest extends TestCase
@@ -295,6 +296,141 @@ class PurchaseRequestTest extends TestCase
 
         $this->postJson(route('procurement.requests.revise', $pr))->assertOk();
         $this->postJson(route('procurement.requests.cancel', $pr), ['reason' => ''])->assertStatus(422);
+    }
+
+    public function test_remaining_quantity_counts_submitted_requests_only(): void
+    {
+        $draft = $this->draft();
+
+        $a = $this->draft();
+        $this->requests->saveLine($a, $this->line($this->hdd, 3, '5000'));
+        $a = $this->requests->submit($a->fresh(), $this->staff);
+        $this->assertSame(500, $this->requests->remainingQuantity($draft, $this->hdd));
+
+        $b = $this->draft();
+        $this->requests->saveLine($b, $this->line($this->hdd, 2, '5000'));
+        $b = $this->requests->submit($b->fresh(), $this->staff);
+        $this->assertSame(300, $this->requests->remainingQuantity($draft, $this->hdd));
+
+        $this->requests->cancel($b, $this->staff, 'Not needed');
+        $this->assertSame(500, $this->requests->remainingQuantity($draft, $this->hdd));
+
+        // Another draft holds nothing until it is submitted
+        $e = $this->draft();
+        $this->requests->saveLine($e, $this->line($this->hdd, 1, '5000'));
+        $this->assertSame(500, $this->requests->remainingQuantity($draft, $this->hdd));
+
+        // A submitted revision replaces the request before it (superseded: no longer counted)
+        $rev = $this->requests->revise($a, $this->staff);
+        $this->requests->saveLine($rev, $this->line($this->hdd, 1, '5000'), $rev->items->first());
+        $this->requests->submit($rev->fresh(), $this->staff);
+        $this->assertSame(RequestStatus::Superseded, $a->fresh()->status);
+        $this->assertSame(700, $this->requests->remainingQuantity($draft, $this->hdd));
+    }
+
+    public function test_remaining_quantity_within_the_request(): void
+    {
+        $draft = $this->draft();
+        $first = $this->requests->saveLine($draft, $this->line($this->hdd, 2, '5000'));
+        $this->requests->saveLine($draft, $this->line($this->hdd, 1, '5000'));
+
+        $this->assertSame(500, $this->requests->remainingQuantity($draft, $this->hdd));
+        $this->assertSame(700, $this->requests->remainingQuantity($draft, $this->hdd, $first));   // editing: its own 2 count back
+
+        $hdd = $this->requests->availableLines($draft, $first)->firstWhere('id', $this->hdd->id);
+        $this->assertSame(700, $hdd->remaining_hundredths);
+        $this->assertSame(800, $hdd->planned_hundredths);
+        $this->assertSame(4000000, $hdd->budget_cents);
+    }
+
+    public function test_revision_gets_back_the_quantity_it_replaces(): void
+    {
+        $a = $this->draft();
+        $this->requests->saveLine($a, $this->line($this->hdd, 6, '5000'));
+        $a = $this->requests->submit($a->fresh(), $this->staff);
+        $rev = $this->requests->revise($a, $this->staff);
+
+        $this->assertSame(200, $this->requests->remainingQuantity($rev, $this->hdd));
+        $this->assertSame(800, $this->requests->remainingQuantity($rev, $this->hdd, $rev->items->first()));
+        $this->assertSame(200, $this->requests->remainingQuantity($this->draft(), $this->hdd));
+    }
+
+    public function test_a_lot_has_no_quantity_limit(): void
+    {
+        PpmpItem::whereKey($this->hdd->id)->update(['quantity' => null]);
+        $draft = $this->draft();
+
+        $this->assertNull($this->requests->remainingQuantity($draft, $this->hdd));
+        $this->assertNull($this->requests->availableLines($draft)->firstWhere('id', $this->hdd->id)->planned_hundredths);
+
+        $this->actingAs($this->staff);
+        $this->get(route('procurement.requests.lines.entry', $draft))->assertOk()->assertSee('Hard Drive (4 TB) — Lot ·');
+        $this->get(route('procurement.requests.show', $draft))->assertOk()->assertSee('Lot · no quantity limit');
+    }
+
+    public function test_quantity_over_the_plan_warns_but_saves(): void
+    {
+        $draft = $this->draft();
+        $this->requests->saveLine($draft, $this->line($this->hdd, 10, '4000'));   // 40,000: within the budget
+
+        $this->assertSame(-200, $this->requests->remainingQuantity($draft, $this->hdd));
+    }
+
+    public function test_pages_show_quantity_left(): void
+    {
+        $this->actingAs($this->staff);
+        $pr = $this->draft();
+
+        $this->get(route('procurement.requests.lines.entry', $pr))->assertOk()->assertSee('8 of 8');
+
+        $this->postJson(route('procurement.requests.lines.store', $pr), $this->line($this->hdd, 4, '5000'))->assertOk();
+        $this->get(route('procurement.requests.show', $pr))->assertOk()->assertSee('Left to request under')->assertSeeText('4 of 8 piece left');
+
+        $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $pr, 'project' => $this->ram->id]))
+            ->assertOk()->assertSee('value="' . $this->ram->id . '" selected', false);
+    }
+
+    public function test_editing_after_a_ppmp_amendment_selects_the_amended_project(): void
+    {
+        $this->actingAs($this->staff);
+        $draft = $this->draft();
+        $draftLine = $this->requests->saveLine($draft, $this->line($this->hdd, 3, '5000'));
+        $a = $this->draft();
+        $this->requests->saveLine($a, $this->line($this->hdd, 2, '5000'));
+        $a = $this->requests->submit($a->fresh(), $this->staff);
+
+        $v2 = $this->ppmps->amend($this->ppmp, $this->staff);
+        $this->ppmps->submit($v2->fresh(), $this->staff);
+        $this->ppmps->approve($v2->fresh(), $this->head);
+        $newHdd = $v2->items()->where('line_uuid', $this->hdd->line_uuid)->first();
+        $this->assertNotSame($newHdd->id, $draftLine->ppmp_item_id);
+
+        // The lines keep the old version's project id; the modal still picks the project (by line_uuid)
+        $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $draft, 'id' => $draftLine->id]))
+            ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSee('6 of 8 piece');
+
+        $rev = $this->requests->revise($a, $this->staff);
+        $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $rev, 'id' => $rev->items->first()->id]))
+            ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSee('8 of 8 piece');
+    }
+
+    public function test_available_lines_take_the_same_queries_whatever_the_number_of_projects(): void
+    {
+        $a = $this->draft();
+        $this->requests->saveLine($a, $this->line($this->hdd, 2, '5000'));
+        $a = $this->requests->submit($a->fresh(), $this->staff);
+        $rev = $this->requests->revise($a, $this->staff);
+        $line = $rev->items()->first();
+
+        DB::enableQueryLog();
+        $lines = $this->requests->availableLines($rev, $line);
+        $queries = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertCount(2, $lines);
+        $this->assertLessThanOrEqual(10, $queries);   // 9 now; 7 more per project before (20 here)
+        $this->assertSame(800, $lines->firstWhere('id', $this->hdd->id)->remaining_hundredths);
+        $this->assertSame(4000000, $lines->firstWhere('id', $this->hdd->id)->remaining_cents);
     }
 
     public function test_jr_print_has_the_certification_and_abc(): void

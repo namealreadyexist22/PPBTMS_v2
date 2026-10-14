@@ -13,6 +13,7 @@ use App\Models\Procurement\PurchaseRequest;
 use App\Models\Procurement\PurchaseRequestItem;
 use App\Models\User;
 use App\Support\Money;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -78,16 +79,29 @@ class PurchaseRequestService
 
     /**
      * PPMP projects of the request's PAP in the office's currently approved PPMP (an amendment
-     * may have been approved since the request was started), with what each has left to charge.
+     * may have been approved since the request was started), with what each has left to charge:
+     * remaining_cents / budget_cents (budget) and remaining_hundredths / planned_hundredths
+     * (quantity; null for a lot). $except is the line being edited: its own share is counted back.
      */
-    public function availableLines(PurchaseRequest $request): \Illuminate\Support\Collection
+    public function availableLines(PurchaseRequest $request, ?PurchaseRequestItem $except = null): Collection
     {
-        $pap = $this->currentPap($request);
+        $lines = $this->currentPap($request)->items()->with(['unit', 'item', 'procurementMode'])->get();
 
-        return $pap->items()->with(['unit', 'item', 'procurementMode'])->get()
-            ->each(function (PpmpItem $line) use ($request) {
-                $line->setAttribute('remaining_cents', $this->remainingCents($request, $line));
-            });
+        return $this->withRemaining($request, $lines, $except);
+    }
+
+    /**
+     * Hundredths of a unit the request may still put on a project; null = lot (no quantity). May be negative.
+     *
+     * The planned quantity of the project in the currently approved PPMP, less what submitted requests
+     * hold on it and this request's other lines, plus (for a revision) what the request it replaces holds.
+     * Shown and warned about only: the budget (remainingCents) is the hard limit.
+     */
+    public function remainingQuantity(PurchaseRequest $request, PpmpItem $project, ?PurchaseRequestItem $except = null): ?int
+    {
+        $current = $this->budget->currentLine($project);
+
+        return $this->withRemaining($request, collect([$current]), $except)->first()->remaining_hundredths;
     }
 
     /** Add or edit a line. Amount = quantity x unit cost, never more than the project's remaining budget. */
@@ -335,20 +349,51 @@ class PurchaseRequestService
     protected function remainingCents(PurchaseRequest $request, PpmpItem $project, ?PurchaseRequestItem $except = null): int
     {
         $current = $this->budget->currentLine($project);
-        $cents = Money::toCents($current->estimated_budget) - Money::toCents($current->committed_amount);
 
-        $cents -= $request->items()->where('line_uuid', $project->line_uuid)
+        return $this->withRemaining($request, collect([$current]), $except)->first()->remaining_cents;
+    }
+
+    /**
+     * Sets on each line of the currently approved PPMP what the request may still put on it:
+     * remaining_cents / budget_cents and remaining_hundredths / planned_hundredths (null for a lot).
+     * Three queries at most, however many lines.
+     */
+    protected function withRemaining(PurchaseRequest $request, Collection $lines, ?PurchaseRequestItem $except): Collection
+    {
+        $uuids = $lines->pluck('line_uuid')->all();
+        $columns = ['line_uuid', 'quantity', 'total_cost'];
+        $submitted = fn ($q) => $q->where('status', RequestStatus::Submitted);
+
+        // What other submitted requests hold (quantity only: their amounts are in committed_amount)
+        $held = PurchaseRequestItem::whereIn('line_uuid', $uuids)->where('purchase_request_id', '!=', $request->id)
+            ->whereHas('request', $submitted)->get($columns)->groupBy('line_uuid');
+
+        // This request's other lines
+        $own = $request->items()->whereIn('line_uuid', $uuids)
             ->when($except, fn ($q) => $q->whereKeyNot($except->id))
-            ->get()->sum(fn ($i) => Money::toCents($i->total_cost));
+            ->get($columns)->groupBy('line_uuid');
 
-        if ($request->revised_from_id) {
-            $cents += PurchaseRequestItem::where('purchase_request_id', $request->revised_from_id)
-                ->where('line_uuid', $project->line_uuid)
-                ->whereHas('request', fn ($q) => $q->where('status', RequestStatus::Submitted))
-                ->get()->sum(fn ($i) => Money::toCents($i->total_cost));
-        }
+        // A revision gets back what the request it replaces holds
+        $replaced = $request->revised_from_id
+            ? PurchaseRequestItem::where('purchase_request_id', $request->revised_from_id)->whereIn('line_uuid', $uuids)
+                ->whereHas('request', $submitted)->get($columns)->groupBy('line_uuid')
+            : collect();
 
-        return $cents;
+        // Summed per row, rounded like the amounts are saved
+        $hundredths = fn (?Collection $items) => (int) $items?->sum(fn ($i) => (int) round((float) $i->quantity * 100));
+        $cents = fn (?Collection $items) => (int) $items?->sum(fn ($i) => Money::toCents($i->total_cost));
+
+        return $lines->each(function (PpmpItem $line) use ($held, $own, $replaced, $hundredths, $cents) {
+            $uuid = $line->line_uuid;
+            $planned = $line->quantity === null ? null : (int) round((float) $line->quantity * 100);
+
+            $line->setAttribute('budget_cents', Money::toCents($line->estimated_budget));
+            $line->setAttribute('remaining_cents', Money::toCents($line->estimated_budget) - Money::toCents($line->committed_amount)
+                - $cents($own->get($uuid)) + $cents($replaced->get($uuid)));
+            $line->setAttribute('planned_hundredths', $planned);
+            $line->setAttribute('remaining_hundredths', $planned === null ? null
+                : $planned - $hundredths($held->get($uuid)) - $hundredths($own->get($uuid)) + $hundredths($replaced->get($uuid)));
+        });
     }
 
     protected function header(RequestKind $kind, array $data): array
