@@ -2,9 +2,27 @@
     $jr = $pr->kind === \App\Enums\RequestKind::Jr;
     $num = fn ($n) => rtrim(rtrim(number_format((float) $n, 2), '0'), '.');
 @endphp
+<style>
+    .pk-search { width: 280px; max-width: 100%; }
+    .pk-table thead th { font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; color: var(--bs-secondary-color); }
+    .pk-row:not(.is-locked) { cursor: pointer; }
+    .pk-row.is-locked > td { color: var(--bs-secondary-color); background: var(--bs-tertiary-bg); }
+    .pk-table tbody tr:last-child > td { border-bottom: 0; }
+    /* Phones: each project is a small card (name, then quantity | budget, then the button) */
+    @media (max-width: 767.98px) {
+        .pk-search { width: 100%; }
+        .pk-table thead { display: none; }
+        .pk-table tr.pk-row { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1rem; padding: .75rem 1rem; border-bottom: var(--bs-border-width) solid var(--bs-border-color); }
+        .pk-table tr.pk-row:last-of-type { border-bottom: 0; }
+        .pk-table tr.pk-row > td { border: 0; padding: 0 !important; background: transparent; }
+        .pk-table tr.pk-row > td:first-child { grid-column: 1 / -1; margin-bottom: .5rem; }
+        .pk-table tr.pk-row > td:last-child { grid-column: 1 / -1; text-align: start !important; margin-top: .5rem; }
+        .pk-table tr.pk-row.is-locked { background: var(--bs-tertiary-bg); }
+    }
+</style>
 <div class="modal fade" id="{{ $modalName }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     {{-- Scrollable: the form is a flex column (page style), so the body scrolls and Save stays in view --}}
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg modal-fullscreen-sm-down">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl modal-fullscreen-lg-down">
         <div class="modal-content border-0 shadow">
             <div class="modal-header bg-white py-3">
                 <div class="d-flex align-items-center gap-3">
@@ -31,55 +49,72 @@
                     @endphp
                     {{-- Step 1: what each PPMP project of the PAP still has; choosing one opens the item form --}}
                     <div id="project_picker" @class(['d-none' => $selected])>
-                        <div class="d-flex justify-content-between align-items-end mb-2">
+                        <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
                             <div>
                                 <div class="fw-semibold">Left to request under {{ $pr->pap->code }}</div>
                                 <div class="small text-muted">Approved PPMP, less submitted requests and this {{ $pr->kind->short() }}. Choose a project to add an item.</div>
                             </div>
+                            <div class="input-group input-group-sm pk-search">
+                                <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                                <input type="search" id="pick_search" class="form-control border-start-0" placeholder="Search projects…" aria-label="Search projects">
+                            </div>
                         </div>
-                        <div class="list-group small">
-                            @foreach ($projects as $p)
-                                @php
-                                    $usedUp = $p['remaining'] <= 0 || ($p['remaining_qty'] !== null && $p['remaining_qty'] <= 0);
-                                    $qtyUsed = $p['planned_qty'] === null ? 0 : $pct($p['remaining_qty'], $p['planned_qty']);
-                                    $budgetUsed = $pct($p['remaining'], $p['budget']);
-                                    $isCurrent = $line && $selected == $p['id'];
-                                @endphp
-                                <button type="button" class="list-group-item list-group-item-action js-pick px-3 py-2 {{ $usedUp && ! $isCurrent ? 'bg-body-tertiary' : '' }}"
-                                        data-id="{{ $p['id'] }}" @disabled($usedUp && ! $isCurrent)>
-                                    <div class="row gx-3 gy-1 align-items-center">
-                                        <div class="col-md-5">
-                                            <div class="fw-semibold pr-clamp">{{ $p['description'] }}</div>
-                                            <div class="text-muted">{{ collect([$p['mode'], $p['unit']])->filter()->implode(' · ') }}</div>
-                                        </div>
-                                        <div class="col-6 col-md-3">
-                                            @if ($p['planned_qty'] === null)
-                                                <span class="badge text-bg-light border">Lot · no quantity limit</span>
-                                            @else
-                                                <div @class(['text-danger' => $p['remaining_qty'] < 0])>
-                                                    @if ($p['remaining_qty'] < 0)
-                                                        <strong>{{ trim($num(-$p['remaining_qty']) . ' ' . $p['unit']) }} over</strong>
-                                                    @else
-                                                        <strong>{{ $num($p['remaining_qty']) }}</strong> of {{ trim($num($p['planned_qty']) . ' ' . $p['unit']) }}
-                                                    @endif
-                                                </div>
-                                                <div class="progress pr-bar mt-1"><div class="progress-bar {{ $barColor($p['remaining_qty'], $qtyUsed) }}" style="width: {{ $qtyUsed }}%"></div></div>
-                                            @endif
-                                        </div>
-                                        <div class="col-6 col-md-3">
-                                            <div @class(['text-danger' => $p['remaining'] < 0])><strong>₱{{ number_format(abs($p['remaining']), 2) }}</strong> {{ $p['remaining'] < 0 ? 'over' : 'left' }}</div>
-                                            <div class="progress pr-bar mt-1"><div class="progress-bar {{ $barColor($p['remaining'], $budgetUsed) }}" style="width: {{ $budgetUsed }}%"></div></div>
-                                        </div>
-                                        <div class="col-md-1 text-md-end">
-                                            @if ($usedUp && ! $isCurrent)
-                                                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border">Fully requested</span>
-                                            @else
-                                                <span class="text-primary text-nowrap"><i class="fas fa-plus"></i><span class="d-md-none ms-1">Add item</span></span>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </button>
-                            @endforeach
+                        <div class="border rounded-3 overflow-hidden">
+                            <table class="table table-hover align-middle small mb-0 pk-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Project</th>
+                                        <th style="width: 22%;">Quantity left</th>
+                                        <th style="width: 22%;">Budget left</th>
+                                        <th class="text-end pe-3" style="width: 140px;"><span class="visually-hidden">Add</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach ($projects as $p)
+                                        @php
+                                            $usedUp = $p['remaining'] <= 0 || ($p['remaining_qty'] !== null && $p['remaining_qty'] <= 0);
+                                            $isCurrent = $line && $selected == $p['id'];
+                                            $locked = $usedUp && ! $isCurrent;
+                                            $qtyUsed = $p['planned_qty'] === null ? 0 : $pct($p['remaining_qty'], $p['planned_qty']);
+                                            $budgetUsed = $pct($p['remaining'], $p['budget']);
+                                        @endphp
+                                        <tr class="pk-row {{ $locked ? 'is-locked' : '' }}" data-id="{{ $p['id'] }}" data-search="{{ \Illuminate\Support\Str::lower($p['description'] . ' ' . $p['mode']) }}">
+                                            <td class="ps-3">
+                                                <div class="fw-semibold">{{ $p['description'] }}</div>
+                                                <div class="text-muted">{{ collect([$p['mode'], $p['unit']])->filter()->implode(' · ') }}</div>
+                                            </td>
+                                            <td>
+                                                @if ($p['planned_qty'] === null)
+                                                    <span class="badge text-bg-light border fw-normal">Lot · no quantity limit</span>
+                                                @else
+                                                    <div @class(['text-danger' => $p['remaining_qty'] < 0])>
+                                                        @if ($p['remaining_qty'] < 0)
+                                                            <strong>{{ trim($num(-$p['remaining_qty']) . ' ' . $p['unit']) }} over</strong>
+                                                        @else
+                                                            <strong>{{ $num($p['remaining_qty']) }}</strong> of {{ trim($num($p['planned_qty']) . ' ' . $p['unit']) }}
+                                                        @endif
+                                                    </div>
+                                                    <div class="progress pr-bar mt-1"><div class="progress-bar {{ $barColor($p['remaining_qty'], $qtyUsed) }}" style="width: {{ $qtyUsed }}%"></div></div>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <div @class(['text-danger' => $p['remaining'] < 0])><strong>₱{{ number_format(abs($p['remaining']), 2) }}</strong> {{ $p['remaining'] < 0 ? 'over' : 'left' }}</div>
+                                                <div class="progress pr-bar mt-1"><div class="progress-bar {{ $barColor($p['remaining'], $budgetUsed) }}" style="width: {{ $budgetUsed }}%"></div></div>
+                                            </td>
+                                            <td class="text-end pe-3">
+                                                @if ($locked)
+                                                    <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border fw-normal">Fully requested</span>
+                                                @else
+                                                    <button type="button" class="btn btn-sm btn-outline-primary js-pick text-nowrap" data-id="{{ $p['id'] }}" aria-label="Add item from {{ $p['description'] }}">
+                                                        <i class="fas fa-plus me-1"></i>{{ $isCurrent ? 'Keep' : 'Add item' }}
+                                                    </button>
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    @endforeach
+                                    <tr id="pick_empty" class="d-none"><td colspan="4" class="text-center text-muted py-4">No project matches the search.</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -292,6 +327,23 @@
         $('#btn_save_line').toggleClass('d-none', on);
         $('#line_error_summary').addClass('d-none');
     }
+    // The whole row picks the project (except used-up ones); search filters by name and mode
+    form.on('click', '.pk-row:not(.is-locked)', function (e) {
+        if (!$(e.target).closest('.js-pick').length) $(this).find('.js-pick').trigger('click');
+    });
+    $('#pick_search').on('input', function () {
+        const q = this.value.trim().toLowerCase();
+        let shown = 0;
+        form.find('.pk-row').each(function () {
+            const hit = !q || this.dataset.search.includes(q);
+            $(this).toggleClass('d-none', !hit);
+            shown += hit ? 1 : 0;
+        });
+        $('#pick_empty').toggleClass('d-none', shown > 0);
+    }).on('keydown', function (e) {
+        // Enter picks the first match
+        if (e.key === 'Enter') { e.preventDefault(); form.find('.pk-row:not(.d-none):not(.is-locked) .js-pick').first().trigger('click'); }
+    });
     form.on('click', '.js-pick', function () {
         const id = String($(this).data('id'));
         const changed = form.find('[name="ppmp_item_id"]').val() !== id;

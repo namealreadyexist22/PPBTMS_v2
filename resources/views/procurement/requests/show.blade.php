@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const el = document.getElementById('REQUEST_LINE_MODAL');
             new bootstrap.Modal(el).show();
             // Deferred: AdminLTE focuses the modal's first button (the close button) on shown
-            el.addEventListener('shown.bs.modal', () => setTimeout(() => ($('#project_picker').is(':visible') ? $('#project_picker .js-pick:enabled').first() : $('#form_request_line [name=quantity]')).trigger('focus')));
+            el.addEventListener('shown.bs.modal', () => setTimeout(() => ($('#project_picker').is(':visible') ? $('#pick_search') : $('#form_request_line [name=quantity]')).trigger('focus')));
             el.addEventListener('hidden.bs.modal', function () { isModalOpen = false; $('#modal-body').html(''); });
         }).fail(function (xhr) { isModalOpen = false; toastr.error(errorText(xhr), 'Error'); });
     }

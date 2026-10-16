@@ -509,8 +509,10 @@ class PurchaseRequestTest extends TestCase
 
         $this->get(route('procurement.requests.lines.entry', $this->draft()))->assertOk()
             ->assertSeeText('1 piece over')->assertSee('Fully requested')
-            ->assertSee('data-id="' . $this->hdd->id . '" disabled', false)
-            ->assertDontSee('data-id="' . $this->ram->id . '" disabled', false);
+            ->assertSee('class="pk-row is-locked" data-id="' . $this->hdd->id . '"', false)
+            ->assertSee('class="pk-row " data-id="' . $this->ram->id . '"', false)
+            ->assertSee('class="btn btn-sm btn-outline-primary js-pick text-nowrap" data-id="' . $this->ram->id . '"', false)
+            ->assertDontSee('js-pick text-nowrap" data-id="' . $this->hdd->id . '"', false);
     }
 
     public function test_a_stale_copy_cannot_cancel_twice_or_edit_after_submit(): void
