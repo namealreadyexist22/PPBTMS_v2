@@ -61,7 +61,8 @@ class UserAccessController extends Controller
                 $manage = $this->managePermission($menu);
 
                 return [$menu->id => [
-                    'value'      => $menuOverrides->get($menu->id) ?? ($manage ? $permissionOverrides->get($manage->id) : null),
+                    // The "manage X" override is what guards the pages, so it is what the row shows
+                    'value'      => ($manage ? $permissionOverrides->get($manage->id) : null) ?? $menuOverrides->get($menu->id),
                     'source'     => $defaultSources->get($manage?->name ?? $menu->permission_name),
                     'linkSource' => $defaultSources->get($menu->permission_name),
                 ]];

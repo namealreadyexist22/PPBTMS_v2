@@ -515,6 +515,24 @@ class PurchaseRequestTest extends TestCase
         $this->get(route('procurement.requests.show', $draft))->assertOk()->assertSee('Over quantity');
     }
 
+    public function test_a_stale_copy_cannot_cancel_twice_or_edit_after_submit(): void
+    {
+        $pr = $this->draft();
+        $this->requests->saveLine($pr, $this->line($this->hdd, 2, '5000'));
+        $stale = $pr->fresh();   // loaded by a second tab before submit
+        $submitted = $this->requests->submit($pr->fresh(), $this->staff);
+
+        // The draft copy is checked again on the locked row
+        $this->assertOverQuantity(fn () => $this->requests->saveLine($stale, $this->line($this->hdd, 1, '5000')), 'can no longer be changed');
+        $this->assertCount(1, $submitted->items()->get());
+
+        $copy = $submitted->fresh();
+        $this->requests->cancel($submitted, $this->staff, 'Not needed');
+        $this->assertOverQuantity(fn () => $this->requests->cancel($copy, $this->staff, 'Again'), 'is Cancelled');
+        $this->assertEquals('0.00', $this->hdd->fresh()->committed_quantity);
+        $this->assertEquals('0.00', $this->hdd->fresh()->committed_amount);
+    }
+
     public function test_pages_show_quantity_left(): void
     {
         $this->actingAs($this->staff);

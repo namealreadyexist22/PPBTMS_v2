@@ -143,8 +143,12 @@ class PpmpService
             throw new ProcurementException('Estimated budget cannot be lower than the amount already charged by PRs ('.Money::format($item->committed_amount).').');
         }
 
-        if (array_key_exists('quantity', $data)) {
-            $this->assertQuantityCoversRequests($item, (clone $item)->fill(['quantity' => $data['quantity']]));
+        // Against the approved line (what PRs hold now); a line new in this amendment has none
+        $approved = PpmpItem::where('line_uuid', $item->line_uuid)->whereKeyNot($item->id)
+            ->whereHas('ppmp', fn ($q) => $q->where('status', PpmpStatus::Approved))->with('unit')->first();
+
+        if ($approved && array_key_exists('quantity', $data)) {
+            $this->assertQuantityCoversRequests($approved, (clone $item)->fill(['quantity' => $data['quantity']]));
         }
 
         return DB::transaction(function () use ($item, $ppmp, $data) {

@@ -113,6 +113,13 @@ class PurchaseRequestService
     {
         $this->assertEditable($request);
 
+        // Locked like submit(): an edit cannot land after the request was submitted and charged
+        return DB::transaction(fn () => $this->writeLine($this->lockEditable($request), $data, $line));
+    }
+
+    protected function writeLine(PurchaseRequest $request, array $data, ?PurchaseRequestItem $line): PurchaseRequestItem
+    {
+
         $project = $this->currentPap($request)->items()->with(['unit', 'item'])->find($data['ppmp_item_id'] ?? null);
 
         if (! $project) {
@@ -180,10 +187,10 @@ class PurchaseRequestService
 
     public function removeLine(PurchaseRequestItem $line): void
     {
-        $request = $line->request;
-        $this->assertEditable($request);
+        $this->assertEditable($line->request);
 
-        DB::transaction(function () use ($line, $request) {
+        DB::transaction(function () use ($line) {
+            $request = $this->lockEditable($line->request);
             $line->delete();
             $request->recalculateTotal();
         });
@@ -283,6 +290,16 @@ class PurchaseRequestService
 
         return DB::transaction(function () use ($request, $user, $reason) {
             $request = PurchaseRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+
+            // Again on the locked row: a cancel or a revision may have gone through meanwhile
+            if ($request->status !== RequestStatus::Submitted) {
+                throw new ProcurementException("Only a submitted request can be cancelled. {$request->title()} is {$request->status->label()}.");
+            }
+
+            if ($open = $this->openRevision($request)) {
+                throw new ProcurementException("Delete the draft {$open->title()} first.");
+            }
+
             $this->releaseLines($request);
             $request->update([
                 'status'        => RequestStatus::Cancelled,
@@ -407,6 +424,15 @@ class PurchaseRequestService
         $fields = array_merge($fields, $kind === RequestKind::Jr ? ['jr_type'] : ['sai_no', 'sai_date']);
 
         return array_intersect_key($data, array_flip($fields));
+    }
+
+    /** The request's row, locked for this transaction, checked again for edits. */
+    protected function lockEditable(PurchaseRequest $request): PurchaseRequest
+    {
+        $locked = PurchaseRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+        $this->assertEditable($locked);
+
+        return $locked;
     }
 
     protected function assertEditable(PurchaseRequest $request): void
