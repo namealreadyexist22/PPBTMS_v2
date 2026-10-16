@@ -5,6 +5,7 @@ namespace App\Models\Procurement;
 use App\Enums\AllotmentClass;
 use App\Enums\ProjectType;
 use App\Support\Money;
+use App\Support\Quantity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -15,7 +16,7 @@ class PpmpItem extends Model
         'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id', 'unit_cost',
         'quantity_size', 'procurement_mode_id', 'pre_proc_conference', 'is_epa', 'proc_start', 'proc_end',
         'delivery_period', 'fund_source_id', 'allotment_class', 'estimated_budget', 'committed_amount',
-        'supporting_documents', 'market_scoping', 'remarks', 'sort_order',
+        'committed_quantity', 'supporting_documents', 'market_scoping', 'remarks', 'sort_order',
     ];
 
     protected function casts(): array
@@ -32,6 +33,7 @@ class PpmpItem extends Model
             'proc_end'            => 'date',
             'estimated_budget'    => 'decimal:2',
             'committed_amount'    => 'decimal:2',
+            'committed_quantity'  => 'decimal:2',
         ];
     }
 
@@ -46,6 +48,23 @@ class PpmpItem extends Model
     public function availableBudget(): string
     {
         return Money::fromCents(Money::toCents($this->estimated_budget) - Money::toCents($this->committed_amount));
+    }
+
+    /**
+     * Planned quantity in hundredths of a unit; null when it sets no limit: a lot (no quantity)
+     * or a quantity of 0 (budget entered directly).
+     */
+    public function plannedHundredths(): ?int
+    {
+        $planned = Quantity::toHundredths($this->quantity);
+
+        return $planned > 0 ? $planned : null;
+    }
+
+    /** Quantity charged by submitted requests, in hundredths of a unit. */
+    public function committedHundredths(): int
+    {
+        return Quantity::toHundredths($this->committed_quantity);
     }
 
     /** Quantity x unit cost in centavos, or null when either is missing (lot budgets). */

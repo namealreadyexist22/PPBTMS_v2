@@ -423,7 +423,7 @@ class PurchaseRequestTest extends TestCase
         $this->requests->submit($other->fresh(), $this->staff);   // 4 left; the budget still covers the draft
 
         $this->assertOverQuantity(fn () => $this->requests->submit($draft->fresh(), $this->staff),
-            'Over the PPMP quantity of "Hard Drive (4 TB)" by 1 piece');
+            'Over the PPMP quantity of "Hard Drive (4 TB)": requested 5 piece, only 4 piece is left.');
         $this->assertSame(RequestStatus::Draft, $draft->fresh()->status);
         $this->assertEquals('20000.00', $this->hdd->fresh()->committed_amount);   // the draft's charge was rolled back
 
@@ -431,6 +431,88 @@ class PurchaseRequestTest extends TestCase
         $this->requests->saveLine($draft, $this->line($this->hdd, 4, '4000'), $line);
         $this->requests->submit($draft->fresh(), $this->staff);
         $this->assertEquals('36000.00', $this->hdd->fresh()->committed_amount);
+    }
+
+    public function test_the_ppmp_line_keeps_the_quantity_submitted_requests_hold(): void
+    {
+        $a = $this->draft();
+        $this->requests->saveLine($a, $this->line($this->hdd, 3, '5000'));
+        $this->requests->saveLine($a, $this->line($this->hdd, 2, '5000'));
+        $a = $this->requests->submit($a->fresh(), $this->staff);
+        $this->assertEquals('5.00', $this->hdd->fresh()->committed_quantity);
+
+        // A revision swaps its quantity for the original's; cancelling gives it back
+        $rev = $this->requests->revise($a, $this->staff);
+        $this->requests->removeLine($rev->items()->first());
+        $rev = $this->requests->submit($rev->fresh(), $this->staff);
+        $this->assertEquals('2.00', $this->hdd->fresh()->committed_quantity);
+
+        $this->requests->cancel($rev, $this->staff, 'Not needed');
+        $this->assertEquals('0.00', $this->hdd->fresh()->committed_quantity);
+        $this->assertEquals('0.00', $this->hdd->fresh()->committed_amount);
+    }
+
+    public function test_charging_refuses_what_the_line_no_longer_has(): void
+    {
+        // As if another request was submitted after this draft was checked: the charge itself refuses
+        PpmpItem::whereKey($this->hdd->id)->update(['committed_quantity' => 7.5]);
+
+        try {
+            app(\App\Services\Procurement\PpmpBudgetService::class)->charge($this->hdd, '5000', '1');
+            $this->fail('Charged more than the planned quantity.');
+        } catch (ProcurementException $e) {
+            $this->assertSame('Over the PPMP quantity of "Hard Drive (4 TB)": requested 1 piece, only 0.5 piece is left.', $e->getMessage());
+        }
+
+        $this->assertEquals('7.50', $this->hdd->fresh()->committed_quantity);
+        $this->assertEquals('0.00', $this->hdd->fresh()->committed_amount);
+    }
+
+    public function test_a_project_with_quantity_0_has_no_quantity_limit(): void
+    {
+        PpmpItem::whereKey($this->hdd->id)->update(['quantity' => 0]);
+        $draft = $this->draft();
+
+        $this->assertNull($this->requests->remainingQuantity($draft, $this->hdd));
+        $this->requests->saveLine($draft, $this->line($this->hdd, 20, '1000'));
+        $this->requests->submit($draft->fresh(), $this->staff);
+        $this->assertEquals('20.00', $this->hdd->fresh()->committed_quantity);
+    }
+
+    public function test_an_amendment_cannot_plan_less_than_requests_hold(): void
+    {
+        $a = $this->draft();
+        $this->requests->saveLine($a, $this->line($this->hdd, 4, '5000'));
+        $this->requests->submit($a->fresh(), $this->staff);
+
+        $v2 = $this->ppmps->amend($this->ppmp, $this->staff);
+        $newHdd = $v2->items()->where('line_uuid', $this->hdd->line_uuid)->first();
+
+        try {
+            $this->ppmps->updateItem($newHdd, ['quantity' => 3, 'unit_cost' => '10000', 'estimated_budget' => '30000']);
+            $this->fail('The amendment planned less than the requests hold.');
+        } catch (ProcurementException $e) {
+            $this->assertSame('Line "Hard Drive (4 TB)" quantity cannot go below the 4 piece already requested by PRs.', $e->getMessage());
+        }
+
+        $this->ppmps->updateItem($newHdd, ['quantity' => 4, 'unit_cost' => '5000', 'estimated_budget' => '20000']);
+        $this->ppmps->submit($v2->fresh(), $this->staff);
+        $this->ppmps->approve($v2->fresh(), $this->head);
+        $this->assertEquals('4.00', $newHdd->fresh()->committed_quantity);
+        $next = $this->requests->create(RequestKind::Pr, $v2->paps()->first(), $this->staff, $this->signed());
+        $this->assertSame(0, $this->requests->remainingQuantity($next, $newHdd));
+    }
+
+    public function test_over_quantity_badge_only_on_the_requests_own_projects(): void
+    {
+        $this->actingAs($this->staff);
+        PpmpItem::whereKey($this->hdd->id)->update(['committed_quantity' => 9]);   // over-requested before quantities were enforced
+
+        $draft = $this->draft();
+        $this->get(route('procurement.requests.show', $draft))->assertOk()->assertDontSee('Over quantity')->assertSee('Fully requested');
+
+        $draft->items()->create($this->line($this->hdd, 1, '5000') + ['line_uuid' => $this->hdd->line_uuid, 'total_cost' => '5000', 'sort_order' => 1]);
+        $this->get(route('procurement.requests.show', $draft))->assertOk()->assertSee('Over quantity');
     }
 
     public function test_pages_show_quantity_left(): void

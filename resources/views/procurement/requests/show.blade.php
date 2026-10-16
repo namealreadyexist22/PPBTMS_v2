@@ -337,9 +337,9 @@
                         <div class="col-xl-4">
                             <div class="fw-semibold pr-clamp" title="{{ $project->description }}">{{ $project->description }}</div>
                             <div class="text-muted">{{ collect([$project->procurementMode?->name, $unit])->filter()->implode(' · ') }}</div>
-                            @if ($qtyLeft !== null && $qtyLeft < 0)
+                            @if ($qtyLeft !== null && $qtyLeft < 0 && $pr->items->contains('line_uuid', $project->line_uuid))
                                 {{-- Saved before quantities were enforced, or others submitted since: lower it to submit --}}
-                                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle mt-1" title="Lower the quantity on this draft before submitting">Over quantity</span>
+                                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle mt-1" title="Lower the quantity on this request before submitting">Over quantity</span>
                             @elseif ($done)
                                 <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle mt-1">Fully requested</span>
                             @endif
@@ -505,6 +505,7 @@ document.addEventListener('DOMContentLoaded', function () {
         form.find('.is-invalid').removeClass('is-invalid');
         form.find('.invalid-feedback').text('');
         summary.addClass('d-none');
+        form.data('saving', true);   // the modal keeps Save off while this is set
         $('#btn_save_line').prop('disabled', true);
 
         $.post('{{ route("procurement.requests.lines.store", $pr) }}', form.serialize())
@@ -514,7 +515,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 refreshView();
             })
             .fail(function (xhr) {
-                $('#btn_save_line').prop('disabled', false);
+                // Save comes back on unless the item is still over a limit
+                form.data('saving', false).find('[name="quantity"]').trigger('input');
                 const res = xhr.responseJSON || {};
                 summary.removeClass('d-none');
                 if (res.errors) {

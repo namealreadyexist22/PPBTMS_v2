@@ -176,7 +176,7 @@
         $('#qty_note').toggleClass('d-none', !overQty).find('div').text(!overQty ? '' : (qtyLeft > 0
             ? 'Over the PPMP quantity: only ' + num(p.remaining_qty) + ' of ' + withUnit(num(p.planned_qty), p.unit) + ' are left on this project.'
             : 'The planned quantity (' + withUnit(num(p.planned_qty), p.unit) + ') is already requested. Nothing more can be requested on this project.'));
-        $('#btn_save_line').prop('disabled', over || overQty);
+        $('#btn_save_line').prop('disabled', !!form.data('saving') || over || overQty);
 
         if (!p) return;
         const budgetLeft = hundredths(p.remaining) - totalCents;

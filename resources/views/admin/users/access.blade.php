@@ -8,6 +8,9 @@
         @if (session('success'))
             <div class="alert alert-success">{{ session('success') }}</div>
         @endif
+        @if ($errors->any())
+            <div class="alert alert-danger">{{ $errors->first() }}</div>
+        @endif
     </div>
 
     <div class="col-md-3">
@@ -87,10 +90,10 @@
                                 <div class="card h-100 border-0 shadow-sm">
                                     <div class="card-header bg-light fw-semibold small">{{ $menu->name }}</div>
                                     <div class="card-body p-0" style="max-height: 240px; overflow-y: auto;">
-                                        <x-permission-chip name="menu_access" :id="$menu->id"
-                                            label="View / Access"
-                                            :value="$menuOverrides->get($menu->id)"
-                                            :source="$defaultSources->get($menu->permission_name)" />
+                                        <x-permission-chip name="menu_access" :id="$menu->id" label="View / Access" :page="true"
+                                            :value="$pageRows[$menu->id]['value']"
+                                            :source="$pageRows[$menu->id]['source']"
+                                            :linkSource="$pageRows[$menu->id]['linkSource']" />
 
                                         {{-- Hidden action gates are checked via canAccessPermission(), so they use permission overrides --}}
                                         @foreach ($menu->actionChildren as $action)

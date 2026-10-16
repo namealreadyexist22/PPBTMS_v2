@@ -69,6 +69,8 @@ class DivisionPpmpController extends Controller
             'fiscalYear' => $fiscalYear,
             'years'      => range(now()->year - 1, now()->year + 2),
             'types'      => PpmpType::cases(),
+            // Section PPMPs open on the PPMP page, which has its own permission
+            'canOpenPpmps' => $user->canAccessPermission('manage ppmp'),
         ]);
     }
 
@@ -80,7 +82,10 @@ class DivisionPpmpController extends Controller
         return view('procurement.division_ppmp.show', [
             'divisionPpmp' => $divisionPpmp,
             'paps'         => $this->papsOf($divisionPpmp->ppmps),
-            'canSetSignatories' => $divisionPpmp->signatoriesEditableBy($request->user()),
+            // Signing is part of the Division PPMP page: it follows that page's access too
+            'canSetSignatories' => $divisionPpmp->signatoriesEditableBy($request->user())
+                && $request->user()->canAccessPermission('menu.division-ppmp'),
+            'canOpenPpmps' => $request->user()->canAccessPermission('manage ppmp'),
             'printSignatories'  => $divisionPpmp->printSignatories(),
             // Signatory suggestions: the division's people, the offices above it and the head
             'signatoryPeople'   => $divisionPpmp->office->signatoryPeople($divisionPpmp->office->consolidatedOfficeIds()),

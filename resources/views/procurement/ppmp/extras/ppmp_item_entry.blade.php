@@ -88,6 +88,9 @@
                             <label class="form-label small fw-semibold text-muted mb-1">Quantity</label>
                             <input type="number" step="0.01" min="0" name="quantity" class="form-control form-control-sm js-budget-calc" value="{{ $item?->quantity !== null ? (float) $item->quantity : '' }}">
                             <div class="invalid-feedback"></div>
+                            @if ($item && $item->committedHundredths() > 0)
+                                <div class="form-text text-warning">Requested by PRs: {{ \App\Support\Quantity::text($item->committedHundredths()) }}. Cannot go lower.</div>
+                            @endif
                         </div>
                         <div class="col-md-2">
                             <label class="form-label small fw-semibold text-muted mb-1">Unit</label>

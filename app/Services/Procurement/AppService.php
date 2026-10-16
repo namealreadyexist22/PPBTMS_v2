@@ -52,11 +52,11 @@ class AppService
         Setting::set(self::signatoryKey($region, $role), $userId);
     }
 
-    /** BAC Secretariat of the APP's region (Super Admin: any region). */
+    /** BAC Secretariat of the APP's region (Super Admin: any region, unless denied in User Access). */
     public function canManage(User $user, Region $region): bool
     {
-        return $user->hasRole('Super Admin')
-            || ($user->canAccessPermission(self::MANAGE_PERMISSION) && ($user->region ?? Region::Lm) === $region);
+        return $user->canAccessPermission(self::MANAGE_PERMISSION)
+            && ($user->hasRole('Super Admin') || ($user->region ?? Region::Lm) === $region);
     }
 
     public function create(int $fiscalYear, Region $region, User $user, AppType $type = AppType::Final, FundGroup $fund = FundGroup::Regular): AnnualProcurementPlan

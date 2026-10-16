@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Models\Permission;
 
 class UserAccessController extends Controller
@@ -31,6 +32,7 @@ class UserAccessController extends Controller
         $permissionOverrides = collect();
         $defaultSources = collect();
         $actionPermissions = collect();
+        $pageRows = collect();
         $overrideCount = 0;
 
         if ($request->filled('user')) {
@@ -51,15 +53,34 @@ class UserAccessController extends Controller
             $menuOverrides = $selectedUser->menuOverrides()->pluck('access', 'menu_id');
             $permissionOverrides = $selectedUser->permissionOverrides()->pluck('access', 'permission_id');
 
-            // Rows with an override (a page's mirrored "manage X" override is the page's own row)
-            $overrideCount = $menuOverrides->count()
+            // A page row: its pages are guarded by its "manage X" permission when it has one (else by
+            // its own menu.* permission), its sidebar link by menu.*. A "manage X" override without a
+            // page override (made before the two were linked) shows on the page row, so it can be seen
+            // and cleared.
+            $pageRows = $groupedMenus->flatten()->mapWithKeys(function (Menu $menu) use ($menuOverrides, $permissionOverrides, $defaultSources) {
+                $manage = $this->managePermission($menu);
+
+                return [$menu->id => [
+                    'value'      => $menuOverrides->get($menu->id) ?? ($manage ? $permissionOverrides->get($manage->id) : null),
+                    'source'     => $defaultSources->get($manage?->name ?? $menu->permission_name),
+                    'linkSource' => $defaultSources->get($menu->permission_name),
+                ]];
+            });
+
+            $overrideCount = $pageRows->whereNotNull('value')->count()
                 + $permissionOverrides->keys()->intersect($this->editablePermissionIds($groupedMenus->flatten()))->count();
         }
 
         return view('admin.users.access', compact(
             'users', 'selectedUser', 'groupedMenus', 'unassignedGrouped',
-            'menuOverrides', 'permissionOverrides', 'defaultSources', 'actionPermissions', 'overrideCount'
+            'menuOverrides', 'permissionOverrides', 'defaultSources', 'actionPermissions', 'pageRows', 'overrideCount'
         ));
+    }
+
+    /** The page's linked "manage X" permission, which guards its routes (null when it has none). */
+    protected function managePermission(Menu $menu)
+    {
+        return $menu->linkedPermissions->first(fn ($p) => str_starts_with($p->name, 'manage '));
     }
 
     /**
@@ -104,35 +125,42 @@ class UserAccessController extends Controller
 
         $menus = Menu::leafMenusGroupedForCards()->flatten()->keyBy('id');
         $editable = $this->editablePermissionIds($menus);
+        $names = Permission::pluck('name', 'id');
         $changes = [];
 
-        DB::transaction(function () use ($data, $user, $menus, $editable, &$changes) {
+        DB::transaction(function () use ($data, $user, $menus, $editable, $names, &$changes) {
             foreach ($data['menu_access'] ?? [] as $menuId => $access) {
-                if (! $menu = $menus->get($menuId)) {
+                if (! $menu = $menus->get((int) $menuId)) {
                     continue;
                 }
 
-                if ($this->setOverride(new MenuUserOverride, ['user_id' => $user->id, 'menu_id' => $menu->id], $access)) {
-                    $changes[] = "{$menu->name}: {$access}";
+                $changed = $this->setOverride(new MenuUserOverride, ['user_id' => $user->id, 'menu_id' => $menu->id], $access);
+
+                // The page's "manage X" permission guards its routes: it gets the same override
+                if ($manage = $this->managePermission($menu)) {
+                    $changed = $this->setOverride(new PermissionUserOverride, ['user_id' => $user->id, 'permission_id' => $manage->id], $access) || $changed;
                 }
 
-                $managePermission = $menu->linkedPermissions->first(fn ($p) => str_starts_with($p->name, 'manage '));
-
-                if ($managePermission) {
-                    $this->setOverride(new PermissionUserOverride, ['user_id' => $user->id, 'permission_id' => $managePermission->id], $access);
+                if ($changed) {
+                    $changes[] = "{$menu->name}: {$access}";
                 }
             }
 
-            $names = Permission::whereIn('id', array_keys($data['perm_access'] ?? []))->pluck('name', 'id');
-
             foreach ($data['perm_access'] ?? [] as $permissionId => $access) {
-                if (! $editable->contains((int) $permissionId)) {
+                $permissionId = (int) $permissionId;
+
+                if (! $editable->contains($permissionId)) {
                     continue;
                 }
 
-                if ($this->setOverride(new PermissionUserOverride, ['user_id' => $user->id, 'permission_id' => (int) $permissionId], $access)) {
-                    $changes[] = "{$names[$permissionId]}: {$access}";
+                if ($this->setOverride(new PermissionUserOverride, ['user_id' => $user->id, 'permission_id' => $permissionId], $access)) {
+                    $changes[] = ($names[$permissionId] ?? "#{$permissionId}") . ": {$access}";
                 }
+            }
+
+            // Nobody can lock themselves out of this screen (rolled back with the rest)
+            if ($user->is(auth()->user()) && ! $user->canAccessPermission('manage access')) {
+                throw ValidationException::withMessages(['access' => 'You cannot remove your own access to User Access.']);
             }
         });
 

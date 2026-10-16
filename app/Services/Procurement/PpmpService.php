@@ -13,6 +13,7 @@ use App\Models\Procurement\PpmpItem;
 use App\Models\Procurement\PpmpPap;
 use App\Models\User;
 use App\Support\Money;
+use App\Support\Quantity;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -116,7 +117,7 @@ class PpmpService
 
         return DB::transaction(function () use ($ppmp, $data) {
             $data['sort_order'] ??= (int) $ppmp->items()->max('sort_order') + 1;
-            unset($data['line_uuid'], $data['committed_amount'], $data['ppmp_id']);
+            unset($data['line_uuid'], $data['committed_amount'], $data['committed_quantity'], $data['ppmp_id']);
 
             $item = $ppmp->items()->create($data);
             $ppmp->recalculateTotal();
@@ -129,7 +130,7 @@ class PpmpService
     {
         $ppmp = $item->ppmp;
         $this->assertEditable($ppmp);
-        unset($data['line_uuid'], $data['committed_amount'], $data['ppmp_id']);
+        unset($data['line_uuid'], $data['committed_amount'], $data['committed_quantity'], $data['ppmp_id']);
         $data = $this->applyUnitCost($this->applyStandardItem($data, $ppmp, $item), $item);
         $this->assertItemData(array_merge($item->only(['proc_start', 'proc_end', 'estimated_budget']), $data));
 
@@ -140,6 +141,10 @@ class PpmpService
         if (isset($data['estimated_budget'])
             && Money::toCents($data['estimated_budget']) < Money::toCents($item->committed_amount)) {
             throw new ProcurementException('Estimated budget cannot be lower than the amount already charged by PRs ('.Money::format($item->committed_amount).').');
+        }
+
+        if (array_key_exists('quantity', $data)) {
+            $this->assertQuantityCoversRequests($item, (clone $item)->fill(['quantity' => $data['quantity']]));
         }
 
         return DB::transaction(function () use ($item, $ppmp, $data) {
@@ -347,10 +352,30 @@ class PpmpService
                 throw new ProcurementException("Line \"{$new->description}\" budget is below its PR charges of ".Money::format($old->committed_amount).'.');
             }
 
-            $new->update(['committed_amount' => $old->committed_amount]);
+            $this->assertQuantityCoversRequests($old, $new);
+
+            $new->update(['committed_amount' => $old->committed_amount, 'committed_quantity' => $old->committed_quantity]);
         }
 
         $previous->update(['status' => PpmpStatus::Superseded]);
+    }
+
+    /**
+     * A project's planned quantity may not be lowered below what submitted PRs / JRs already
+     * hold on it ($before holds the PR quantity; keeping or raising the quantity is always fine).
+     */
+    protected function assertQuantityCoversRequests(PpmpItem $before, PpmpItem $after): void
+    {
+        $held = $before->committedHundredths();
+        $planned = $after->plannedHundredths();
+        $was = $before->plannedHundredths();
+
+        if ($held > 0 && $planned !== null && $planned < $held && ($was === null || $planned < $was)) {
+            throw new ProcurementException(sprintf(
+                'Line "%s" quantity cannot go below the %s already requested by PRs.',
+                $after->description, Quantity::text($held, $before->unit?->name),
+            ));
+        }
     }
 
     /**

@@ -13,7 +13,7 @@ use App\Models\Procurement\PurchaseRequest;
 use App\Models\Procurement\PurchaseRequestItem;
 use App\Models\User;
 use App\Support\Money;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use App\Support\Quantity;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -92,7 +92,7 @@ class PurchaseRequestService
     }
 
     /**
-     * Hundredths of a unit the request may still put on a project; null = lot (no quantity). May be negative.
+     * Hundredths of a unit the request may still put on a project; null = no quantity limit (a lot). May be negative.
      *
      * The planned quantity of the project in the currently approved PPMP, less what submitted requests
      * hold on it and this request's other lines, plus (for a revision) what the request it replaces holds.
@@ -125,7 +125,7 @@ class PurchaseRequestService
             $data['specifications'] = $data['specifications'] ?? $project->item->specifications;
         }
 
-        $quantityHundredths = (int) round((float) $data['quantity'] * 100);
+        $quantityHundredths = Quantity::toHundredths($data['quantity']);
         $totalCents = (int) round($quantityHundredths * Money::toCents($data['unit_cost']) / 100);
 
         if ($quantityHundredths <= 0 || $totalCents <= 0) {
@@ -140,8 +140,8 @@ class PurchaseRequestService
         if ($quantityLeft !== null && $quantityHundredths > $quantityLeft) {
             throw new ProcurementException(sprintf(
                 'Over the PPMP quantity of "%s": this line is %s, only %s is left on the project.',
-                $project->description, $this->quantityText($quantityHundredths, $project->unit?->name),
-                $this->quantityText(max(0, $quantityLeft), $project->unit?->name),
+                $project->description, Quantity::text($quantityHundredths, $project->unit?->name),
+                Quantity::text(max(0, $quantityLeft), $project->unit?->name),
             ));
         }
 
@@ -220,13 +220,11 @@ class PurchaseRequestService
                 $this->assignNumber($request);
             }
 
+            // Amount and quantity, each checked under the project's row lock: a draft saved within the
+            // limits may be over them now that other requests were submitted
             foreach ($request->items()->with('ppmpItem')->get() as $line) {
-                $this->budget->charge($line->ppmpItem, $line->total_cost);
+                $this->budget->charge($line->ppmpItem, $line->total_cost, $line->quantity);
             }
-
-            // After the charges, which lock the projects: a draft saved within the quantity may be over it
-            // now that other requests were submitted (or it was saved before quantities were enforced)
-            $this->assertWithinQuantity($request);
 
             $request->fill([
                 'status'       => RequestStatus::Submitted,
@@ -343,7 +341,7 @@ class PurchaseRequestService
     protected function releaseLines(PurchaseRequest $request): void
     {
         foreach ($request->items()->with('ppmpItem')->get() as $line) {
-            $this->budget->release($line->ppmpItem, $line->total_cost);
+            $this->budget->release($line->ppmpItem, $line->total_cost, $line->quantity);
         }
     }
 
@@ -363,43 +361,17 @@ class PurchaseRequestService
         return $pap;
     }
 
-    /** Every project's planned quantity still covers the request's lines on it (a lot has no limit). */
-    protected function assertWithinQuantity(PurchaseRequest $request): void
-    {
-        $projects = (new EloquentCollection($request->items()->with('ppmpItem')->get()
-            ->map(fn (PurchaseRequestItem $line) => $this->budget->currentLine($line->ppmpItem))
-            ->unique('line_uuid')->values()->all()))->load('unit');
-
-        foreach ($this->withRemaining($request, $projects, null) as $project) {
-            if ($project->remaining_hundredths !== null && $project->remaining_hundredths < 0) {
-                throw new ProcurementException(sprintf(
-                    'Over the PPMP quantity of "%s" by %s: lower the quantity before submitting.',
-                    $project->description, $this->quantityText(-$project->remaining_hundredths, $project->unit?->name),
-                ));
-            }
-        }
-    }
-
-    /** E.g. 2.5 piece, from hundredths of a unit. */
-    protected function quantityText(int $hundredths, ?string $unit): string
-    {
-        return trim(rtrim(rtrim(number_format($hundredths / 100, 2), '0'), '.') . ' ' . $unit);
-    }
-
     /**
      * Sets on each line of the currently approved PPMP what the request may still put on it:
-     * remaining_cents / budget_cents and remaining_hundredths / planned_hundredths (null for a lot).
-     * Three queries at most, however many lines.
+     * remaining_cents / budget_cents and remaining_hundredths / planned_hundredths (null when the
+     * line has no quantity limit). What submitted requests hold is on the line itself
+     * (committed_amount / committed_quantity). Two queries at most, however many lines.
      */
     protected function withRemaining(PurchaseRequest $request, Collection $lines, ?PurchaseRequestItem $except): Collection
     {
         $uuids = $lines->pluck('line_uuid')->all();
         $columns = ['line_uuid', 'quantity', 'total_cost'];
         $submitted = fn ($q) => $q->where('status', RequestStatus::Submitted);
-
-        // What other submitted requests hold (quantity only: their amounts are in committed_amount)
-        $held = PurchaseRequestItem::whereIn('line_uuid', $uuids)->where('purchase_request_id', '!=', $request->id)
-            ->whereHas('request', $submitted)->get($columns)->groupBy('line_uuid');
 
         // This request's other lines
         $own = $request->items()->whereIn('line_uuid', $uuids)
@@ -413,19 +385,19 @@ class PurchaseRequestService
             : collect();
 
         // Summed per row, rounded like the amounts are saved
-        $hundredths = fn (?Collection $items) => (int) $items?->sum(fn ($i) => (int) round((float) $i->quantity * 100));
+        $hundredths = fn (?Collection $items) => (int) $items?->sum(fn ($i) => Quantity::toHundredths($i->quantity));
         $cents = fn (?Collection $items) => (int) $items?->sum(fn ($i) => Money::toCents($i->total_cost));
 
-        return $lines->each(function (PpmpItem $line) use ($held, $own, $replaced, $hundredths, $cents) {
+        return $lines->each(function (PpmpItem $line) use ($own, $replaced, $hundredths, $cents) {
             $uuid = $line->line_uuid;
-            $planned = $line->quantity === null ? null : (int) round((float) $line->quantity * 100);
+            $planned = $line->plannedHundredths();
 
             $line->setAttribute('budget_cents', Money::toCents($line->estimated_budget));
             $line->setAttribute('remaining_cents', Money::toCents($line->estimated_budget) - Money::toCents($line->committed_amount)
                 - $cents($own->get($uuid)) + $cents($replaced->get($uuid)));
             $line->setAttribute('planned_hundredths', $planned);
             $line->setAttribute('remaining_hundredths', $planned === null ? null
-                : $planned - $hundredths($held->get($uuid)) - $hundredths($own->get($uuid)) + $hundredths($replaced->get($uuid)));
+                : $planned - $line->committedHundredths() - $hundredths($own->get($uuid)) + $hundredths($replaced->get($uuid)));
         });
     }
 

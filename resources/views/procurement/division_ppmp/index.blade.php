@@ -92,7 +92,7 @@
                                     <td>{{ $ppmp->ppmp_no }}</td>
                                     <td class="text-center"><span class="badge bg-{{ $statusColors[$ppmp->status->value] ?? 'secondary' }}">{{ $ppmp->status->label() }}</span></td>
                                     <td class="text-end">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
-                                    <td class="text-end pe-3"><a href="{{ route('procurement.ppmp.show', $ppmp) }}">Open</a></td>
+                                    <td class="text-end pe-3">@if ($canOpenPpmps)<a href="{{ route('procurement.ppmp.show', $ppmp) }}">Open</a>@endif</td>
                                 @else
                                     <td colspan="4" class="fst-italic">No PPMP for FY {{ $fiscalYear }} yet</td>
                                 @endif

@@ -7,12 +7,13 @@ use App\Exceptions\ProcurementException;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpItem;
 use App\Support\Money;
+use App\Support\Quantity;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Hard budget control between PR lines and PPMP lines.
+ * Hard budget and quantity control between PR lines and PPMP lines.
  * A PR line may only be charged against a line of the currently approved PPMP,
- * and never beyond that line's remaining budget.
+ * and never beyond that line's remaining budget or planned quantity.
  */
 class PpmpBudgetService
 {
@@ -30,16 +31,34 @@ class PpmpBudgetService
         return $current;
     }
 
-    public function charge(PpmpItem $line, string|int|float $amount): PpmpItem
+    /**
+     * Charge a PR line: its amount, and its quantity when given. Neither may go over what is
+     * left on the line (a line without a planned quantity has no quantity limit). Both are
+     * checked and updated under the line's row lock, so concurrent submits cannot overbook.
+     */
+    public function charge(PpmpItem $line, string|int|float $amount, string|int|float|null $quantity = null): PpmpItem
     {
         $cents = Money::toCents($amount);
+        $hundredths = Quantity::toHundredths($quantity);
 
         if ($cents <= 0) {
             throw new ProcurementException('Charge amount must be greater than zero.');
         }
 
-        return DB::transaction(function () use ($line, $cents) {
+        return DB::transaction(function () use ($line, $cents, $hundredths) {
             $current = $this->lockCurrentLine($line);
+            $planned = $current->plannedHundredths();
+            $unit = $current->unit?->name;
+
+            if ($planned !== null && $current->committedHundredths() + $hundredths > $planned) {
+                throw new ProcurementException(sprintf(
+                    'Over the PPMP quantity of "%s": requested %s, only %s is left.',
+                    $current->description,
+                    Quantity::text($hundredths, $unit),
+                    Quantity::text(max(0, $planned - $current->committedHundredths()), $unit),
+                ));
+            }
+
             $available = Money::toCents($current->estimated_budget) - Money::toCents($current->committed_amount);
 
             if ($cents > $available) {
@@ -52,19 +71,21 @@ class PpmpBudgetService
             }
 
             $current->update([
-                'committed_amount' => Money::fromCents(Money::toCents($current->committed_amount) + $cents),
+                'committed_amount'   => Money::fromCents(Money::toCents($current->committed_amount) + $cents),
+                'committed_quantity' => Quantity::fromHundredths($current->committedHundredths() + $hundredths),
             ]);
 
             return $current;
         });
     }
 
-    /** Give budget back, e.g. when a PR is cancelled or its line reduced. */
-    public function release(PpmpItem $line, string|int|float $amount): PpmpItem
+    /** Give budget (and quantity) back, e.g. when a PR is cancelled or replaced by its revision. */
+    public function release(PpmpItem $line, string|int|float $amount, string|int|float|null $quantity = null): PpmpItem
     {
         $cents = Money::toCents($amount);
+        $hundredths = Quantity::toHundredths($quantity);
 
-        return DB::transaction(function () use ($line, $cents) {
+        return DB::transaction(function () use ($line, $cents, $hundredths) {
             $current = $this->lockCurrentLine($line);
             $committed = Money::toCents($current->committed_amount);
 
@@ -72,7 +93,10 @@ class PpmpBudgetService
                 throw new ProcurementException('Release amount must be between zero and the amount charged.');
             }
 
-            $current->update(['committed_amount' => Money::fromCents($committed - $cents)]);
+            $current->update([
+                'committed_amount'   => Money::fromCents($committed - $cents),
+                'committed_quantity' => Quantity::fromHundredths(max(0, $current->committedHundredths() - $hundredths)),
+            ]);
 
             return $current;
         });

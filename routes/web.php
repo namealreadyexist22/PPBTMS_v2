@@ -229,13 +229,13 @@ use Illuminate\Support\Facades\Route;
             Route::get('division-ppmp', [DivisionPpmpController::class, 'index'])->name('division-ppmp.index');
             Route::post('division-ppmp/approve', [DivisionPpmpController::class, 'approve'])->name('division-ppmp.approve');
             Route::get('division-ppmp/preview/{office}', [DivisionPpmpController::class, 'preview'])->name('division-ppmp.preview');
+            Route::post('division-ppmp/{divisionPpmp}/signatories', [DivisionPpmpController::class, 'signatories'])->name('division-ppmp.signatories');
         });
 
-        // A numbered Division PPMP also opens from the section PPMP it includes; who may see or sign it is the controller's
+        // A numbered Division PPMP can also be viewed from the section PPMP it includes; who may see it is the controller's
         Route::middleware('perm:manage ppmp|menu.division-ppmp')->group(function () {
             Route::get('division-ppmp/{divisionPpmp}', [DivisionPpmpController::class, 'show'])->name('division-ppmp.show');
             Route::get('division-ppmp/{divisionPpmp}/print', [DivisionPpmpController::class, 'print'])->name('division-ppmp.print');
-            Route::post('division-ppmp/{divisionPpmp}/signatories', [DivisionPpmpController::class, 'signatories'])->name('division-ppmp.signatories');
         });
 
     });

@@ -3,11 +3,13 @@
 @section('content')
 
 
-<div class="mb-3">
-    <a href="{{ route('procurement.division-ppmp.index', ['fy' => $divisionPpmp->fiscal_year]) }}" class="text-decoration-none small text-muted">
-        <i class="fas fa-arrow-left me-1"></i> Back to Division PPMP
-    </a>
-</div>
+@if (auth()->user()->canAccessPermission('menu.division-ppmp'))
+    <div class="mb-3">
+        <a href="{{ route('procurement.division-ppmp.index', ['fy' => $divisionPpmp->fiscal_year]) }}" class="text-decoration-none small text-muted">
+            <i class="fas fa-arrow-left me-1"></i> Back to Division PPMP
+        </a>
+    </div>
+@endif
 
 <div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
     <div class="card-body p-4">
@@ -49,7 +51,10 @@
     <ul class="list-group list-group-flush small">
         @foreach ($divisionPpmp->ppmps->sortBy(fn ($p) => $p->office->code) as $ppmp)
             <li class="list-group-item px-4 d-flex justify-content-between">
-                <span><a href="{{ route('procurement.ppmp.show', $ppmp) }}">{{ $ppmp->ppmp_no }}</a> — {{ $ppmp->office->name }}</span>
+                <span>
+                    @if ($canOpenPpmps)<a href="{{ route('procurement.ppmp.show', $ppmp) }}">{{ $ppmp->ppmp_no }}</a>@else{{ $ppmp->ppmp_no }}@endif
+                    — {{ $ppmp->office->name }}
+                </span>
                 <span class="fw-semibold">₱ {{ number_format((float) $ppmp->total_budget, 2) }}</span>
             </li>
         @endforeach

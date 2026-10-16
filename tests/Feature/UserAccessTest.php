@@ -162,6 +162,63 @@ class UserAccessTest extends TestCase
         $this->actingAs($other->fresh())->get(route('core.users.index'))->assertForbidden();
     }
 
+    public function test_a_page_row_shows_what_guards_its_pages(): void
+    {
+        $pagesOnly = User::factory()->create(['is_activated' => 1]);
+        $pagesOnly->assignRole(Role::create(['name' => 'Pages only', 'guard_name' => 'web'])->givePermissionTo('manage users'));
+        $linkOnly = User::factory()->create(['is_activated' => 1]);
+        $linkOnly->assignRole(Role::create(['name' => 'Link only', 'guard_name' => 'web'])->givePermissionTo('menu.manage-users'));
+
+        $this->actingAs($this->admin)->get(route('core.access.index', ['user' => $pagesOnly->id]))
+            ->assertSee('Default: pages allowed (role), no sidebar link');
+        $this->get(route('core.access.index', ['user' => $linkOnly->id]))
+            ->assertSee('Default: sidebar link only (role), pages blocked');
+
+        // The seeded Admin role has both, like a role saved on the Roles screen
+        $this->assertTrue(Role::findByName('Admin')->hasPermissionTo('menu.manage-users'));
+        $this->assertTrue(Role::findByName('Admin')->hasPermissionTo('manage users'));
+    }
+
+    public function test_a_manage_override_without_its_page_override_shows_and_clears(): void
+    {
+        // Saved before "manage ppmp" was linked to the PPMP page
+        $manage = Permission::where('name', 'manage ppmp')->first();
+        \App\Core\Models\PermissionUserOverride::create(['user_id' => $this->staff->id, 'permission_id' => $manage->id, 'access' => 'deny']);
+        $ppmp = $this->menu('PPMP');
+
+        $this->actingAs($this->admin)->get(route('core.access.index', ['user' => $this->staff->id]))
+            ->assertSee('id="access-menu_access-' . $ppmp->id . '-deny" value="deny" autocomplete="off" checked', false)
+            ->assertSee('1 override');
+
+        $this->save($this->staff, ['menu_access' => [$ppmp->id => 'inherit']])->assertSessionHas('success', fn ($m) => str_starts_with($m, 'Access updated'));
+        $this->assertDatabaseCount('permission_user_overrides', 0);
+        $this->assertTrue($this->staff->fresh()->canAccessPermission('manage ppmp'));
+    }
+
+    public function test_nobody_can_remove_their_own_user_access(): void
+    {
+        $access = $this->menu('User Access');
+
+        $this->actingAs($this->admin)->put(route('core.access.update', $this->admin), ['menu_access' => [$access->id => 'deny']])
+            ->assertSessionHasErrors('access');
+
+        $this->assertDatabaseCount('menu_user_overrides', 0);
+        $this->assertDatabaseCount('permission_user_overrides', 0);
+        $this->get(route('core.access.index'))->assertOk();
+    }
+
+    public function test_a_super_admin_can_be_denied_preparing_the_app(): void
+    {
+        $other = User::factory()->create(['is_activated' => 1]);
+        $other->assignRole('Super Admin');
+        $appManage = Permission::where('name', 'menu.app-manage')->value('id');
+        $apps = app(\App\Services\Procurement\AppService::class);
+
+        $this->assertTrue($apps->canManage($other, \App\Enums\Region::Vis));
+        $this->save($other, ['perm_access' => [$appManage => 'deny']]);
+        $this->assertFalse($apps->canManage($other->fresh(), \App\Enums\Region::Vis));
+    }
+
     public function test_bad_values_and_rows_not_on_the_screen_are_refused(): void
     {
         $ppmp = $this->menu('PPMP');
@@ -173,5 +230,10 @@ class UserAccessTest extends TestCase
         $this->save($this->staff, ['perm_access' => [$manage => 'deny']]);
         $this->assertDatabaseCount('permission_user_overrides', 0);
         $this->assertTrue($this->staff->fresh()->canAccessPermission('manage ppmp'));
+
+        // A key written with a leading zero is the same permission, not an error
+        $clear = Permission::where('name', 'menu.activity-logs-clear')->value('id');
+        $this->save($this->staff, ['perm_access' => ['0' . $clear => 'allow']]);
+        $this->assertTrue($this->staff->fresh()->canAccessPermission('menu.activity-logs-clear'));
     }
 }

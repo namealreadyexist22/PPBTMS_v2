@@ -13,6 +13,7 @@ class ActionPermissionSeeder extends Seeder
     {
         $this->linkBasePermissions();
         $this->createDestroySubmenus();
+        $this->grantAdminPageLinks();
     }
 
     /**
@@ -50,6 +51,24 @@ class ActionPermissionSeeder extends Seeder
                 'group' => $menu->name,
             ]);
         }
+    }
+
+    /**
+     * Admin is seeded with "manage X" permissions only, so its pages opened but
+     * had no sidebar links (and User Access showed them as "no access"). Give it
+     * the menu permission of each page it manages, as the Roles screen would.
+     */
+    protected function grantAdminPageLinks(): void
+    {
+        $admin = Role::where('name', 'Admin')->first();
+
+        if (! $admin) {
+            return;
+        }
+
+        $menuIds = $admin->permissions()->where('name', 'like', 'manage %')->whereNotNull('menu_id')->pluck('menu_id');
+
+        $admin->givePermissionTo(Menu::whereIn('id', $menuIds)->pluck('permission_name')->all());
     }
 
     protected function createDestroySubmenus(): void

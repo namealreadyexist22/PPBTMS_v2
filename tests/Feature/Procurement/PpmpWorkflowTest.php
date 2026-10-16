@@ -428,8 +428,13 @@ class PpmpWorkflowTest extends TestCase
         $this->ppmps->submit($ppmp, $this->staff);
         $no1 = $divisions->approve($this->office, 2027, \App\Enums\Region::Lm, $this->head, $this->staff);
 
+        // Viewing needs PPMP or Division PPMP; signing is part of the Division PPMP page
         $this->head->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('manage ppmp'));
-        $this->actingAs($this->head)->get(route('procurement.division-ppmp.show', $no1))->assertOk()->assertSee('DIVISION_SIGNATORIES_MODAL', false);
+        $this->actingAs($this->head)->get(route('procurement.division-ppmp.show', $no1))->assertOk()->assertDontSee('DIVISION_SIGNATORIES_MODAL', false);
+        $this->postJson(route('procurement.division-ppmp.signatories', $no1), ['prepared_by_name' => 'X'])->assertForbidden();
+
+        $this->head->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('menu.division-ppmp'));
+        $this->get(route('procurement.division-ppmp.show', $no1))->assertOk()->assertSee('DIVISION_SIGNATORIES_MODAL', false);
         $this->postJson(route('procurement.division-ppmp.signatories', $no1), [
             'prepared_by_name' => 'Ana B. Santos', 'prepared_by_designation' => 'Planning Officer III',
             'submitted_by_name' => 'Pedro C. Reyes', 'submitted_by_designation' => 'OIC, Office of the RED',
