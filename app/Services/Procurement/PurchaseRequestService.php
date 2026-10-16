@@ -221,6 +221,8 @@ class PurchaseRequestService
                     throw new ProcurementException("{$previous->title()} is {$previous->status->label()}, so this revision can no longer replace it.");
                 }
 
+                $this->assertNotOnRfq($previous, 'replaced');
+
                 $this->releaseLines($previous);
                 $previous->update(['status' => RequestStatus::Superseded, 'updated_by' => $user->id]);
             } else {
@@ -249,6 +251,8 @@ class PurchaseRequestService
         if ($request->status !== RequestStatus::Submitted) {
             throw new ProcurementException("Only a submitted request can be revised. {$request->title()} is {$request->status->label()}.");
         }
+
+        $this->assertNotOnRfq($request, 'revised');
 
         if ($open = $this->openRevision($request)) {
             throw new ProcurementException("{$open->title()} is already being prepared. Open it instead.");
@@ -283,6 +287,8 @@ class PurchaseRequestService
         if ($request->status !== RequestStatus::Submitted) {
             throw new ProcurementException("Only a submitted request can be cancelled. {$request->title()} is {$request->status->label()}.");
         }
+
+        $this->assertNotOnRfq($request, 'cancelled');
 
         if ($open = $this->openRevision($request)) {
             throw new ProcurementException("Delete the draft {$open->title()} first.");
@@ -424,6 +430,14 @@ class PurchaseRequestService
         $fields = array_merge($fields, $kind === RequestKind::Jr ? ['jr_type'] : []);
 
         return array_intersect_key($data, array_flip($fields));
+    }
+
+    /** A request whose lines are on an open RFQ stays as it is until they are taken off (or the RFQ is cancelled). */
+    protected function assertNotOnRfq(PurchaseRequest $request, string $action): void
+    {
+        if ($rfq = app(RfqService::class)->openRfqFor($request)) {
+            throw new ProcurementException("{$request->title()} has items on {$rfq->title()}, so it cannot be {$action}. Take them off the RFQ or cancel it first.");
+        }
     }
 
     /** The request's row, locked for this transaction, checked again for edits. */

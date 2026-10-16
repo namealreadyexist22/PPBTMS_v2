@@ -115,6 +115,8 @@ class PurchaseRequestController extends Controller
             'jrTypes'      => config('procurement.jr_types'),
             'lines'        => $canEdit && $pr->isEditable() ? $this->linesOrError($pr) : collect(),
             'people'       => $this->signatoryPeople($pr->office),
+            // Being quoted: revise / cancel wait until its items are off the RFQ
+            'rfq'          => $pr->status === RequestStatus::Submitted ? app(\App\Services\Procurement\RfqService::class)->openRfqFor($pr) : null,
         ]);
     }
 

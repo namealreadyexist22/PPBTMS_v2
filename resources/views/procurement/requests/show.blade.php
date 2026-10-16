@@ -55,6 +55,14 @@
                     @if ($pr->revision)<span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle align-middle" style="font-size: .7rem;">Rev. {{ $pr->revision }}</span>@endif
                     @php $c = $pr->status->color(); @endphp
                     <span class="badge rounded-pill bg-{{ $c }}-subtle text-{{ $c }}-emphasis border border-{{ $c }}-subtle align-middle" style="font-size: .7rem;">{{ $pr->status->label() }}</span>
+                    @if ($rfq)
+                        {{-- Link only for those who may open RFQs --}}
+                        @if (auth()->user()->canAccessPermission(\App\Models\Procurement\Rfq::MANAGE_PERMISSION))
+                            <a href="{{ route('procurement.rfqs.show', $rfq) }}" class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle align-middle text-decoration-none" style="font-size: .7rem;">On {{ $rfq->title() }}</a>
+                        @else
+                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle align-middle" style="font-size: .7rem;">On {{ $rfq->title() }}</span>
+                        @endif
+                    @endif
                 </h4>
                 <div class="text-muted small">{{ $pr->office->pathLabel() }}</div>
             </div>

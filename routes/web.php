@@ -18,6 +18,7 @@ use App\Http\Controllers\Procurement\StandardItemController;
 use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use App\Http\Controllers\Procurement\PurchaseRequestController;
+use App\Http\Controllers\Procurement\RfqController;
 use Illuminate\Support\Facades\Route;
 
     Route::get('/', function () {
@@ -190,6 +191,21 @@ use Illuminate\Support\Facades\Route;
             Route::post('requests/{purchaseRequest}/revise', [PurchaseRequestController::class, 'revise'])->name('requests.revise');
             Route::post('requests/{purchaseRequest}/cancel', [PurchaseRequestController::class, 'cancel'])->name('requests.cancel');
             Route::delete('requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->name('requests.destroy');
+        });
+
+        // Requests for Quotation from submitted PRs / JRs; {rfq} is the uuid
+        Route::middleware('perm:manage rfq')->group(function () {
+            Route::get('rfqs', [RfqController::class, 'index'])->name('rfqs.index');
+            Route::post('rfqs/store', [RfqController::class, 'store'])->name('rfqs.store');
+            Route::get('rfqs/{rfq}', [RfqController::class, 'show'])->name('rfqs.show');
+            Route::get('rfqs/{rfq}/print', [RfqController::class, 'print'])->name('rfqs.print');
+            Route::post('rfqs/{rfq}/header', [RfqController::class, 'header'])->name('rfqs.header');
+            Route::get('rfqs/{rfq}/picker', [RfqController::class, 'picker'])->name('rfqs.picker');
+            Route::post('rfqs/{rfq}/lines', [RfqController::class, 'addLines'])->name('rfqs.lines.store');
+            Route::delete('rfqs/{rfq}/lines', [RfqController::class, 'removeLine'])->name('rfqs.lines.destroy');
+            Route::post('rfqs/{rfq}/issue', [RfqController::class, 'issue'])->name('rfqs.issue');
+            Route::post('rfqs/{rfq}/cancel', [RfqController::class, 'cancel'])->name('rfqs.cancel');
+            Route::delete('rfqs/{rfq}', [RfqController::class, 'destroy'])->name('rfqs.destroy');
         });
 
         Route::middleware('perm:manage ppmp')->group(function () {

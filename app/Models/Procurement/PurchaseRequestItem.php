@@ -27,4 +27,10 @@ class PurchaseRequestItem extends Model
     {
         return $this->belongsTo(PpmpItem::class);
     }
+
+    /** Its places on RFQs (at most one that is not cancelled). */
+    public function rfqItems(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(RfqItem::class);
+    }
 }

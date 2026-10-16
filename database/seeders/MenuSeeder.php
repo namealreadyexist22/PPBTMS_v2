@@ -95,6 +95,11 @@ class MenuSeeder extends Seeder
             ['nav_name' => 'PR / JR', 'icon' => 'fas fa-file-invoice', 'route' => 'procurement.requests.index', 'order' => 5]
         );
 
+        Menu::updateOrCreate(
+            ['name' => 'Requests for Quotation', 'parent_id' => $procurement->id],
+            ['nav_name' => 'RFQ', 'icon' => 'fas fa-file-signature', 'route' => 'procurement.rfqs.index', 'order' => 6]
+        );
+
         // Hidden gate: the BAC Secretariat prepares the APP of its own region (menu.app-manage)
         Menu::firstOrCreate(
             ['name' => 'APP Manage', 'parent_id' => $app->id],
