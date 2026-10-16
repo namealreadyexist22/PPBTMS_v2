@@ -41,9 +41,11 @@
     </a>
 </div>
 
-{{-- Header and items are redrawn in place after item changes (no full reload) --}}
+{{-- One card: header, items, then the purpose and signatories. Header and items are redrawn in
+     place after item changes (no full reload) --}}
+<div class="card border-0 shadow-sm pr-card overflow-hidden mb-3">
 <div id="pr_header" data-total="{{ number_format((float) $pr->total_amount, 2) }}">
-<div class="card border-0 shadow-sm pr-card mb-3">
+<div>
     <div class="card-body p-4">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
             <div>
@@ -144,58 +146,10 @@
 </div>
 </div>
 
-{{-- Details and signatories --}}
-<div class="card border-0 shadow-sm pr-card mb-3">
-    <div class="card-header bg-white py-3 px-4" style="border-bottom: 1px solid #f1f5f9;">
-        <h6 class="m-0 fw-bold"><i class="fas {{ $canEdit ? 'fa-pen' : 'fa-file-alt' }} text-muted me-2"></i>Details</h6>
-    </div>
-    <div class="card-body px-4">
-        <form id="form_header" autocomplete="off">
-            @csrf
-            <fieldset class="border-0 p-0 m-0" @disabled(! $canEdit)>
-                <div class="pr-label mb-2">Request</div>
-                <div class="row g-3">
-                    <div class="{{ $jr ? 'col-lg-9' : 'col-12' }}">
-                        <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
-                        @if ($canEdit)
-                            <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
-                        @else
-                            {{-- Read-only: the whole purpose as text, however long --}}
-                            <div class="small" style="white-space: pre-line;">{{ $pr->purpose ?: '—' }}</div>
-                        @endif
-                    </div>
-                    @if ($jr)
-                        <div class="col-lg-3">
-                            <label class="form-label small fw-semibold text-muted mb-1">JR Type</label>
-                            <select name="jr_type" class="form-select form-select-sm">
-                                <option value="">Choose…</option>
-                                @foreach ($jrTypes as $value => $label)
-                                    <option value="{{ $value }}" @selected($pr->jr_type === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    @endif
-                </div>
-
-                <div class="pr-label mt-4 mb-2">Signatories</div>
-                {{-- align-items-end: the inputs line up when a label wraps --}}
-                <div class="row g-3 align-items-end">
-                    @include('procurement.requests.extras.signatory_fields', ['prefix' => '', 'col' => 'col-sm-6 col-xl-3'])
-                </div>
-                @if ($canEdit)
-                    <div class="d-flex justify-content-end border-top pt-3 mt-3">
-                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save Details</button>
-                    </div>
-                @endif
-            </fieldset>
-        </form>
-    </div>
-</div>
-
 <div id="pr_items">
 @php $cols = 6 + ($jr ? 1 : 0) + ($canEdit ? 1 : 0); @endphp
 {{-- Items --}}
-<div class="card border-0 shadow-sm pr-card overflow-hidden mb-3">
+<div class="border-top">
     <div class="card-header bg-white py-3 px-4 d-flex align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
         <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>Items</h6>
         <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis">{{ $pr->items->count() }}</span>
@@ -298,6 +252,52 @@
 </div>
 
 </div>
+
+{{-- Purpose and signatories --}}
+<div class="border-top">
+    <div class="card-body p-4">
+        <form id="form_header" autocomplete="off">
+            @csrf
+            <fieldset class="border-0 p-0 m-0" @disabled(! $canEdit)>
+                <div class="pr-label mb-2">Request</div>
+                <div class="row g-3">
+                    <div class="{{ $jr ? 'col-lg-9' : 'col-12' }}">
+                        <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
+                        @if ($canEdit)
+                            <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
+                        @else
+                            {{-- Read-only: the whole purpose as text, however long --}}
+                            <div class="small" style="white-space: pre-line;">{{ $pr->purpose ?: '—' }}</div>
+                        @endif
+                    </div>
+                    @if ($jr)
+                        <div class="col-lg-3">
+                            <label class="form-label small fw-semibold text-muted mb-1">JR Type</label>
+                            <select name="jr_type" class="form-select form-select-sm">
+                                <option value="">Choose…</option>
+                                @foreach ($jrTypes as $value => $label)
+                                    <option value="{{ $value }}" @selected($pr->jr_type === $value)>{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
+                </div>
+
+                <div class="pr-label mt-4 mb-2">Signatories</div>
+                {{-- align-items-end: the inputs line up when a label wraps --}}
+                <div class="row g-3 align-items-end">
+                    @include('procurement.requests.extras.signatory_fields', ['prefix' => '', 'col' => 'col-sm-6 col-xl-3'])
+                </div>
+                @if ($canEdit)
+                    <div class="d-flex justify-content-end border-top pt-3 mt-3">
+                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save Details</button>
+                    </div>
+                @endif
+            </fieldset>
+        </form>
+    </div>
+</div>
+</div>{{-- one card --}}
 
 {{-- Print: set the signatories, then print --}}
 @if ($canPrintSign)
