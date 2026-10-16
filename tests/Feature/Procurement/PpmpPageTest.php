@@ -50,8 +50,10 @@ class PpmpPageTest extends TestCase
         $this->oic = User::factory()->create(['is_activated' => 1, 'office_id' => $this->division->id, 'fname' => 'Anne', 'minitial' => null, 'lname' => 'Dilay', 'designation' => 'OIC, Planning, Policy and Programming Division']);
         $this->outsider = User::factory()->create(['is_activated' => 1, 'office_id' => $other->id]);
 
+        // As in the app, PPMP users also get the Division PPMP page (its own menu permission)
+        \Spatie\Permission\Models\Permission::findOrCreate('menu.division-ppmp');
         foreach ([$this->staff, $this->staff2, $this->head, $this->oic, $this->outsider] as $user) {
-            $user->givePermissionTo('manage ppmp');
+            $user->givePermissionTo(['manage ppmp', 'menu.division-ppmp']);
         }
     }
 
@@ -432,7 +434,7 @@ class PpmpPageTest extends TestCase
     public function test_lm_and_visayas_ppmps_are_separate_down_to_the_division_ppmp(): void
     {
         $visStaff = User::factory()->create(['is_activated' => 1, 'office_id' => $this->section->id, 'region' => 'vis']);
-        $visStaff->givePermissionTo('manage ppmp');
+        $visStaff->givePermissionTo(['manage ppmp', 'menu.division-ppmp']);
 
         $lm = $this->submittedSectionPpmp($this->section, $this->staff, '64000');       // staff defaults to LM
         $vis = $this->submittedSectionPpmp($this->section, $visStaff, '10000');

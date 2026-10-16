@@ -13,6 +13,7 @@ use App\Models\Procurement\PurchaseRequest;
 use App\Models\Procurement\PurchaseRequestItem;
 use App\Models\User;
 use App\Support\Money;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -95,7 +96,7 @@ class PurchaseRequestService
      *
      * The planned quantity of the project in the currently approved PPMP, less what submitted requests
      * hold on it and this request's other lines, plus (for a revision) what the request it replaces holds.
-     * Shown and warned about only: the budget (remainingCents) is the hard limit.
+     * A hard limit like the budget: saveLine and submit refuse to go over it.
      */
     public function remainingQuantity(PurchaseRequest $request, PpmpItem $project, ?PurchaseRequestItem $except = null): ?int
     {
@@ -104,7 +105,10 @@ class PurchaseRequestService
         return $this->withRemaining($request, collect([$current]), $except)->first()->remaining_hundredths;
     }
 
-    /** Add or edit a line. Amount = quantity x unit cost, never more than the project's remaining budget. */
+    /**
+     * Add or edit a line. Amount = quantity x unit cost. The line may take neither more than what is
+     * left of the project's planned quantity (a lot has none) nor more than its remaining budget.
+     */
     public function saveLine(PurchaseRequest $request, array $data, ?PurchaseRequestItem $line = null): PurchaseRequestItem
     {
         $this->assertEditable($request);
@@ -128,7 +132,18 @@ class PurchaseRequestService
             throw new ProcurementException('Quantity and unit cost must be greater than zero.');
         }
 
-        $remaining = $this->remainingCents($request, $project, $line);
+        // $project is already the line of the currently approved PPMP
+        $this->withRemaining($request, collect([$project]), $line);
+        $quantityLeft = $project->remaining_hundredths;
+        $remaining = $project->remaining_cents;
+
+        if ($quantityLeft !== null && $quantityHundredths > $quantityLeft) {
+            throw new ProcurementException(sprintf(
+                'Over the PPMP quantity of "%s": this line is %s, only %s is left on the project.',
+                $project->description, $this->quantityText($quantityHundredths, $project->unit?->name),
+                $this->quantityText(max(0, $quantityLeft), $project->unit?->name),
+            ));
+        }
 
         if ($totalCents > $remaining) {
             throw new ProcurementException(sprintf(
@@ -208,6 +223,10 @@ class PurchaseRequestService
             foreach ($request->items()->with('ppmpItem')->get() as $line) {
                 $this->budget->charge($line->ppmpItem, $line->total_cost);
             }
+
+            // After the charges, which lock the projects: a draft saved within the quantity may be over it
+            // now that other requests were submitted (or it was saved before quantities were enforced)
+            $this->assertWithinQuantity($request);
 
             $request->fill([
                 'status'       => RequestStatus::Submitted,
@@ -344,15 +363,27 @@ class PurchaseRequestService
         return $pap;
     }
 
-    /**
-     * Centavos the request may still put on a PPMP project: the project's uncharged budget, less
-     * this request's other lines on it, plus (for a revision) what the request it replaces holds.
-     */
-    protected function remainingCents(PurchaseRequest $request, PpmpItem $project, ?PurchaseRequestItem $except = null): int
+    /** Every project's planned quantity still covers the request's lines on it (a lot has no limit). */
+    protected function assertWithinQuantity(PurchaseRequest $request): void
     {
-        $current = $this->budget->currentLine($project);
+        $projects = (new EloquentCollection($request->items()->with('ppmpItem')->get()
+            ->map(fn (PurchaseRequestItem $line) => $this->budget->currentLine($line->ppmpItem))
+            ->unique('line_uuid')->values()->all()))->load('unit');
 
-        return $this->withRemaining($request, collect([$current]), $except)->first()->remaining_cents;
+        foreach ($this->withRemaining($request, $projects, null) as $project) {
+            if ($project->remaining_hundredths !== null && $project->remaining_hundredths < 0) {
+                throw new ProcurementException(sprintf(
+                    'Over the PPMP quantity of "%s" by %s: lower the quantity before submitting.',
+                    $project->description, $this->quantityText(-$project->remaining_hundredths, $project->unit?->name),
+                ));
+            }
+        }
+    }
+
+    /** E.g. 2.5 piece, from hundredths of a unit. */
+    protected function quantityText(int $hundredths, ?string $unit): string
+    {
+        return trim(rtrim(rtrim(number_format($hundredths / 100, 2), '0'), '.') . ' ' . $unit);
     }
 
     /**

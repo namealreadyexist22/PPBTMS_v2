@@ -37,24 +37,38 @@
 
     <div class="col-md-9">
         @if ($selectedUser)
-            <form method="POST" action="{{ route('core.access.update', $selectedUser) }}">
+            <style>
+                .access-row { transition: background-color .15s; }
+                .access-row.is-overridden { background: var(--bs-warning-bg-subtle); }
+                .access-default { font-size: .7rem; }
+                .access-dot { width: .55rem; height: .55rem; border-radius: 50%; flex-shrink: 0; background: var(--bs-secondary-bg); border: 1px solid var(--bs-border-color); }
+                .access-dot.is-allowed { background: var(--bs-success); border-color: var(--bs-success); }
+                .access-row .btn-group .btn { font-size: .7rem; padding: .15rem .45rem; }
+            </style>
+            <form method="POST" action="{{ route('core.access.update', $selectedUser) }}" id="form_access">
                 @csrf
                 @method('PUT')
 
-                <div class="d-flex align-items-center justify-content-between mb-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                     <div>
                         <h5 class="mb-0">{{ $selectedUser->fullname }}</h5>
                         <span class="text-muted small">
                             Roles: {{ $selectedUser->roles->pluck('name')->join(', ') ?: '— none —' }}
+                            · <span id="override_count">{{ $overrideCount === 0 ? 'no overrides' : $overrideCount . ' ' . Str::plural('override', $overrideCount) }}</span>
                         </span>
                     </div>
-                    <button type="submit" class="btn btn-primary btn-sm">Save Access</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-light border btn-sm" id="btn_reset_access" title="Set every row back to Default (save to apply)">
+                            <i class="fas fa-undo me-1"></i> All to Default
+                        </button>
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-save me-1"></i> Save Access</button>
+                    </div>
                 </div>
 
                 <p class="text-muted small">
-                    The right switch turns on a personal override for that item; the left switch then sets
-                    whether it's allowed or denied. Leave the right switch off to simply inherit from the
-                    user's role.
+                    <strong>Default</strong> follows the user's roles (and any permission given to them directly).
+                    <strong>Allow</strong> or <strong>Deny</strong> overrides it for this user only. Rows with an override are highlighted;
+                    the dot shows whether the user has access. A page's Allow / Deny applies to both its sidebar link and its pages.
                 </p>
 
                 @foreach ($groupedMenus as $sectionName => $menusInSection)
@@ -68,43 +82,31 @@
                                 $otherLinkedPermissions = $menu->linkedPermissions->reject(
                                     fn ($p) => str_starts_with($p->name, 'manage ')
                                 );
-                                $menuOverrideValue = $menuOverrides->get($menu->id);
                             @endphp
-                            <div class="col-md-4">
+                            <div class="col-lg-6 col-xxl-4">
                                 <div class="card h-100 border-0 shadow-sm">
-                                    <div class="card-header bg-light fw-semibold small d-flex justify-content-between align-items-center" style="border-radius: 0px 0px 0 0;">
-                                        {{ $menu->name }}
-                                        <span class="text-muted text-uppercase ms-auto" style="font-size: 0.62rem; letter-spacing: 0.5px;">Override</span>
-                                    </div>                             
+                                    <div class="card-header bg-light fw-semibold small">{{ $menu->name }}</div>
                                     <div class="card-body p-0" style="max-height: 240px; overflow-y: auto;">
-                                        <x-permission-chip stateField="menu_state" overrideField="menu_override"
-                                            :id="$menu->id" :label="$menu->nav_name ?: $menu->name"
-                                            :checked="$menuOverrideValue === 'allow'"
-                                            :overridden="$menuOverrideValue !== null"
-                                            :roleDefault="$rolePermissionNames->contains($menu->permission_name)" />
+                                        <x-permission-chip name="menu_access" :id="$menu->id"
+                                            label="View / Access"
+                                            :value="$menuOverrides->get($menu->id)"
+                                            :source="$defaultSources->get($menu->permission_name)" />
 
                                         {{-- Hidden action gates are checked via canAccessPermission(), so they use permission overrides --}}
                                         @foreach ($menu->actionChildren as $action)
-                                            @php
-                                                $actionPermission = $actionPermissions->get($action->permission_name);
-                                                $permOverrideValue = $actionPermission ? $permissionOverrides->get($actionPermission->id) : null;
-                                            @endphp
+                                            @php $actionPermission = $actionPermissions->get($action->permission_name); @endphp
                                             @if ($actionPermission)
-                                                <x-permission-chip stateField="perm_state" overrideField="perm_override"
-                                                    :id="$actionPermission->id" :label="$action->nav_name ?: $action->name"
-                                                    :checked="$permOverrideValue === 'allow'"
-                                                    :overridden="$permOverrideValue !== null"
-                                                    :roleDefault="$rolePermissionNames->contains($action->permission_name)" />
+                                                <x-permission-chip name="perm_access" :id="$actionPermission->id"
+                                                    :label="$action->nav_name ?: $action->name"
+                                                    :value="$permissionOverrides->get($actionPermission->id)"
+                                                    :source="$defaultSources->get($action->permission_name)" />
                                             @endif
                                         @endforeach
 
                                         @foreach ($otherLinkedPermissions as $permission)
-                                            @php $permOverrideValue = $permissionOverrides->get($permission->id); @endphp
-                                            <x-permission-chip stateField="perm_state" overrideField="perm_override"
-                                                :id="$permission->id" :label="$permission->name"
-                                                :checked="$permOverrideValue === 'allow'"
-                                                :overridden="$permOverrideValue !== null"
-                                                :roleDefault="$rolePermissionNames->contains($permission->name)" />
+                                            <x-permission-chip name="perm_access" :id="$permission->id" :label="$permission->name"
+                                                :value="$permissionOverrides->get($permission->id)"
+                                                :source="$defaultSources->get($permission->name)" />
                                         @endforeach
                                     </div>
                                 </div>
@@ -120,19 +122,14 @@
 
                     <div class="row g-3 mb-2">
                         @foreach ($unassignedGrouped as $groupName => $permissionsInGroup)
-                            <div class="col-md-4">
+                            <div class="col-lg-6 col-xxl-4">
                                 <div class="card h-100 border-0 shadow-sm">
-                                    <div class="card-header bg-light fw-semibold small" style="border-radius: 10px 10px 0 0;">
-                                        {{ $groupName }}
-                                    </div>
+                                    <div class="card-header bg-light fw-semibold small">{{ $groupName }}</div>
                                     <div class="card-body p-0" style="max-height: 240px; overflow-y: auto;">
                                         @foreach ($permissionsInGroup as $permission)
-                                            @php $permOverrideValue = $permissionOverrides->get($permission->id); @endphp
-                                            <x-permission-chip stateField="perm_state" overrideField="perm_override"
-                                                :id="$permission->id" :label="$permission->name"
-                                                :checked="$permOverrideValue === 'allow'"
-                                                :overridden="$permOverrideValue !== null"
-                                                :roleDefault="$rolePermissionNames->contains($permission->name)" />
+                                            <x-permission-chip name="perm_access" :id="$permission->id" :label="$permission->name"
+                                                :value="$permissionOverrides->get($permission->id)"
+                                                :source="$defaultSources->get($permission->name)" />
                                         @endforeach
                                     </div>
                                 </div>
@@ -141,7 +138,7 @@
                     </div>
                 @endif
 
-                <button type="submit" class="btn btn-primary mt-3">Save Access</button>
+                <button type="submit" class="btn btn-primary mt-3"><i class="fas fa-save me-1"></i> Save Access</button>
             </form>
         @else
             <div class="text-muted">Select a user on the left to manage their access.</div>
@@ -153,24 +150,35 @@
 @push('script')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.chip-override').forEach(function (overrideSwitch) {
-        overrideSwitch.addEventListener('change', function () {
-            const row = this.closest('.d-flex');
-            const target = document.getElementById(this.dataset.target);
-            const badge = row.querySelector('.chip-status-badge');
-            const switchWrapper = row.querySelector('.chip-state-wrapper');
+    const form = document.getElementById('form_access');
+    if (!form) return;
 
-            if (!target || !badge || !switchWrapper) return;
+    // Highlight overridden rows, colour the dot by the resulting access, count the overrides
+    function paint(row) {
+        const value = row.querySelector('.btn-check:checked')?.value || 'inherit';
+        const allowed = value === 'inherit' ? row.dataset.default === 'allow' : value === 'allow';
+        row.classList.toggle('is-overridden', value !== 'inherit');
+        const dot = row.querySelector('.access-dot');
+        dot.classList.toggle('is-allowed', allowed);
+        dot.title = allowed ? 'Has access' : 'No access';
+    }
 
-            target.disabled = !this.checked;
-            badge.style.display = this.checked ? 'none' : '';
-            switchWrapper.style.display = this.checked ? '' : 'none';
+    function count() {
+        const n = form.querySelectorAll('.access-row.is-overridden').length;
+        document.getElementById('override_count').textContent = n === 0 ? 'no overrides' : n + (n === 1 ? ' override' : ' overrides');
+    }
 
-            if (!this.checked) {
-                target.checked = target.dataset.roleDefault === '1';
-            }
-        });
+    form.addEventListener('change', function (e) {
+        const row = e.target.closest('.access-row');
+        if (row) { paint(row); count(); }
     });
+
+    document.getElementById('btn_reset_access').addEventListener('click', function () {
+        form.querySelectorAll('.btn-check[value="inherit"]').forEach((radio) => { radio.checked = true; });
+        form.querySelectorAll('.access-row').forEach(paint);
+        count();
+    });
+
 });
 </script>
 @endpush

@@ -12,12 +12,12 @@
                     <i class="fas fa-clipboard-list text-muted me-2"></i>Activity Logs
                 </h5>
 
-                @can('logs.clear')
+                @if (auth()->user()->canAccessPermission('menu.activity-logs-clear'))
                     <button id="btn_clear_logs" class="btn btn-sm px-3 ms-auto text-white fw-medium shadow-sm"
                             style="background-color: #ef4444; border: 1px solid #ef4444; font-size: 0.85rem; padding: 0.45rem 1.1rem; border-radius: 6px; white-space: nowrap;">
                         <i class="fas fa-trash-alt me-1"></i>Clear Log
                     </button>
-                @endcan
+                @endif
             </div>
 
             <div class="card-body px-4 pb-4 pt-3 overflow-hidden">

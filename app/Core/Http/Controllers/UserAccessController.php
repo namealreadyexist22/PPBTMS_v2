@@ -8,6 +8,7 @@ use App\Core\Models\PermissionUserOverride;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Permission;
 
 class UserAccessController extends Controller
@@ -28,15 +29,16 @@ class UserAccessController extends Controller
         $unassignedGrouped = collect();
         $menuOverrides = collect();
         $permissionOverrides = collect();
-        $rolePermissionNames = collect();
+        $defaultSources = collect();
         $actionPermissions = collect();
+        $overrideCount = 0;
 
         if ($request->filled('user')) {
             $selectedUser = User::findOrFail($request->user);
 
             $groupedMenus = Menu::leafMenusGroupedForCards();
 
-            $rolePermissionNames = $selectedUser->getPermissionsViaRoles()->pluck('name');
+            $defaultSources = $this->defaultSources($selectedUser);
 
             $unassignedGrouped = Permission::where('name', 'not like', 'menu.%')
                 ->whereNull('menu_id')
@@ -48,12 +50,31 @@ class UserAccessController extends Controller
 
             $menuOverrides = $selectedUser->menuOverrides()->pluck('access', 'menu_id');
             $permissionOverrides = $selectedUser->permissionOverrides()->pluck('access', 'permission_id');
+
+            // Rows with an override (a page's mirrored "manage X" override is the page's own row)
+            $overrideCount = $menuOverrides->count()
+                + $permissionOverrides->keys()->intersect($this->editablePermissionIds($groupedMenus->flatten()))->count();
         }
 
         return view('admin.users.access', compact(
             'users', 'selectedUser', 'groupedMenus', 'unassignedGrouped',
-            'menuOverrides', 'permissionOverrides', 'rolePermissionNames', 'actionPermissions'
+            'menuOverrides', 'permissionOverrides', 'defaultSources', 'actionPermissions', 'overrideCount'
         ));
+    }
+
+    /**
+     * What the user has without any override, as permission name => where it
+     * comes from: their roles, or permissions given to them directly. A Super
+     * Admin has everything.
+     */
+    protected function defaultSources(User $user)
+    {
+        if ($user->hasRole('Super Admin')) {
+            return Permission::pluck('name')->mapWithKeys(fn ($name) => [$name => 'Super Admin']);
+        }
+
+        return $user->getDirectPermissions()->pluck('name')->mapWithKeys(fn ($name) => [$name => 'given directly'])
+            ->merge($user->getPermissionsViaRoles()->pluck('name')->mapWithKeys(fn ($name) => [$name => 'role']));
     }
 
     /** Permissions of the hidden action gates (e.g. menu.ppmp-view-all) under the given pages. */
@@ -65,72 +86,99 @@ class UserAccessController extends Controller
     }
 
     /**
-     * Per menu: the "override" toggle decides whether an override row
-     * exists at all; the "state" toggle (only meaningful when override is
-     * on) decides allow vs deny. A menu's linked "manage X" permission is
-     * mirrored to match automatically, same merge as the Roles screen —
-     * it never gets its own override row in the UI. Any other linked
-     * permission (e.g. a *.destroy) stays fully independent.
+     * Each row posts Default (inherit), Allow or Deny: menu_access[menu id] for
+     * a page, perm_access[permission id] for an action or other permission.
+     * Default removes the override, so the user follows their roles again. A
+     * page's "manage X" permission (which guards its routes) gets the same
+     * override automatically, same merge as the Roles screen; any other linked
+     * permission (e.g. a *.destroy) has a row of its own.
      */
     public function update(Request $request, User $user)
     {
-        $groupedMenus = Menu::leafMenusGroupedForCards();
-        $allMenus = $groupedMenus->flatten();
+        $data = $request->validate([
+            'menu_access'   => ['array'],
+            'menu_access.*' => ['in:inherit,allow,deny'],
+            'perm_access'   => ['array'],
+            'perm_access.*' => ['in:inherit,allow,deny'],
+        ]);
 
-        foreach ($allMenus as $menu) {
-            $overrideOn = $request->boolean("menu_override.{$menu->id}");
-            $managePermission = $menu->linkedPermissions->first(fn ($p) => str_starts_with($p->name, 'manage '));
+        $menus = Menu::leafMenusGroupedForCards()->flatten()->keyBy('id');
+        $editable = $this->editablePermissionIds($menus);
+        $changes = [];
 
-            if (! $overrideOn) {
-                MenuUserOverride::where('user_id', $user->id)->where('menu_id', $menu->id)->delete();
-
-                if ($managePermission) {
-                    PermissionUserOverride::where('user_id', $user->id)->where('permission_id', $managePermission->id)->delete();
+        DB::transaction(function () use ($data, $user, $menus, $editable, &$changes) {
+            foreach ($data['menu_access'] ?? [] as $menuId => $access) {
+                if (! $menu = $menus->get($menuId)) {
+                    continue;
                 }
 
-                continue;
+                if ($this->setOverride(new MenuUserOverride, ['user_id' => $user->id, 'menu_id' => $menu->id], $access)) {
+                    $changes[] = "{$menu->name}: {$access}";
+                }
+
+                $managePermission = $menu->linkedPermissions->first(fn ($p) => str_starts_with($p->name, 'manage '));
+
+                if ($managePermission) {
+                    $this->setOverride(new PermissionUserOverride, ['user_id' => $user->id, 'permission_id' => $managePermission->id], $access);
+                }
             }
 
-            $state = $request->boolean("menu_state.{$menu->id}");
+            $names = Permission::whereIn('id', array_keys($data['perm_access'] ?? []))->pluck('name', 'id');
 
-            MenuUserOverride::updateOrCreate(
-                ['user_id' => $user->id, 'menu_id' => $menu->id],
-                ['access' => $state ? 'allow' : 'deny']
-            );
+            foreach ($data['perm_access'] ?? [] as $permissionId => $access) {
+                if (! $editable->contains((int) $permissionId)) {
+                    continue;
+                }
 
-            if ($managePermission) {
-                PermissionUserOverride::updateOrCreate(
-                    ['user_id' => $user->id, 'permission_id' => $managePermission->id],
-                    ['access' => $state ? 'allow' : 'deny']
-                );
+                if ($this->setOverride(new PermissionUserOverride, ['user_id' => $user->id, 'permission_id' => (int) $permissionId], $access)) {
+                    $changes[] = "{$names[$permissionId]}: {$access}";
+                }
             }
+        });
+
+        activity()->causedBy(auth()->user())->performedOn($user)
+            ->withProperties(['changes' => $changes])
+            ->log("updated access overrides for user \"{$user->fullname}\"");
+
+        return back()->with('success', $changes
+            ? "Access updated for {$user->fullname}."
+            : "Nothing changed for {$user->fullname}.");
+    }
+
+    /** inherit removes the override; allow / deny saves it. True when something changed. */
+    protected function setOverride(MenuUserOverride|PermissionUserOverride $model, array $keys, string $access): bool
+    {
+        $current = $model->newQuery()->where($keys)->first();
+
+        if ($access === 'inherit') {
+            return (bool) $current?->delete();
         }
 
-        // Any other linked permission (e.g. *.destroy) plus unassigned ones
-        // stay independently toggleable — same pattern as before, just now
-        // excluding the "manage X" ones already handled above.
-        $otherPermissionIds = Permission::where('name', 'not like', 'menu.%')
-            ->where('name', 'not like', 'manage %')
-            ->pluck('id')
-            ->merge($this->actionPermissions($groupedMenus)->pluck('id'));
-
-        foreach ($otherPermissionIds as $permissionId) {
-            $overrideOn = $request->boolean("perm_override.$permissionId");
-
-            if (! $overrideOn) {
-                PermissionUserOverride::where('user_id', $user->id)->where('permission_id', $permissionId)->delete();
-                continue;
-            }
-
-            $state = $request->boolean("perm_state.$permissionId");
-            PermissionUserOverride::updateOrCreate(
-                ['user_id' => $user->id, 'permission_id' => $permissionId],
-                ['access' => $state ? 'allow' : 'deny']
-            );
+        if ($current?->access === $access) {
+            return false;
         }
 
-        activity()->causedBy(auth()->user())->performedOn($user)->log("updated access overrides for user \"{$user->fullname}\"");
+        $model->newQuery()->updateOrCreate($keys, ['access' => $access]);
 
-        return back()->with('success', "Access updated for {$user->fullname}.");
+        return true;
+    }
+
+    /**
+     * Permissions with a row of their own on the screen: the hidden action
+     * gates, a page's other linked permissions, and permissions not linked to
+     * any page. A page's "manage X" permission is not one: it follows the page.
+     */
+    protected function editablePermissionIds($menus)
+    {
+        $linked = $menus->flatMap(fn (Menu $menu) => $menu->linkedPermissions)
+            ->reject(fn ($p) => str_starts_with($p->name, 'manage '))
+            ->pluck('id');
+
+        return Permission::where('name', 'not like', 'menu.%')->whereNull('menu_id')->pluck('id')
+            ->merge($linked)
+            ->merge($this->actionPermissions($menus)->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
     }
 }

@@ -38,7 +38,8 @@
                                         default                    => $num($p['remaining_qty']) . ' of ' . trim($num($p['planned_qty']) . ' ' . $p['unit']),
                                     };
                                 @endphp
-                                <option value="{{ $p['id'] }}" @selected($selected == $p['id']) @disabled($p['remaining'] <= 0 && ! ($line && $selected == $p['id']))>
+                                @php $usedUp = $p['remaining'] <= 0 || ($p['remaining_qty'] !== null && $p['remaining_qty'] <= 0); @endphp
+                                <option value="{{ $p['id'] }}" @selected($selected == $p['id']) @disabled($usedUp && ! ($line && $selected == $p['id']))>
                                     {{ $p['description'] }} — {{ $qtyText }} · {{ $left }}
                                 </option>
                             @endforeach
@@ -112,8 +113,8 @@
                             <div class="form-control form-control-sm bg-light fw-bold" id="line_total">0.00</div>
                         </div>
                     </div>
-                    <div class="alert alert-warning d-flex gap-2 small py-2 d-none" id="qty_note">
-                        <i class="fas fa-exclamation-triangle mt-1"></i><div></div>
+                    <div class="alert alert-danger d-flex gap-2 small py-2 d-none" id="qty_note">
+                        <i class="fas fa-exclamation-circle mt-1"></i><div></div>
                     </div>
                     <div class="alert alert-danger d-flex gap-2 small py-2 d-none" id="over_note">
                         <i class="fas fa-exclamation-circle mt-1"></i><div></div>
@@ -164,18 +165,18 @@
         $('#qty_unit').text(unit || '—');
         $('#line_total').text(peso(totalCents / 100));
 
-        // Budget: the hard limit (checked again on save)
+        // Budget and quantity are both hard limits (checked again on save): Save stays off while over either
         const over = !!p && totalCents > hundredths(p.remaining);
         $('#line_total').toggleClass('text-danger', over);
         $('#over_note').toggleClass('d-none', !over).find('div').text(over ? 'Over the PPMP budget: only ₱' + peso(p.remaining) + ' is left on this project.' : '');
 
-        // Quantity: a warning only, saving stays allowed
         const qtyLeft = p && !isLot(p) ? hundredths(p.remaining_qty) : null;
         const overQty = qtyLeft !== null && qty > 0 && qty > qtyLeft;
-        form.find('[name="quantity"]').toggleClass('border-warning', overQty);
+        form.find('[name="quantity"]').toggleClass('is-invalid', overQty);
         $('#qty_note').toggleClass('d-none', !overQty).find('div').text(!overQty ? '' : (qtyLeft > 0
-            ? 'More than the PPMP quantity: only ' + num(p.remaining_qty) + ' of ' + withUnit(num(p.planned_qty), p.unit) + ' are left on this project. You can still save; the budget is the limit.'
-            : 'Planned quantity (' + withUnit(num(p.planned_qty), p.unit) + ') already requested. You can still save while the budget allows.'));
+            ? 'Over the PPMP quantity: only ' + num(p.remaining_qty) + ' of ' + withUnit(num(p.planned_qty), p.unit) + ' are left on this project.'
+            : 'The planned quantity (' + withUnit(num(p.planned_qty), p.unit) + ') is already requested. Nothing more can be requested on this project.'));
+        $('#btn_save_line').prop('disabled', over || overQty);
 
         if (!p) return;
         const budgetLeft = hundredths(p.remaining) - totalCents;
@@ -188,7 +189,7 @@
         }
         bar('#pi_budget_bar', hundredths(p.budget), hundredths(p.remaining), totalCents);
         $('#after_line').text('After this item: ' + after).removeClass('text-danger text-warning-emphasis text-body-secondary')
-            .addClass(budgetLeft < 0 ? 'text-danger' : (overQty ? 'text-warning-emphasis' : 'text-body-secondary'));
+            .addClass(budgetLeft < 0 || overQty ? 'text-danger' : 'text-body-secondary');
     }
 
     // Choosing a project fills in its name, unit, cost and (standard items) specifications
@@ -213,6 +214,8 @@
             $('#qty_hint').text(lot ? 'Lot · no quantity limit' : (p.remaining_qty > 0 ? 'Up to ' + withUnit(num(p.remaining_qty), p.unit) + ' on the PPMP' : 'Planned quantity already used'))
                 .toggleClass('text-danger', !lot && p.remaining_qty <= 0);
         }
+        // The spinner stops at what is left
+        form.find('[name="quantity"]').attr('max', p && !isLot(p) && p.remaining_qty > 0 ? p.remaining_qty : null);
 
         if (p && !initial) {
             form.find('[name="description"]').val(p.description);

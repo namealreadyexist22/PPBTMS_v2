@@ -52,7 +52,9 @@
                     <button class="btn btn-sm btn-primary" id="btn_submit" @disabled($budgetOver) title="{{ $budgetOver ? 'Over budget allocation' : '' }}"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
                 @endif
                 @if ($canReturn)
-                    <a href="{{ route('procurement.division-ppmp.index', ['fy' => $ppmp->fiscal_year]) }}" class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Approve in Division PPMP</a>
+                    @if (auth()->user()->canAccessPermission('menu.division-ppmp'))
+                        <a href="{{ route('procurement.division-ppmp.index', ['fy' => $ppmp->fiscal_year]) }}" class="btn btn-sm btn-success"><i class="fas fa-check me-1"></i> Approve in Division PPMP</a>
+                    @endif
                     <button class="btn btn-sm btn-warning" id="btn_return"><i class="fas fa-undo me-1"></i> Return</button>
                 @endif
                 @if ($canAmend)

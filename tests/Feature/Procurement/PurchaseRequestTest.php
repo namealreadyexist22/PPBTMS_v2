@@ -142,7 +142,7 @@ class PurchaseRequestTest extends TestCase
         $this->requests->submit($first->fresh(), $this->staff);
 
         $second = $this->draft();
-        $this->requests->saveLine($second, $this->line($this->hdd, 2, '5000'));   // exactly what is left
+        $this->requests->saveLine($second, $this->line($this->hdd, 1, '6000'));   // a dearer unit: 1 unit and 4,000 left
 
         try {
             $this->requests->saveLine($second, $this->line($this->hdd, 1, '5000'));
@@ -150,6 +150,8 @@ class PurchaseRequestTest extends TestCase
         } catch (ProcurementException $e) {
             $this->assertStringContainsString('Over the PPMP budget', $e->getMessage());
         }
+
+        $this->requests->saveLine($second, $this->line($this->hdd, 1, '4000'));   // exactly what is left
 
         $this->requests->submit($second->fresh(), $this->staff);
         $this->assertEquals('40000.00', $this->hdd->fresh()->committed_amount);
@@ -276,6 +278,8 @@ class PurchaseRequestTest extends TestCase
         $this->get(route('procurement.requests.lines.entry', $pr))->assertOk()->assertSee('Hard Drive (4 TB)');
 
         $this->postJson(route('procurement.requests.lines.store', $pr), $this->line($this->hdd, 9, '5000'))
+            ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'Over the PPMP quantity'));
+        $this->postJson(route('procurement.requests.lines.store', $pr), $this->line($this->hdd, 8, '6000'))
             ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'Over the PPMP budget'));
         $this->postJson(route('procurement.requests.lines.store', $pr), $this->line($this->hdd, 4, '5000', ['stock_no' => '3629', 'specifications' => 'royal kludge']))
             ->assertOk();
@@ -353,6 +357,13 @@ class PurchaseRequestTest extends TestCase
         $this->assertSame(200, $this->requests->remainingQuantity($rev, $this->hdd));
         $this->assertSame(800, $this->requests->remainingQuantity($rev, $this->hdd, $rev->items->first()));
         $this->assertSame(200, $this->requests->remainingQuantity($this->draft(), $this->hdd));
+
+        // The revision may take the whole plan back, but no more
+        $this->assertOverQuantity(fn () => $this->requests->saveLine($rev, $this->line($this->hdd, 9, '4000'), $rev->items->first()));
+        $this->requests->saveLine($rev, $this->line($this->hdd, 8, '4000'), $rev->items->first());
+        $this->requests->submit($rev->fresh(), $this->staff);
+        $this->assertSame(RequestStatus::Superseded, $a->fresh()->status);
+        $this->assertEquals('32000.00', $this->hdd->fresh()->committed_amount);
     }
 
     public function test_a_lot_has_no_quantity_limit(): void
@@ -362,18 +373,64 @@ class PurchaseRequestTest extends TestCase
 
         $this->assertNull($this->requests->remainingQuantity($draft, $this->hdd));
         $this->assertNull($this->requests->availableLines($draft)->firstWhere('id', $this->hdd->id)->planned_hundredths);
+        $this->requests->saveLine($draft, $this->line($this->hdd, 20, '1000'));   // only the budget limits a lot
 
         $this->actingAs($this->staff);
         $this->get(route('procurement.requests.lines.entry', $draft))->assertOk()->assertSee('Hard Drive (4 TB) — Lot ·');
         $this->get(route('procurement.requests.show', $draft))->assertOk()->assertSee('Lot · no quantity limit');
     }
 
-    public function test_quantity_over_the_plan_warns_but_saves(): void
+    protected function assertOverQuantity(callable $save, string $message = 'Over the PPMP quantity'): void
+    {
+        try {
+            $save();
+            $this->fail('A line went over the planned quantity.');
+        } catch (ProcurementException $e) {
+            $this->assertStringContainsString($message, $e->getMessage());
+        }
+    }
+
+    public function test_quantity_over_the_plan_is_blocked(): void
     {
         $draft = $this->draft();
-        $this->requests->saveLine($draft, $this->line($this->hdd, 10, '4000'));   // 40,000: within the budget
 
-        $this->assertSame(-200, $this->requests->remainingQuantity($draft, $this->hdd));
+        // 10 x 4,000 = 40,000 is within the budget, but 8 are planned
+        $this->assertOverQuantity(fn () => $this->requests->saveLine($draft, $this->line($this->hdd, 10, '4000')),
+            'Over the PPMP quantity of "Hard Drive (4 TB)": this line is 10 piece, only 8 piece is left on the project.');
+
+        // Another line on the same project gets only what is left; editing counts the line's own quantity back
+        $line = $this->requests->saveLine($draft, $this->line($this->hdd, 5, '4000'));
+        $this->assertOverQuantity(fn () => $this->requests->saveLine($draft, $this->line($this->hdd, 4, '4000')));
+        $this->requests->saveLine($draft, $this->line($this->hdd, 3, '4000'));
+        $this->assertOverQuantity(fn () => $this->requests->saveLine($draft, $this->line($this->hdd, 6, '4000'), $line));
+        $this->requests->saveLine($draft, $this->line($this->hdd, 5, '4000'), $line);
+        $this->assertSame(0, $this->requests->remainingQuantity($draft, $this->hdd));
+        $this->assertCount(2, $draft->items()->get());
+
+        // The page refuses it too
+        $response = $this->actingAs($this->staff)
+            ->postJson(route('procurement.requests.lines.store', $draft), $this->line($this->ram, 11, '1000'))->assertStatus(422);
+        $this->assertStringContainsString('Over the PPMP quantity of "RAM 16 GB"', $response->json('message'));
+    }
+
+    public function test_submit_refuses_a_draft_now_over_the_quantity(): void
+    {
+        $draft = $this->draft();
+        $line = $this->requests->saveLine($draft, $this->line($this->hdd, 5, '4000'));   // 5 of 8 when saved
+
+        $other = $this->draft();
+        $this->requests->saveLine($other, $this->line($this->hdd, 4, '5000'));
+        $this->requests->submit($other->fresh(), $this->staff);   // 4 left; the budget still covers the draft
+
+        $this->assertOverQuantity(fn () => $this->requests->submit($draft->fresh(), $this->staff),
+            'Over the PPMP quantity of "Hard Drive (4 TB)" by 1 piece');
+        $this->assertSame(RequestStatus::Draft, $draft->fresh()->status);
+        $this->assertEquals('20000.00', $this->hdd->fresh()->committed_amount);   // the draft's charge was rolled back
+
+        // Lowered to what is left, it goes through
+        $this->requests->saveLine($draft, $this->line($this->hdd, 4, '4000'), $line);
+        $this->requests->submit($draft->fresh(), $this->staff);
+        $this->assertEquals('36000.00', $this->hdd->fresh()->committed_amount);
     }
 
     public function test_pages_show_quantity_left(): void

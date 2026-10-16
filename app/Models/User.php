@@ -101,20 +101,42 @@ class User extends Authenticatable
 
     /**
      * Override-aware permission check: a per-user allow/deny beats the
-     * role-based permission. Use this instead of $user->can() anywhere
-     * an individual exception (like Kevin losing user.destroy) matters.
+     * role-based (or direct) permission. Use this instead of $user->can()
+     * anywhere an individual exception (like Kevin losing user.destroy) matters.
+     * A page's override (User Access) counts for its own permission, e.g.
+     * menu.division-ppmp; its "manage X" permission gets the same override.
      */
     public function canAccessPermission(string $permissionName): bool
     {
-        $override = $this->permissionOverrides()
-            ->whereHas('permission', fn ($q) => $q->where('name', $permissionName))
-            ->first();
+        $access = $this->accessOverrides($permissionName)[$permissionName] ?? null;
 
-        if ($override) {
-            return $override->access === 'allow';
+        if ($access !== null) {
+            return $access === 'allow';
         }
 
         return $this->can($permissionName);
+    }
+
+    /**
+     * This user's overrides as permission name => 'allow'|'deny': permission
+     * overrides, then page overrides under the page's permission (menu.ppmp).
+     * A permission override wins over a page override of the same name.
+     */
+    public function accessOverrides(?string $only = null): array
+    {
+        $permissions = \App\Core\Models\PermissionUserOverride::query()
+            ->join('permissions', 'permissions.id', '=', 'permission_user_overrides.permission_id')
+            ->where('permission_user_overrides.user_id', $this->id)
+            ->when($only !== null, fn ($q) => $q->where('permissions.name', $only))
+            ->pluck('permission_user_overrides.access', 'permissions.name')->all();
+
+        $pages = \App\Core\Models\MenuUserOverride::query()
+            ->join('menus', 'menus.id', '=', 'menu_user_overrides.menu_id')
+            ->where('menu_user_overrides.user_id', $this->id)
+            ->when($only !== null, fn ($q) => $q->where('menus.permission_name', $only))
+            ->pluck('menu_user_overrides.access', 'menus.permission_name')->all();
+
+        return $permissions + $pages;
     }
 
     public function avatarUrl(): string

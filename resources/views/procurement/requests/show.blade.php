@@ -328,7 +328,8 @@
                     $qtyLeft = $project->remaining_hundredths;
                     $planned = $project->planned_hundredths;
                     $qtyPct = $qtyLeft === null ? 0 : $usedPct($qtyLeft, $planned);
-                    $done = $budgetLeft <= 0;
+                    // Nothing more can go on a project once its budget or its planned quantity is used up
+                    $done = $budgetLeft <= 0 || ($qtyLeft !== null && $qtyLeft <= 0);
                 @endphp
                 <div class="list-group-item px-4 py-3 {{ $done ? 'bg-body-tertiary text-muted' : '' }}">
                     <div class="row gx-4 gy-2 align-items-center">
@@ -336,12 +337,11 @@
                         <div class="col-xl-4">
                             <div class="fw-semibold pr-clamp" title="{{ $project->description }}">{{ $project->description }}</div>
                             <div class="text-muted">{{ collect([$project->procurementMode?->name, $unit])->filter()->implode(' · ') }}</div>
-                            @if ($done)
+                            @if ($qtyLeft !== null && $qtyLeft < 0)
+                                {{-- Saved before quantities were enforced, or others submitted since: lower it to submit --}}
+                                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle mt-1" title="Lower the quantity on this draft before submitting">Over quantity</span>
+                            @elseif ($done)
                                 <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle mt-1">Fully requested</span>
-                            @elseif ($qtyLeft !== null && $qtyLeft < 0)
-                                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle mt-1">Over quantity</span>
-                            @elseif ($qtyLeft === 0)
-                                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-1">Quantity used up</span>
                             @endif
                         </div>
                         <div class="col-sm-6 col-xl-3">

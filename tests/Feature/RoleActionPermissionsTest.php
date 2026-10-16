@@ -67,8 +67,7 @@ class RoleActionPermissionsTest extends TestCase
             ->assertOk()->assertSee('View All');
 
         $this->put(route('core.access.update', $user), [
-            'perm_override' => [$permissionId => 1],
-            'perm_state'    => [$permissionId => 1],
+            'perm_access' => [$permissionId => 'allow'],
         ])->assertRedirect();
 
         $this->assertTrue($user->fresh()->canAccessPermission('menu.ppmp-view-all'));

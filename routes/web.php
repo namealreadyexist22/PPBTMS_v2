@@ -118,7 +118,8 @@ use Illuminate\Support\Facades\Route;
             Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy')->middleware('perm:menu.roles-permissions-destroy');
         });
 
-        Route::middleware('perm:manage logs')->group(function () {
+        // Activity Logs has no "manage" permission of its own: its page permission guards it
+        Route::middleware('perm:menu.activity-logs')->group(function () {
             Route::get('logs', [LogController::class, 'index'])->name('logs.index');
             Route::delete('logs', [LogController::class, 'clear'])->name('logs.clear')->middleware('perm:menu.activity-logs-clear');
         });
@@ -218,16 +219,23 @@ use Illuminate\Support\Facades\Route;
             Route::post('ppmp/{ppmp}/amend', [PpmpController::class, 'amend'])->name('ppmp.amend');
             Route::post('ppmp/{ppmp}/signatories', [PpmpController::class, 'signatories'])->name('ppmp.signatories');
 
-            // Division PPMP: sections combined, approved by the division head -> PPMP No. 1, 2, 3...
+            Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
+                ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');
+        });
+
+        // Division PPMP: sections combined, approved by the division head -> PPMP No. 1, 2, 3...
+        // Its page follows its own menu permission (and User Access override)
+        Route::middleware('perm:menu.division-ppmp')->group(function () {
             Route::get('division-ppmp', [DivisionPpmpController::class, 'index'])->name('division-ppmp.index');
             Route::post('division-ppmp/approve', [DivisionPpmpController::class, 'approve'])->name('division-ppmp.approve');
             Route::get('division-ppmp/preview/{office}', [DivisionPpmpController::class, 'preview'])->name('division-ppmp.preview');
+        });
+
+        // A numbered Division PPMP also opens from the section PPMP it includes; who may see or sign it is the controller's
+        Route::middleware('perm:manage ppmp|menu.division-ppmp')->group(function () {
             Route::get('division-ppmp/{divisionPpmp}', [DivisionPpmpController::class, 'show'])->name('division-ppmp.show');
             Route::get('division-ppmp/{divisionPpmp}/print', [DivisionPpmpController::class, 'print'])->name('division-ppmp.print');
             Route::post('division-ppmp/{divisionPpmp}/signatories', [DivisionPpmpController::class, 'signatories'])->name('division-ppmp.signatories');
-
-            Route::delete('ppmp/destroy', [PpmpController::class, 'destroy'])
-                ->name('ppmp.destroy')->middleware('perm:menu.ppmp-destroy');
         });
 
     });

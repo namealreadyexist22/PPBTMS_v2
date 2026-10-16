@@ -15,9 +15,7 @@ class MenuService
      */
     public function getMenuTreeForUser(User $user): Collection
     {
-        $overrides = $user->menuOverrides()
-            ->get(['menu_id', 'access'])
-            ->keyBy('menu_id');
+        $overrides = $user->accessOverrides();
 
         $all = Menu::query()->active()->where('is_nav', true)->orderBy('order')->get();
 
@@ -37,28 +35,33 @@ class MenuService
             });
     }
 
-    protected function filterTree(Collection $menus, User $user, Collection $overrides): Collection
+    /**
+     * A plain group (submenus but no page of its own, like Settings) shows only
+     * while one of its submenus does: when every page under it is denied, it goes too.
+     */
+    protected function filterTree(Collection $menus, User $user, array $overrides): Collection
     {
         return $menus
-            ->map(function (Menu $menu) use ($user, $overrides) {
-                $menu->setRelation('children', $this->filterTree($menu->children, $user, $overrides));
-                return $menu;
-            })
             ->filter(function (Menu $menu) use ($user, $overrides) {
-                $accessible = $this->canAccess($menu, $user, $overrides);
-                $hasVisibleChildren = $menu->children->isNotEmpty();
+                $isGroup = $menu->children->isNotEmpty() && ! $menu->route && ! $menu->url;
+                $menu->setRelation('children', $this->filterTree($menu->children, $user, $overrides));
 
-                return $accessible || $hasVisibleChildren;
+                if ($menu->children->isNotEmpty()) {
+                    return true;
+                }
+
+                return ! $isGroup && $this->canAccess($menu, $user, $overrides);
             })
             ->values();
     }
 
-    public function canAccess(Menu $menu, User $user, ?Collection $overrides = null): bool
+    /** Same rule as the routes (User::canAccessPermission): the user's override first, then roles. */
+    public function canAccess(Menu $menu, User $user, ?array $overrides = null): bool
     {
-        $overrides ??= $user->menuOverrides()->get(['menu_id', 'access'])->keyBy('menu_id');
+        $overrides ??= $user->accessOverrides($menu->permission_name);
 
-        if ($override = $overrides->get($menu->id)) {
-            return $override->access === 'allow';
+        if ($access = $overrides[$menu->permission_name] ?? null) {
+            return $access === 'allow';
         }
 
         return $user->can($menu->permission_name);
