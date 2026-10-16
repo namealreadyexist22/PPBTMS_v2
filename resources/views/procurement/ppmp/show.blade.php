@@ -16,8 +16,10 @@
 
 {{-- Redrawn in place after adding / editing / removing PAPs and projects (no full reload) --}}
 <div id="ppmp_view">
+{{-- One card: header, the PAPs and projects, then the budget allocation --}}
+<div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
 {{-- Header --}}
-<div class="card border-0 shadow-sm mb-3" style="border-radius: 12px;">
+<div>
     <div class="card-body p-4">
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
             <div>
@@ -135,61 +137,9 @@
     </div>
 </div>
 
-{{-- Budget allocation: the department's budget, shared by its offices --}}
-@php $department = $ppmp->office->department; @endphp
-@if ($budgetRows->isNotEmpty() || $canEdit)
-    <div class="card border-0 shadow-sm mb-3 {{ $budgetOver ? 'border border-danger' : '' }}" style="border-radius: 12px; overflow: hidden;" id="budget_card">
-        <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
-            <div>
-                <h6 class="m-0 fw-bold">
-                    <i class="fas fa-coins text-muted me-2"></i>
-                    Budget Allocation — FY {{ $ppmp->fiscal_year }}
-                    <a tabindex="0" role="button" class="text-muted ms-1" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right"
-                       title="How the budget is checked"
-                       data-bs-content="The budget covers MOOE, CO and semi-expendable together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served."><i class="far fa-question-circle"></i></a>
-                </h6>
-                {{-- @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif --}}
-            </div>
-        </div>
-        @if (! $department)
-            <div class="small text-muted px-4 py-3">{{ $ppmp->office->shortName() }} is not under a department, so it has no budget allocation. Fix it in Settings → Organization.</div>
-        @elseif ($budgetRows->isEmpty())
-            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $department->shortName() }} for FY {{ $ppmp->fiscal_year }} yet. The PPMP is not checked against a budget until the Budget officer sets one.</div>
-        @else
-            <div class="table-responsive">
-                <table class="table table-sm align-middle small mb-0">
-                    <thead class="table-light"><tr class="text-nowrap"><th class="ps-4">Fund</th><th class="text-end">Department budget</th><th class="text-end">Used by other offices</th><th class="text-end">This PPMP</th><th class="text-end pe-4">Remaining</th></tr></thead>
-                    <tbody>
-                        @foreach ($budgetRows as $row)
-                            <tr class="{{ $row['over'] ? 'table-danger' : '' }}">
-                                <td class="ps-4 fw-semibold">{{ $row['fund']->label() }}</td>
-                                @if ($row['allocation'])
-                                    <td class="text-end">{{ $pesoC($row['amount']) }}</td>
-                                    <td class="text-end">{{ $pesoC($row['others']) }}</td>
-                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
-                                    <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
-                                @elseif ($row['wrong_fund'])
-                                    <td class="text-end text-danger" colspan="2">No {{ $row['fund']->label() }} budget (department is {{ $department->budget_fund?->label() }})</td>
-                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
-                                    <td class="text-danger pe-4 text-end fw-semibold">Not allowed</td>
-                                @else
-                                    <td class="text-end text-muted">Not set</td>
-                                    <td></td>
-                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
-                                    <td class="text-muted pe-4 text-end">Not checked</td>
-                                @endif
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endif
-    </div>
-@endif
-
 {{-- Procurement projects, grouped by PAP --}}
 @php $colspan = 11; $n = 0; @endphp
-<div class="card border-0 shadow-sm mb-3" style="border-radius: 12px; overflow: hidden;">
+<div class="border-top">
     <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
         <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>PAPs and Procurement Projects ({{ $ppmp->paps->count() }} PAP, {{ $ppmp->items->count() }} projects)</h6>
     </div>
@@ -352,6 +302,59 @@
         </div>
     </div>
 </div>
+
+{{-- Budget allocation: the department's budget, shared by its offices --}}
+@php $department = $ppmp->office->department; @endphp
+@if ($budgetRows->isNotEmpty() || $canEdit)
+    <div class="border-top {{ $budgetOver ? 'border-danger border-2' : '' }}" id="budget_card">
+        <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap justify-content-between align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
+            <div>
+                <h6 class="m-0 fw-bold">
+                    <i class="fas fa-coins text-muted me-2"></i>
+                    Budget Allocation — FY {{ $ppmp->fiscal_year }}
+                    <a tabindex="0" role="button" class="text-muted ms-1" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right"
+                       title="How the budget is checked"
+                       data-bs-content="The budget covers MOOE, CO and semi-expendable together. Used by other offices = their latest submitted or approved PPMPs (drafts do not hold budget), first come, first served."><i class="far fa-question-circle"></i></a>
+                </h6>
+                {{-- @if ($department)<div class="small text-muted">{{ $department->shortName() }} — {{ $department->name }} budget, shared by its units</div>@endif --}}
+            </div>
+        </div>
+        @if (! $department)
+            <div class="small text-muted px-4 py-3">{{ $ppmp->office->shortName() }} is not under a department, so it has no budget allocation. Fix it in Settings → Organization.</div>
+        @elseif ($budgetRows->isEmpty())
+            <div class="small text-muted px-4 py-3">No budget allocation set for {{ $department->shortName() }} for FY {{ $ppmp->fiscal_year }} yet. The PPMP is not checked against a budget until the Budget officer sets one.</div>
+        @else
+            <div class="table-responsive">
+                <table class="table table-sm align-middle small mb-0">
+                    <thead class="table-light"><tr class="text-nowrap"><th class="ps-4">Fund</th><th class="text-end">Department budget</th><th class="text-end">Used by other offices</th><th class="text-end">This PPMP</th><th class="text-end pe-4">Remaining</th></tr></thead>
+                    <tbody>
+                        @foreach ($budgetRows as $row)
+                            <tr class="{{ $row['over'] ? 'table-danger' : '' }}">
+                                <td class="ps-4 fw-semibold">{{ $row['fund']->label() }}</td>
+                                @if ($row['allocation'])
+                                    <td class="text-end">{{ $pesoC($row['amount']) }}</td>
+                                    <td class="text-end">{{ $pesoC($row['others']) }}</td>
+                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                                    <td class="text-end pe-4 fw-semibold {{ $row['over'] ? 'text-danger' : 'text-success' }}">{{ $pesoC($row['remaining']) }}</td>
+                                @elseif ($row['wrong_fund'])
+                                    <td class="text-end text-danger" colspan="2">No {{ $row['fund']->label() }} budget (department is {{ $department->budget_fund?->label() }})</td>
+                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                                    <td class="text-danger pe-4 text-end fw-semibold">Not allowed</td>
+                                @else
+                                    <td class="text-end text-muted">Not set</td>
+                                    <td></td>
+                                    <td class="text-end">{{ $pesoC($row['mine']) }}</td>
+                                    <td class="text-muted pe-4 text-end">Not checked</td>
+                                @endif
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        @endif
+    </div>
+@endif
+</div>{{-- one card --}}
 
 {{-- Signatories / history, opened from the History button --}}
 <div class="modal fade" id="PPMP_HISTORY_MODAL" tabindex="-1" aria-hidden="true">

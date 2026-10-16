@@ -34,7 +34,7 @@ class PurchaseRequestController extends Controller
         $search = trim((string) $request->query('q'));
 
         $requests = PurchaseRequest::visibleTo($request->user())
-            ->with(['office', 'pap'])
+            ->with(['office', 'pap', 'items'])
             ->where('kind', $kind)
             ->when($status, fn ($q) => $q->where('status', $status))
             ->when(! $status, fn ($q) => $q->where('status', '!=', RequestStatus::Superseded))

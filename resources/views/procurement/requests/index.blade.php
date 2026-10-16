@@ -50,28 +50,35 @@
                             <tr class="text-nowrap">
                                 <th>{{ $kind === RequestKind::Jr ? 'J.R. No.' : 'PR No.' }}</th>
                                 <th>Date</th>
-                                <th>Office</th>
                                 <th>Charge to</th>
-                                <th>Purpose</th>
                                 <th class="text-end">{{ $kind === RequestKind::Jr ? 'ABC' : 'Total' }}</th>
                                 <th class="text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse ($requests as $row)
-                                <tr role="button" onclick="window.location='{{ route('procurement.requests.show', $row) }}'">
+                                @php
+                                    // Hover card: what the row is (office, purpose, items), the columns the table leaves out
+                                    $items = $row->items->take(5)->map(fn ($i) => '<li>' . e($i->description) . ' <span class="text-muted">× ' . e(rtrim(rtrim(number_format((float) $i->quantity, 2), '0'), '.') . ' ' . $i->unit) . '</span></li>')->implode('');
+                                    $more = $row->items->count() > 5 ? '<li class="text-muted">and ' . ($row->items->count() - 5) . ' more</li>' : '';
+                                    $card = '<div class="small"><div class="text-muted">' . e($row->office->shortName() . ' — ' . $row->office->name) . '</div>'
+                                        . '<div class="mt-1">' . ($row->purpose ? e($row->purpose) : '<span class="text-muted">No purpose yet</span>') . '</div>'
+                                        . ($items ? '<div class="fw-semibold mt-2">' . $row->items->count() . ' ' . \Illuminate\Support\Str::plural('item', $row->items->count()) . '</div><ul class="ps-3 mb-0">' . $items . $more . '</ul>' : '<div class="text-muted mt-2">No items yet</div>')
+                                        . '</div>';
+                                @endphp
+                                <tr role="button" class="js-request-row" onclick="window.location='{{ route('procurement.requests.show', $row) }}'"
+                                    data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" data-bs-html="true"
+                                    data-bs-title="{{ $row->title() }}" data-bs-content="{{ $card }}">
                                     <td class="fw-semibold text-nowrap">
                                         {{ $row->request_no ?? 'Draft' }}@if ($row->revision) <span class="badge bg-info text-dark">Rev. {{ $row->revision }}</span>@endif
                                     </td>
                                     <td class="text-nowrap">{{ ($row->submitted_at ?? $row->created_at)->format('M d, Y') }}</td>
-                                    <td>{{ $row->office->shortName() }}</td>
                                     <td class="text-nowrap">{{ $row->pap?->code }}</td>
-                                    <td class="text-truncate" style="max-width: 320px;">{{ $row->purpose }}</td>
                                     <td class="text-end text-nowrap">{{ number_format((float) $row->total_amount, 2) }}</td>
                                     <td class="text-center"><span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
+                                <tr><td colspan="5" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -99,10 +106,18 @@ document.addEventListener('DOMContentLoaded', function () {
         history.replaceState(null, '', url);
         pending = $.get(url).done(function (html) {
             const fresh = $('<div>').append($.parseHTML(html)).find('#requests_view');
+            $('.popover').remove();
             fresh.length ? $('#requests_view').replaceWith(fresh) : window.location.reload();
+            initRowCards();
         }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.href = url; })
           .always(() => $('#requests_view').css('opacity', ''));
     }
+    // Hovering a row shows its office, purpose and items
+    function initRowCards() {
+        document.querySelectorAll('#requests_view .js-request-row').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body', customClass: 'request-card' }));
+    }
+    initRowCards();
+
     function applyFilter() {
         const params = new URLSearchParams();
         $('#requests_filter').serializeArray().forEach((f) => { if (f.value.trim()) params.set(f.name, f.value.trim()); });
