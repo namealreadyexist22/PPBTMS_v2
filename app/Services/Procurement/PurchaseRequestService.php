@@ -55,7 +55,7 @@ class PurchaseRequestService
         ]);
     }
 
-    /** Purpose, JR type, SAI and the signatories (set on save or print). */
+    /** Purpose, JR type and the signatories (set on save or print). SAI is filled in by Property later. */
     public function updateHeader(PurchaseRequest $request, User $user, array $data): PurchaseRequest
     {
         $this->assertEditable($request);
@@ -421,7 +421,7 @@ class PurchaseRequestService
     protected function header(RequestKind $kind, array $data): array
     {
         $fields = ['purpose', ...self::SIGNATORY_FIELDS];
-        $fields = array_merge($fields, $kind === RequestKind::Jr ? ['jr_type'] : ['sai_no', 'sai_date']);
+        $fields = array_merge($fields, $kind === RequestKind::Jr ? ['jr_type'] : []);
 
         return array_intersect_key($data, array_flip($fields));
     }

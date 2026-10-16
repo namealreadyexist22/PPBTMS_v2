@@ -7,11 +7,6 @@
     $jr = $pr->kind === RequestKind::Jr;
     $canPrintSign = $canManage && in_array($pr->status, [RequestStatus::Draft, RequestStatus::Submitted], true);
     $papMissing = is_string($lines);
-    // Quantities in hundredths of a unit ("7.5", "8")
-    $qty = fn ($h) => rtrim(rtrim(number_format($h / 100, 2), '0'), '.');
-    // Share used, as on the Budget page: green, amber from 90%, red when over
-    $usedPct = fn ($left, $total) => $total > 0 ? (int) max(0, min(100, round(($total - $left) / $total * 100))) : 100;
-    $barColor = fn ($left, $pct) => $left < 0 ? 'bg-danger' : ($pct >= 90 ? 'bg-warning' : 'bg-success');
 @endphp
 
 <style>
@@ -160,7 +155,7 @@
             <fieldset class="border-0 p-0 m-0" @disabled(! $canEdit)>
                 <div class="pr-label mb-2">Request</div>
                 <div class="row g-3">
-                    <div class="{{ $jr ? 'col-lg-9' : 'col-lg-6' }}">
+                    <div class="{{ $jr ? 'col-lg-9' : 'col-12' }}">
                         <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
                         @if ($canEdit)
                             <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
@@ -178,16 +173,6 @@
                                     <option value="{{ $value }}" @selected($pr->jr_type === $value)>{{ $label }}</option>
                                 @endforeach
                             </select>
-                        </div>
-                    @else
-                        <div class="col-6 col-lg-3">
-                            <label class="form-label small fw-semibold text-muted mb-1">SAI No.</label>
-                            <input type="text" name="sai_no" class="form-control form-control-sm" value="{{ $pr->sai_no }}" maxlength="50" @if (! $canEdit) placeholder="—" @endif>
-                        </div>
-                        <div class="col-6 col-lg-3">
-                            <label class="form-label small fw-semibold text-muted mb-1">SAI Date</label>
-                            {{-- Read-only and blank: plain text, not the browser's mm/dd/yyyy --}}
-                            <input type="{{ $canEdit || $pr->sai_date ? 'date' : 'text' }}" name="sai_date" class="form-control form-control-sm" value="{{ $pr->sai_date?->format('Y-m-d') }}" @if (! $canEdit) placeholder="—" @endif>
                         </div>
                     @endif
                 </div>
@@ -312,75 +297,6 @@
     @endif
 </div>
 
-{{-- What each PPMP project of the PAP still has: quantity and budget --}}
-@if ($canEdit && ! $papMissing && $lines->isNotEmpty())
-    <div class="card border-0 shadow-sm pr-card overflow-hidden mb-3">
-        <div class="card-header bg-white py-3 px-4" style="border-bottom: 1px solid #f1f5f9;">
-            <h6 class="m-0 fw-bold d-flex gap-2"><i class="fas fa-chart-bar text-muted mt-1"></i><span>Left to request under <span class="text-nowrap">{{ $pr->pap->code }}</span></span></h6>
-            <div class="small text-muted mt-1 ms-4">Approved PPMP, less submitted requests and this draft.</div>
-        </div>
-        <div class="list-group list-group-flush small">
-            @foreach ($lines as $project)
-                @php
-                    $unit = $project->unit?->name;
-                    $budgetLeft = $project->remaining_cents;
-                    $budgetPct = $usedPct($budgetLeft, $project->budget_cents);
-                    $qtyLeft = $project->remaining_hundredths;
-                    $planned = $project->planned_hundredths;
-                    $qtyPct = $qtyLeft === null ? 0 : $usedPct($qtyLeft, $planned);
-                    // Nothing more can go on a project once its budget or its planned quantity is used up
-                    $done = $budgetLeft <= 0 || ($qtyLeft !== null && $qtyLeft <= 0);
-                @endphp
-                <div class="list-group-item px-4 py-3 {{ $done ? 'bg-body-tertiary text-muted' : '' }}">
-                    <div class="row gx-4 gy-2 align-items-center">
-                        {{-- One row from xl: below that the sidebar leaves too little width for four columns --}}
-                        <div class="col-xl-4">
-                            <div class="fw-semibold pr-clamp" title="{{ $project->description }}">{{ $project->description }}</div>
-                            <div class="text-muted">{{ collect([$project->procurementMode?->name, $unit])->filter()->implode(' · ') }}</div>
-                            @if ($qtyLeft !== null && $qtyLeft < 0 && $pr->items->contains('line_uuid', $project->line_uuid))
-                                {{-- Saved before quantities were enforced, or others submitted since: lower it to submit --}}
-                                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle mt-1" title="Lower the quantity on this request before submitting">Over quantity</span>
-                            @elseif ($done)
-                                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle mt-1">Fully requested</span>
-                            @endif
-                        </div>
-                        <div class="col-sm-6 col-xl-3">
-                            <div class="pr-label mb-1">Quantity</div>
-                            @if ($qtyLeft === null)
-                                <span class="badge text-bg-light border">Lot · no quantity limit</span>
-                            @else
-                                @if ($qtyLeft < 0)
-                                    <div class="text-danger"><strong>{{ trim($qty(-$qtyLeft) . ' ' . $unit) }} over</strong> · planned {{ $qty($planned) }}</div>
-                                @else
-                                    <div><strong>{{ $qty($qtyLeft) }}</strong> of {{ trim($qty($planned) . ' ' . $unit) }} left</div>
-                                @endif
-                                <div class="progress pr-bar mt-1" title="{{ $qtyPct }}% used">
-                                    <div class="progress-bar {{ $barColor($qtyLeft, $qtyPct) }}" style="width: {{ $qtyPct }}%"></div>
-                                </div>
-                            @endif
-                        </div>
-                        <div class="col-sm-6 col-xl-4">
-                            <div class="pr-label mb-1">Budget</div>
-                            @if ($budgetLeft < 0)
-                                <div class="text-danger"><strong>₱{{ number_format(-$budgetLeft / 100, 2) }} over</strong> of ₱{{ number_format($project->budget_cents / 100, 2) }}</div>
-                            @else
-                                <div><strong>₱{{ number_format($budgetLeft / 100, 2) }}</strong> of ₱{{ number_format($project->budget_cents / 100, 2) }} left</div>
-                            @endif
-                            <div class="progress pr-bar mt-1" title="{{ $budgetPct }}% used">
-                                <div class="progress-bar {{ $barColor($budgetLeft, $budgetPct) }}" style="width: {{ $budgetPct }}%"></div>
-                            </div>
-                        </div>
-                        <div class="col-xl-1 text-xl-end">
-                            <button class="btn btn-sm btn-outline-primary js-add-line" data-project="{{ $project->id }}" title="Add item from this project" aria-label="Add item from {{ $project->description }}" @disabled($done)>
-                                <i class="fas fa-plus"></i><span class="d-xl-none ms-1">Add item</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            @endforeach
-        </div>
-    </div>
-@endif
 </div>
 
 {{-- Print: set the signatories, then print --}}
@@ -490,7 +406,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const el = document.getElementById('REQUEST_LINE_MODAL');
             new bootstrap.Modal(el).show();
             // Deferred: AdminLTE focuses the modal's first button (the close button) on shown
-            el.addEventListener('shown.bs.modal', () => setTimeout(() => $(id ? '#form_request_line [name=quantity]' : '#form_request_line [name=ppmp_item_id]').trigger('focus')));
+            el.addEventListener('shown.bs.modal', () => setTimeout(() => ($('#project_picker').is(':visible') ? $('#project_picker .js-pick:enabled').first() : $('#form_request_line [name=quantity]')).trigger('focus')));
             el.addEventListener('hidden.bs.modal', function () { isModalOpen = false; $('#modal-body').html(''); });
         }).fail(function (xhr) { isModalOpen = false; toastr.error(errorText(xhr), 'Error'); });
     }

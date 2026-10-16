@@ -25,29 +25,83 @@
                         <i class="fas fa-exclamation-triangle me-1"></i> <span></span>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted mb-1">PPMP project ({{ $pr->pap->code }})</label>
-                        <select name="ppmp_item_id" class="form-select form-select-sm" required>
-                            <option value="">Choose…</option>
+                    @php
+                        $pct = fn ($left, $total) => $total > 0 ? (int) max(0, min(100, round(($total - $left) / $total * 100))) : 100;
+                        $barColor = fn ($left, $used) => $left < 0 ? 'bg-danger' : ($used >= 90 ? 'bg-warning' : 'bg-success');
+                    @endphp
+                    {{-- Step 1: what each PPMP project of the PAP still has; choosing one opens the item form --}}
+                    <div id="project_picker" @class(['d-none' => $selected])>
+                        <div class="d-flex justify-content-between align-items-end mb-2">
+                            <div>
+                                <div class="fw-semibold">Left to request under {{ $pr->pap->code }}</div>
+                                <div class="small text-muted">Approved PPMP, less submitted requests and this {{ $pr->kind->short() }}. Choose a project to add an item.</div>
+                            </div>
+                        </div>
+                        <div class="list-group small">
                             @foreach ($projects as $p)
                                 @php
-                                    $left = '₱' . number_format($p['remaining'], 2) . ' left';
-                                    $qtyText = match (true) {
-                                        $p['planned_qty'] === null => 'Lot',
-                                        $p['remaining_qty'] < 0    => trim($num(-$p['remaining_qty']) . ' ' . $p['unit']) . ' over',
-                                        default                    => $num($p['remaining_qty']) . ' of ' . trim($num($p['planned_qty']) . ' ' . $p['unit']),
-                                    };
+                                    $usedUp = $p['remaining'] <= 0 || ($p['remaining_qty'] !== null && $p['remaining_qty'] <= 0);
+                                    $qtyUsed = $p['planned_qty'] === null ? 0 : $pct($p['remaining_qty'], $p['planned_qty']);
+                                    $budgetUsed = $pct($p['remaining'], $p['budget']);
+                                    $isCurrent = $line && $selected == $p['id'];
                                 @endphp
-                                @php $usedUp = $p['remaining'] <= 0 || ($p['remaining_qty'] !== null && $p['remaining_qty'] <= 0); @endphp
-                                <option value="{{ $p['id'] }}" @selected($selected == $p['id']) @disabled($usedUp && ! ($line && $selected == $p['id']))>
-                                    {{ $p['description'] }} — {{ $qtyText }} · {{ $left }}
-                                </option>
+                                <button type="button" class="list-group-item list-group-item-action js-pick px-3 py-2 {{ $usedUp && ! $isCurrent ? 'bg-body-tertiary' : '' }}"
+                                        data-id="{{ $p['id'] }}" @disabled($usedUp && ! $isCurrent)>
+                                    <div class="row gx-3 gy-1 align-items-center">
+                                        <div class="col-md-5">
+                                            <div class="fw-semibold pr-clamp">{{ $p['description'] }}</div>
+                                            <div class="text-muted">{{ collect([$p['mode'], $p['unit']])->filter()->implode(' · ') }}</div>
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            @if ($p['planned_qty'] === null)
+                                                <span class="badge text-bg-light border">Lot · no quantity limit</span>
+                                            @else
+                                                <div @class(['text-danger' => $p['remaining_qty'] < 0])>
+                                                    @if ($p['remaining_qty'] < 0)
+                                                        <strong>{{ trim($num(-$p['remaining_qty']) . ' ' . $p['unit']) }} over</strong>
+                                                    @else
+                                                        <strong>{{ $num($p['remaining_qty']) }}</strong> of {{ trim($num($p['planned_qty']) . ' ' . $p['unit']) }}
+                                                    @endif
+                                                </div>
+                                                <div class="progress pr-bar mt-1"><div class="progress-bar {{ $barColor($p['remaining_qty'], $qtyUsed) }}" style="width: {{ $qtyUsed }}%"></div></div>
+                                            @endif
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <div @class(['text-danger' => $p['remaining'] < 0])><strong>₱{{ number_format(abs($p['remaining']), 2) }}</strong> {{ $p['remaining'] < 0 ? 'over' : 'left' }}</div>
+                                            <div class="progress pr-bar mt-1"><div class="progress-bar {{ $barColor($p['remaining'], $budgetUsed) }}" style="width: {{ $budgetUsed }}%"></div></div>
+                                        </div>
+                                        <div class="col-md-1 text-md-end">
+                                            @if ($usedUp && ! $isCurrent)
+                                                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border">Fully requested</span>
+                                            @else
+                                                <span class="text-primary text-nowrap"><i class="fas fa-plus"></i><span class="d-md-none ms-1">Add item</span></span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    {{-- Step 2: the item --}}
+                    <div id="line_fields" @class(['d-none' => ! $selected])>
+                    <div class="mb-3">
+                        <select name="ppmp_item_id" class="d-none" aria-hidden="true" tabindex="-1">
+                            <option value=""></option>
+                            @foreach ($projects as $p)
+                                <option value="{{ $p['id'] }}" @selected($selected == $p['id'])>{{ $p['description'] }}</option>
                             @endforeach
                         </select>
-                        <div class="invalid-feedback"></div>
                         {{-- The chosen project: what is left of its planned quantity and budget (filled by the script below) --}}
-                        <div id="project_info" class="d-none rounded-3 border bg-body-tertiary p-3 mt-2">
-                            <div id="pi_meta" class="small text-muted"></div>
+                        <div id="project_info" class="d-none rounded-3 border bg-body-tertiary p-3">
+                            <div class="d-flex justify-content-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="pr-label">PPMP project ({{ $pr->pap->code }})</div>
+                                    <div id="pi_name" class="fw-semibold"></div>
+                                    <div id="pi_meta" class="small text-muted"></div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-light border flex-shrink-0 align-self-start" id="btn_change_project"><i class="fas fa-exchange-alt me-1"></i> Change</button>
+                            </div>
                             <div class="row g-3 mt-1">
                                 <div class="col-md-6">
                                     <div class="pr-label mb-1">Quantity</div>
@@ -127,11 +181,12 @@
                             <div class="invalid-feedback"></div>
                         </div>
                     @endif
+                    </div>{{-- #line_fields --}}
                 </div>
 
                 <div class="modal-footer bg-body-tertiary border-0 py-2">
                     <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" id="btn_save_line" class="btn btn-sm btn-primary px-3"><i class="fas fa-save me-1"></i> Save</button>
+                    <button type="submit" id="btn_save_line" class="btn btn-sm btn-primary px-3 {{ $selected ? '' : 'd-none' }}"><i class="fas fa-save me-1"></i> Save</button>
                 </div>
             </form>
         </div>
@@ -202,6 +257,7 @@
 
         if (p) {
             const lot = isLot(p);
+            $('#pi_name').text(p.description);
             $('#pi_meta').text([p.mode, p.unit_cost !== null ? 'PPMP unit cost ₱' + peso(p.unit_cost) : null].filter(Boolean).join(' · '));
             $('#pi_lot').toggleClass('d-none', !lot);
             $('#pi_qty, #pi_qty_progress').toggleClass('d-none', lot);
@@ -228,5 +284,22 @@
     }).trigger('change', [{{ $line ? 'true' : 'false' }}]);
 
     form.find('[name="quantity"], [name="unit_cost"], [name="unit"]').on('input', refresh);
+
+    // Pick a project from the list -> the item form; Change goes back to the list
+    function showPicker(on) {
+        $('#project_picker').toggleClass('d-none', !on);
+        $('#line_fields').toggleClass('d-none', on);
+        $('#btn_save_line').toggleClass('d-none', on);
+        $('#line_error_summary').addClass('d-none');
+    }
+    form.on('click', '.js-pick', function () {
+        const id = String($(this).data('id'));
+        const changed = form.find('[name="ppmp_item_id"]').val() !== id;
+        form.find('[name="ppmp_item_id"]').val(id);
+        if (changed) form.find('[name="ppmp_item_id"]').trigger('change');
+        showPicker(false);
+        setTimeout(() => form.find('[name="quantity"]').trigger('focus'));
+    });
+    $('#btn_change_project').on('click', () => showPicker(true));
 })();
 </script>

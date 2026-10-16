@@ -347,8 +347,6 @@ class PurchaseRequestController extends Controller
         return [
             'purpose'  => ['nullable', 'string', 'max:2000'],
             'jr_type'  => ['nullable', Rule::in(array_keys(config('procurement.jr_types')))],
-            'sai_no'   => ['nullable', 'string', 'max:50'],
-            'sai_date' => ['nullable', 'date'],
         ] + $this->signatoryRules(false);
     }
 

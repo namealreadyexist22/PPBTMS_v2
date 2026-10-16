@@ -376,8 +376,7 @@ class PurchaseRequestTest extends TestCase
         $this->requests->saveLine($draft, $this->line($this->hdd, 20, '1000'));   // only the budget limits a lot
 
         $this->actingAs($this->staff);
-        $this->get(route('procurement.requests.lines.entry', $draft))->assertOk()->assertSee('Hard Drive (4 TB) — Lot ·');
-        $this->get(route('procurement.requests.show', $draft))->assertOk()->assertSee('Lot · no quantity limit');
+        $this->get(route('procurement.requests.lines.entry', $draft))->assertOk()->assertSee('Lot · no quantity limit');
     }
 
     protected function assertOverQuantity(callable $save, string $message = 'Over the PPMP quantity'): void
@@ -503,16 +502,15 @@ class PurchaseRequestTest extends TestCase
         $this->assertSame(0, $this->requests->remainingQuantity($next, $newHdd));
     }
 
-    public function test_over_quantity_badge_only_on_the_requests_own_projects(): void
+    public function test_used_up_projects_cannot_be_picked(): void
     {
         $this->actingAs($this->staff);
         PpmpItem::whereKey($this->hdd->id)->update(['committed_quantity' => 9]);   // over-requested before quantities were enforced
 
-        $draft = $this->draft();
-        $this->get(route('procurement.requests.show', $draft))->assertOk()->assertDontSee('Over quantity')->assertSee('Fully requested');
-
-        $draft->items()->create($this->line($this->hdd, 1, '5000') + ['line_uuid' => $this->hdd->line_uuid, 'total_cost' => '5000', 'sort_order' => 1]);
-        $this->get(route('procurement.requests.show', $draft))->assertOk()->assertSee('Over quantity');
+        $this->get(route('procurement.requests.lines.entry', $this->draft()))->assertOk()
+            ->assertSeeText('1 piece over')->assertSee('Fully requested')
+            ->assertSee('data-id="' . $this->hdd->id . '" disabled', false)
+            ->assertDontSee('data-id="' . $this->ram->id . '" disabled', false);
     }
 
     public function test_a_stale_copy_cannot_cancel_twice_or_edit_after_submit(): void
@@ -538,10 +536,12 @@ class PurchaseRequestTest extends TestCase
         $this->actingAs($this->staff);
         $pr = $this->draft();
 
-        $this->get(route('procurement.requests.lines.entry', $pr))->assertOk()->assertSee('8 of 8');
+        // Add Item opens on what is left to request; the page itself no longer lists it
+        $this->get(route('procurement.requests.lines.entry', $pr))->assertOk()->assertSee('Left to request under')->assertSeeText('8 of 8 piece');
 
         $this->postJson(route('procurement.requests.lines.store', $pr), $this->line($this->hdd, 4, '5000'))->assertOk();
-        $this->get(route('procurement.requests.show', $pr))->assertOk()->assertSee('Left to request under')->assertSeeText('4 of 8 piece left');
+        $this->get(route('procurement.requests.lines.entry', $pr))->assertOk()->assertSeeText('4 of 8 piece');
+        $this->get(route('procurement.requests.show', $pr))->assertOk()->assertDontSee('Left to request under')->assertDontSee('SAI No.');
 
         $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $pr, 'project' => $this->ram->id]))
             ->assertOk()->assertSee('value="' . $this->ram->id . '" selected', false);
@@ -564,11 +564,11 @@ class PurchaseRequestTest extends TestCase
 
         // The lines keep the old version's project id; the modal still picks the project (by line_uuid)
         $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $draft, 'id' => $draftLine->id]))
-            ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSee('6 of 8 piece');
+            ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSeeText('6 of 8 piece');
 
         $rev = $this->requests->revise($a, $this->staff);
         $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $rev, 'id' => $rev->items->first()->id]))
-            ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSee('8 of 8 piece');
+            ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSeeText('8 of 8 piece');
     }
 
     public function test_available_lines_take_the_same_queries_whatever_the_number_of_projects(): void
