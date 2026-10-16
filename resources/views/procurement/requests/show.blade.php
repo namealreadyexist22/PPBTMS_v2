@@ -111,12 +111,12 @@
                     </div>
                 </div>
             </div>
-            <div class="col-12 col-md-3">
+            {{-- <div class="col-12 col-md-3">
                 <div class="pr-stat text-md-end bg-primary-subtle border-primary-subtle">
                     <div class="pr-label">{{ $jr ? 'ABC' : 'Total' }}</div>
                     <div class="fs-5 fw-bold">₱ {{ number_format((float) $pr->total_amount, 2) }}</div>
                 </div>
-            </div>
+            </div> --}}
         </div>
 
         @if ($pr->status === RequestStatus::Draft && $pr->revised_from_id)
@@ -259,12 +259,12 @@
         <form id="form_header" autocomplete="off">
             @csrf
             <fieldset class="border-0 p-0 m-0" @disabled(! $canEdit)>
-                <div class="pr-label mb-2">Request</div>
+                {{-- <div class="pr-label mb-2">Request</div> --}}
                 <div class="row g-3">
                     <div class="{{ $jr ? 'col-lg-9' : 'col-12' }}">
                         <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
                         @if ($canEdit)
-                            <textarea name="purpose" class="form-control form-control-sm" rows="2">{{ $pr->purpose }}</textarea>
+                            <textarea name="purpose" class="form-control form-control-sm" rows="2" style="resize: none;">{{ $pr->purpose }}</textarea>
                         @else
                             {{-- Read-only: the whole purpose as text, however long --}}
                             <div class="small" style="white-space: pre-line;">{{ $pr->purpose ?: '—' }}</div>

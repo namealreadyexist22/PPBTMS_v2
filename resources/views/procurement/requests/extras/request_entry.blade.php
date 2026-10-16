@@ -56,7 +56,7 @@
 
                         <div class="mb-0">
                             <label class="form-label small fw-semibold text-muted mb-1">Purpose</label>
-                            <textarea name="purpose" class="form-control form-control-sm" rows="2" placeholder="Can also be filled in later"></textarea>
+                            <textarea name="purpose" class="form-control form-control-sm" rows="2" style="resize: none;" placeholder="Can also be filled in later"></textarea>
                         </div>
                     @endif
                 </div>
