@@ -199,6 +199,7 @@ use Illuminate\Support\Facades\Route;
             Route::post('rfqs/store', [RfqController::class, 'store'])->name('rfqs.store');
             Route::get('rfqs/{rfq}', [RfqController::class, 'show'])->name('rfqs.show');
             Route::get('rfqs/{rfq}/print', [RfqController::class, 'print'])->name('rfqs.print');
+            Route::get('rfqs/{rfq}/requests/{purchaseRequest}', [RfqController::class, 'request'])->name('rfqs.request');
             Route::post('rfqs/{rfq}/header', [RfqController::class, 'header'])->name('rfqs.header');
             Route::get('rfqs/{rfq}/picker', [RfqController::class, 'picker'])->name('rfqs.picker');
             Route::post('rfqs/{rfq}/lines', [RfqController::class, 'addLines'])->name('rfqs.lines.store');

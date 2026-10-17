@@ -162,6 +162,18 @@ class RfqController extends Controller
         });
     }
 
+    /** A PR / JR whose items are on this RFQ, as its printed form (shown in a modal on the RFQ page). */
+    public function request(Request $request, Rfq $rfq, \App\Models\Procurement\PurchaseRequest $purchaseRequest)
+    {
+        $this->authorizeView($request, $rfq);
+
+        if (! $rfq->items()->whereHas('line', fn ($q) => $q->where('purchase_request_id', $purchaseRequest->id))->exists()) {
+            $this->deny($request, "{$purchaseRequest->title()} has no items on this RFQ.");
+        }
+
+        return app(PurchaseRequestController::class)->printView($purchaseRequest);
+    }
+
     /** Printable RFQ; ?copies=N prints N copies, one per supplier the canvassers will visit. */
     public function print(Request $request, Rfq $rfq)
     {

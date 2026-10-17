@@ -84,6 +84,10 @@
     </style>
 </head>
 <body>
+@if (request()->boolean('embed'))
+    {{-- Shown in a modal (RFQ page): no toolbar, the sheet fits the frame --}}
+    <style>.toolbar { display: none; } body { background: #fff; } .sheet { margin: 0 auto; }</style>
+@endif
 <div class="toolbar">
     <strong>{{ $pr->title() }}</strong>
     <span>{{ $pr->status->label() }}</span>

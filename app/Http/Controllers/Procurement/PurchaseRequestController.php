@@ -278,6 +278,13 @@ class PurchaseRequestController extends Controller
     public function print(Request $request, PurchaseRequest $purchaseRequest)
     {
         $this->authorizeView($request, $purchaseRequest);
+
+        return $this->printView($purchaseRequest);
+    }
+
+    /** The printed form, without access checks (callers check first, e.g. the RFQ's PR viewer). */
+    public function printView(PurchaseRequest $purchaseRequest)
+    {
         $pr = $purchaseRequest->load(['office.parent.parent', 'pap', 'items.ppmpItem.procurementMode']);
         $department = $pr->office->department;
 

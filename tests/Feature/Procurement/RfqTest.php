@@ -222,6 +222,12 @@ class RfqTest extends TestCase
             ->assertSee('Canvassed by:')->assertSee('Juan Dela Cruz')->assertSee('FM-AFD-PPS-015,Rev.02')->getContent();
         $this->assertSame(3, substr_count($html, 'FM-AFD-PPS-015,Rev.02'));
 
+        // The PR / JR on the RFQ opens as printed, for RFQ staff without PR access too; others' requests do not
+        $this->assertFalse($this->bac->canAccessPermission('manage requests'));
+        $this->get(route('procurement.rfqs.request', [$rfq, $pr, 'embed' => 1]))->assertOk()->assertSee('PURCHASE REQUEST')->assertSee($pr->request_no)->assertDontSee('Print / Save as PDF</button>\n    <button', false);
+        $other = $this->submittedPr([[$this->ram, 1]]);
+        $this->get(route('procurement.rfqs.request', [$rfq, $other]))->assertForbidden();
+
         // The PR shows where it is being quoted
         $this->actingAs($this->staff)->get(route('procurement.requests.show', $pr))->assertOk()->assertSee('On RFQ 2026-0001');
 

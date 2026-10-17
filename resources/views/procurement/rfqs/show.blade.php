@@ -56,27 +56,21 @@
         </div>
 
         <div class="row g-2 mt-3">
-            <div class="col-md-6 col-xl-5">
+            <div class="col-md-6">
                 <div class="pr-stat">
                     <div class="pr-label">PR / JR</div>
                     @forelse ($requests as $pr)
-                        <a href="{{ route('procurement.requests.show', $pr) }}" class="badge rounded-pill bg-light text-dark border text-decoration-none me-1" title="{{ $pr->office->shortName() }} · {{ $pr->purpose }}">{{ $pr->title() }}</a>
+                        <a href="#" class="badge rounded-pill bg-light text-dark border text-decoration-none me-1 js-view-request" data-url="{{ route('procurement.rfqs.request', [$rfq, $pr]) }}" data-title="{{ $pr->title() }}" title="View {{ $pr->title() }} ({{ $pr->office->shortName() }})"><i class="far fa-eye me-1"></i>{{ $pr->title() }}</a>
                     @empty
                         <div class="text-muted small">None yet</div>
                     @endforelse
                 </div>
             </div>
-            <div class="col-6 col-md-3 col-xl-2">
+            <div class="col-6 col-md-3">
                 <div class="pr-stat"><div class="pr-label">Date</div><div class="fw-semibold small">{{ $rfq->issued_at?->format('M d, Y') ?? 'On issue' }}</div></div>
             </div>
-            <div class="col-6 col-md-3 col-xl-2">
+            <div class="col-6 col-md-3">
                 <div class="pr-stat"><div class="pr-label">Deadline</div><div class="fw-semibold small">{{ $rfq->submission_deadline?->format('M d, Y g:i A') ?? '—' }}</div></div>
-            </div>
-            <div class="col-md-12 col-xl-3">
-                <div class="pr-stat bg-primary-subtle border-primary-subtle text-end">
-                    <div class="pr-label">ABC</div>
-                    <div class="fs-5 fw-bold">₱ {{ number_format((float) $rfq->total_abc, 2) }}</div>
-                </div>
             </div>
         </div>
 
@@ -132,7 +126,7 @@
                             <td class="text-end text-nowrap">{{ number_format((float) $line->unit_cost, 2) }}</td>
                             <td class="text-end text-nowrap fw-semibold {{ $canEdit ? '' : 'pe-4' }}">{{ number_format((float) $line->total_cost, 2) }}</td>
                             <td class="text-nowrap">
-                                <a href="{{ route('procurement.requests.show', $line->request) }}" class="text-decoration-none">{{ $line->request->title() }}</a>
+                                <a href="#" class="text-decoration-none js-view-request" data-url="{{ route('procurement.rfqs.request', [$rfq, $line->request]) }}" data-title="{{ $line->request->title() }}">{{ $line->request->title() }}</a>
                                 <div class="text-muted">{{ $line->request->office->shortName() }}</div>
                             </td>
                             @if ($canEdit)
@@ -228,6 +222,25 @@
 </div>{{-- one card --}}
 
 <div id="modal-body"></div>
+
+{{-- A PR / JR on the RFQ, as printed --}}
+<div class="modal fade" id="REQUEST_VIEW_MODAL" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl modal-fullscreen-lg-down">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-white py-3">
+                <h5 class="modal-title fw-bold mb-0" id="request_view_title"></h5>
+                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0 bg-body-tertiary">
+                <iframe id="request_view_frame" title="Request" style="width: 100%; height: 75vh; border: 0; display: block;"></iframe>
+            </div>
+            <div class="modal-footer bg-body-tertiary border-0 py-2">
+                <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn_request_view_print"><i class="fas fa-print me-1"></i> Print</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('script')
@@ -302,6 +315,17 @@ document.addEventListener('DOMContentLoaded', function () {
             .done((res) => { toastr.success(res.message, 'Success'); refreshView(); })
             .fail((xhr) => toastr.error(errorText(xhr), 'Error'));
     });
+
+    // ---------- PR / JR viewer ----------
+    const viewModal = document.getElementById('REQUEST_VIEW_MODAL');
+    $(document).on('click', '.js-view-request', function (e) {
+        e.preventDefault();
+        $('#request_view_title').text($(this).data('title'));
+        $('#request_view_frame').attr('src', $(this).data('url') + '?embed=1');
+        bootstrap.Modal.getOrCreateInstance(viewModal).show();
+    });
+    viewModal.addEventListener('hidden.bs.modal', () => $('#request_view_frame').attr('src', 'about:blank'));
+    $('#btn_request_view_print').on('click', () => document.getElementById('request_view_frame').contentWindow.print());
 
     // ---------- Workflow ----------
     $(document).on('click', '#btn_print', function () {
