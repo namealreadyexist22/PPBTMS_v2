@@ -3,6 +3,12 @@
 @section('content')
 @php use App\Enums\RfqStatus; @endphp
 
+<style>
+    /* As on the PR / JR list: the row under the pointer stands out (the whole row opens the RFQ) */
+    #rfqs_view .js-rfq-row:hover > td { background-color: var(--bs-primary-bg-subtle); box-shadow: none; }
+    #rfqs_view .js-rfq-row:hover > td:first-child { box-shadow: inset 3px 0 0 var(--bs-primary); }
+</style>
+
 <div class="row">
     <div class="col-12">
         <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
@@ -41,6 +47,7 @@
                                 <th>RFQ No.</th>
                                 <th>Date</th>
                                 <th>Title</th>
+                                <th>Items</th>
                                 <th>PR / JR</th>
                                 <th>Mode</th>
                                 <th class="text-end">ABC</th>
@@ -49,17 +56,39 @@
                         </thead>
                         <tbody>
                             @forelse ($rfqs as $row)
-                                <tr role="button" onclick="window.location='{{ route('procurement.rfqs.show', $row) }}'">
+                                @php
+                                    $lines = $row->items->map->line->filter();
+                                    $itemText = fn ($l) => e($l->description) . ' <span class="text-muted">× ' . e(rtrim(rtrim(number_format((float) $l->quantity, 2), '0'), '.') . ' ' . $l->unit) . '</span>';
+                                @endphp
+                                <tr role="button" class="js-rfq-row" onclick="window.location='{{ route('procurement.rfqs.show', $row) }}'">
                                     <td class="fw-semibold text-nowrap">{{ $row->rfq_no ?? 'Draft' }}</td>
                                     <td class="text-nowrap">{{ ($row->issued_at ?? $row->created_at)->format('M d, Y') }}</td>
                                     <td class="text-truncate" style="max-width: 320px;" title="{{ $row->title }}">{{ $row->title }}</td>
-                                    <td>{{ $row->requests()->map->title()->implode(', ') ?: '—' }}</td>
+                                    {{-- Up to 5 items listed; 6 or more: hover the count to see them all --}}
+                                    <td style="min-width: 220px;">
+                                        @if ($lines->isEmpty())
+                                            <span class="text-muted">No items yet</span>
+                                        @elseif ($lines->count() <= 5)
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach ($lines as $l)<li class="text-truncate" style="max-width: 360px;">{!! $itemText($l) !!}</li>@endforeach
+                                            </ul>
+                                        @else
+                                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle js-items-popover" tabindex="0"
+                                                  data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right" data-bs-html="true"
+                                                  data-bs-title="{{ $lines->count() }} items"
+                                                  data-bs-content="{{ '<ul class="ps-3 mb-0 small">' . $lines->map(fn ($l) => '<li>' . $itemText($l) . '</li>')->implode('') . '</ul>' }}">
+                                                <i class="fas fa-list me-1"></i>{{ $lines->count() }} items
+                                            </span>
+                                            <span class="text-muted small ms-1 text-truncate d-inline-block align-middle" style="max-width: 240px;">{{ $lines->take(2)->pluck('description')->implode(', ') }}, …</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-nowrap">{!! $row->requests()->map(fn ($pr) => e($pr->title()))->implode('<br>') ?: '—' !!}</td>
                                     <td class="text-nowrap">{{ $row->procurementMode?->code ?? '—' }}</td>
                                     <td class="text-end text-nowrap">{{ number_format((float) $row->total_abc, 2) }}</td>
                                     <td class="text-center"><span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="7" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No RFQs match the search.' : 'No RFQs yet. Start one and add items from submitted PRs / JRs.' }}</td></tr>
+                                <tr><td colspan="8" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No RFQs match the search.' : 'No RFQs yet. Start one and add items from submitted PRs / JRs.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -116,10 +145,18 @@ document.addEventListener('DOMContentLoaded', function () {
         history.replaceState(null, '', url);
         pending = $.get(url).done(function (html) {
             const fresh = $('<div>').append($.parseHTML(html)).find('#rfqs_view');
+            $('.popover').remove();
             fresh.length ? $('#rfqs_view').replaceWith(fresh) : window.location.reload();
+            initItemPopovers();
         }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.href = url; })
           .always(() => $('#rfqs_view').css('opacity', ''));
     }
+    // 6 or more items: hovering the count lists them all
+    function initItemPopovers() {
+        document.querySelectorAll('#rfqs_view .js-items-popover').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body' }));
+    }
+    initItemPopovers();
+
     function applyFilter() {
         const params = new URLSearchParams();
         $('#rfqs_filter').serializeArray().forEach((f) => { if (f.value.trim()) params.set(f.name, f.value.trim()); });
