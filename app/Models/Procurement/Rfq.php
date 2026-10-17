@@ -23,7 +23,7 @@ class Rfq extends Model
     protected $fillable = [
         'uuid', 'rfq_no', 'series_year', 'series', 'region', 'procurement_mode_id', 'title', 'delivery_place',
         'delivery_period', 'price_validity', 'warranty', 'payment_terms', 'submission_deadline', 'remarks',
-        'signatory_name', 'signatory_designation', 'status', 'total_abc', 'issued_at', 'cancelled_at', 'cancel_reason',
+        'signatory_name', 'signatory_designation', 'canvassed_by_name', 'status', 'total_abc', 'issued_at', 'cancelled_at', 'cancel_reason',
         'created_by', 'updated_by',
     ];
 
@@ -49,7 +49,7 @@ class Rfq extends Model
         return 'uuid';
     }
 
-    /** e.g. "RFQ 2026-10-0003", or "RFQ (draft)". */
+    /** e.g. "RFQ 2026-0003", or "RFQ (draft)". */
     public function title(): string
     {
         return 'RFQ ' . ($this->rfq_no ?? '(draft)');

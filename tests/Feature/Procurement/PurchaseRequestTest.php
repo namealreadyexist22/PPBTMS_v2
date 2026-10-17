@@ -157,11 +157,19 @@ class PurchaseRequestTest extends TestCase
         $this->assertEquals('40000.00', $this->hdd->fresh()->committed_amount);
     }
 
-    public function test_submit_needs_items_purpose_signatories_and_jr_type(): void
+    public function test_submit_needs_items(): void
     {
         $pr = $this->requests->create(RequestKind::Pr, $this->ppmp->paps()->first(), $this->staff, []);
         $this->expectExceptionMessage('Add at least one item');
         $this->requests->submit($pr, $this->staff);
+    }
+
+    public function test_purpose_is_optional(): void
+    {
+        $pr = $this->draft(RequestKind::Pr, ['purpose' => null]);
+        $this->requests->saveLine($pr, $this->line($this->hdd, 1, '5000'));
+
+        $this->assertSame(RequestStatus::Submitted, $this->requests->submit($pr->fresh(), $this->staff)->status);
     }
 
     public function test_jr_needs_a_type(): void

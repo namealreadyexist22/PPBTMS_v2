@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         // Request for Quotation: items of one or more submitted PRs / JRs of one region and one
-        // procurement mode, canvassed together. Number YYYY-MM-XXXX (series per year), given on issue.
+        // procurement mode, canvassed together. Quotation No. YYYY-NNNN (series per year), given on issue.
         // Suppliers are written on the printed copies by the canvassers.
         Schema::create('rfqs', function (Blueprint $table) {
             $table->id();

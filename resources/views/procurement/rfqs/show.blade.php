@@ -172,35 +172,30 @@
                         <label class="form-label small fw-semibold text-muted mb-1">Deadline for quotations</label>
                         <input type="{{ $canEdit || $rfq->submission_deadline ? 'datetime-local' : 'text' }}" name="submission_deadline" class="form-control form-control-sm" value="{{ $rfq->submission_deadline?->format('Y-m-d\TH:i') }}">
                     </div>
-                    <div class="col-lg-6">
-                        <label class="form-label small fw-semibold text-muted mb-1">Place of delivery</label>
-                        <input type="text" name="delivery_place" class="form-control form-control-sm" value="{{ $rfq->delivery_place }}" maxlength="500" placeholder="e.g. SRA Main Office, North Avenue, Diliman, Quezon City">
-                    </div>
-                    <div class="col-lg-6">
+                    {{-- Notes 2 and 3 of the printed RFQ; left blank, they are filled in by hand --}}
+                    <div class="col-sm-6 col-lg-3">
                         <label class="form-label small fw-semibold text-muted mb-1">Delivery period</label>
-                        <input type="text" name="delivery_period" class="form-control form-control-sm" value="{{ $rfq->delivery_period }}" maxlength="255">
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="delivery_period" class="form-control" value="{{ is_numeric($rfq->delivery_period) ? (int) $rfq->delivery_period : '' }}" min="1" max="3650" placeholder="—">
+                            <span class="input-group-text">calendar days</span>
+                        </div>
                     </div>
-                    <div class="col-lg-4">
+                    <div class="col-sm-6 col-lg-3">
                         <label class="form-label small fw-semibold text-muted mb-1">Price validity</label>
-                        <input type="text" name="price_validity" class="form-control form-control-sm" value="{{ $rfq->price_validity }}" maxlength="255">
+                        <div class="input-group input-group-sm">
+                            <input type="number" name="price_validity" class="form-control" value="{{ is_numeric($rfq->price_validity) ? (int) $rfq->price_validity : '' }}" min="1" max="3650" placeholder="—">
+                            <span class="input-group-text">calendar days</span>
+                        </div>
                     </div>
-                    <div class="col-lg-4">
-                        <label class="form-label small fw-semibold text-muted mb-1">Warranty</label>
-                        <input type="text" name="warranty" class="form-control form-control-sm" value="{{ $rfq->warranty }}" maxlength="255" placeholder="e.g. 1 year on parts and labor">
-                    </div>
-                    <div class="col-lg-4">
-                        <label class="form-label small fw-semibold text-muted mb-1">Payment terms</label>
-                        <input type="text" name="payment_terms" class="form-control form-control-sm" value="{{ $rfq->payment_terms }}" maxlength="255">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold text-muted mb-1">Other conditions</label>
-                        <textarea name="remarks" class="form-control form-control-sm" rows="2" maxlength="2000" placeholder="Printed under the terms, e.g. brand / model must be stated; samples may be required">{{ $rfq->remarks }}</textarea>
+                    <div class="col-lg-6">
+                        <label class="form-label small fw-semibold text-muted mb-1">Other note</label>
+                        <textarea name="remarks" class="form-control form-control-sm" rows="1" maxlength="2000" style="resize: none;" placeholder="Printed as note 7, e.g. samples may be required">{{ $rfq->remarks }}</textarea>
                     </div>
                 </div>
             </fieldset>
 
             <fieldset class="border-0 p-0 m-0" @disabled(! $canSign)>
-                <div class="pr-label mt-4 mb-2">Signatory</div>
+                <div class="pr-label mt-4 mb-2">Signatory and canvasser</div>
                 <div class="row g-3 align-items-end">
                     <div class="col-sm-6 col-xl-4">
                         <label class="form-label small fw-semibold text-muted mb-1">Signed by — printed name</label>
@@ -213,10 +208,17 @@
                         <label class="form-label small fw-semibold text-muted mb-1">Designation</label>
                         <input type="text" name="signatory_designation" class="form-control form-control-sm" value="{{ $rfq->signatory_designation }}" maxlength="255">
                     </div>
+                    <div class="col-sm-6 col-xl-4">
+                        <label class="form-label small fw-semibold text-muted mb-1">Canvassed by</label>
+                        @include('procurement.partials.signatory_select', [
+                            'name' => 'canvassed_by_name', 'value' => $rfq->canvassed_by_name, 'designationField' => '',
+                            'people' => $people, 'placeholder' => 'Blank: written in by the canvasser',
+                        ])
+                    </div>
                 </div>
                 @if ($canSign)
                     <div class="d-flex justify-content-end border-top pt-3 mt-3">
-                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save {{ $canEdit ? 'Details' : 'Signatory' }}</button>
+                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save {{ $canEdit ? 'Details' : 'Names' }}</button>
                     </div>
                 @endif
             </fieldset>

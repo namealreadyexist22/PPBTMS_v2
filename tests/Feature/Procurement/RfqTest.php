@@ -134,13 +134,13 @@ class RfqTest extends TestCase
 
         $rfq = $this->rfqs->issue($rfq->fresh(), $this->bac, ['submission_deadline' => '2026-10-23 17:00', 'signatory_name' => 'Ana Santos', 'signatory_designation' => 'Head, BAC Secretariat']);
         $this->assertSame(RfqStatus::Issued, $rfq->status);
-        $this->assertSame('2026-10-0001', $rfq->rfq_no);
+        $this->assertSame('2026-0001', $rfq->rfq_no);
         $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$a->items[1]->id]), 'can no longer be changed');
 
         $second = $this->draftRfq();
         $this->rfqs->addLines($second, $this->bac, [$a->items[1]->id]);   // the desktop on its own (CB) RFQ
         $second = $this->rfqs->issue($second->fresh(), $this->bac, ['submission_deadline' => '2026-10-30 17:00']);
-        $this->assertSame('2026-10-0002', $second->rfq_no);
+        $this->assertSame('2026-0002', $second->rfq_no);
     }
 
     public function test_a_line_is_on_one_open_rfq_and_cancelling_frees_it(): void
@@ -209,23 +209,26 @@ class RfqTest extends TestCase
         $this->get(route('procurement.rfqs.picker', $rfq))->assertOk()->assertSee($pr->title())->assertSee('Hard Drive (4 TB)')->assertSee('RAM 16 GB');
 
         $this->postJson(route('procurement.rfqs.lines.store', $rfq), ['lines' => $pr->items->pluck('id')->all()])->assertOk()->assertJson(['message' => '2 items added.']);
-        $this->postJson(route('procurement.rfqs.header', $rfq), ['delivery_place' => 'SRA Main Office', 'signatory_name' => 'Ana Santos', 'signatory_designation' => 'Head, BAC Secretariat'])->assertOk();
+        $this->postJson(route('procurement.rfqs.header', $rfq), ['delivery_period' => 15, 'signatory_name' => 'Ana Santos', 'signatory_designation' => 'Head, BAC Secretariat', 'canvassed_by_name' => 'Juan Dela Cruz'])->assertOk();
+        $this->postJson(route('procurement.rfqs.header', $rfq), ['price_validity' => 'thirty'])->assertStatus(422);
         $this->postJson(route('procurement.rfqs.issue', $rfq), [])->assertStatus(422)->assertJson(['message' => 'Set the deadline for submitting quotations before issuing.']);
         $this->postJson(route('procurement.rfqs.issue', $rfq), ['submission_deadline' => '2026-10-23T17:00'])->assertOk();
 
-        $this->get(route('procurement.rfqs.show', $rfq))->assertOk()->assertSee('RFQ 2026-10-0001')->assertSee('19,000.00')->assertSee('Cancel RFQ');
-        $this->get(route('procurement.rfqs.print', [$rfq, 'copies' => 3]))->assertOk()
-            ->assertSee('REQUEST FOR QUOTATION')->assertSee('2026-10-0001')->assertSee($pr->request_no)
-            ->assertSee('October 23, 2026 at 5:00 PM')->assertSee('Ana Santos')->assertSee('SRA Main Office')
-            ->assertSee('copy 3 of 3')->assertSee('PhilGEPS Reg. No.');
+        $this->get(route('procurement.rfqs.show', $rfq))->assertOk()->assertSee('RFQ 2026-0001')->assertSee('19,000.00')->assertSee('Cancel RFQ');
+        $html = $this->get(route('procurement.rfqs.print', [$rfq, 'copies' => 3]))->assertOk()
+            ->assertSee('REQUEST FOR QUOTATION')->assertSee('Quotation No.')->assertSee('2026-0001')->assertSee($pr->request_no)
+            ->assertSee('October 23, 2026')->assertSee('Ana Santos')->assertSee('Head, BAC Secretariat')
+            ->assertSee('Delivery period shall be within 15 calendar days.')->assertSee('Price validity shall be for a period of ____ calendar days.')
+            ->assertSee('Canvassed by:')->assertSee('Juan Dela Cruz')->assertSee('FM-AFD-PPS-015,Rev.02')->getContent();
+        $this->assertSame(3, substr_count($html, 'FM-AFD-PPS-015,Rev.02'));
 
         // The PR shows where it is being quoted
-        $this->actingAs($this->staff)->get(route('procurement.requests.show', $pr))->assertOk()->assertSee('On RFQ 2026-10-0001');
+        $this->actingAs($this->staff)->get(route('procurement.requests.show', $pr))->assertOk()->assertSee('On RFQ 2026-0001');
 
         // Another region's RFQ stays out of sight
         $visBac = User::factory()->create(['is_activated' => 1, 'region' => 'vis']);
         $visBac->givePermissionTo('manage rfq');
         $this->actingAs($visBac)->get(route('procurement.rfqs.show', $rfq))->assertForbidden();
-        $this->get(route('procurement.rfqs.index'))->assertOk()->assertDontSee('2026-10-0001');
+        $this->get(route('procurement.rfqs.index'))->assertOk()->assertDontSee('2026-0001');
     }
 }

@@ -3,6 +3,12 @@
 @section('content')
 @php use App\Enums\RequestKind; use App\Enums\RequestStatus; @endphp
 
+<style>
+    /* The row under the pointer stands out (the whole row opens the request) */
+    #requests_view .js-request-row:hover > td { background-color: var(--bs-primary-bg-subtle); box-shadow: none; }
+    #requests_view .js-request-row:hover > td:first-child { box-shadow: inset 3px 0 0 var(--bs-primary); }
+</style>
+
 <div class="row">
     <div class="col-12">
         <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
@@ -51,6 +57,7 @@
                                 <th>{{ $kind === RequestKind::Jr ? 'J.R. No.' : 'PR No.' }}</th>
                                 <th>Date</th>
                                 <th>Charge to</th>
+                                <th>Items</th>
                                 <th class="text-end">{{ $kind === RequestKind::Jr ? 'ABC' : 'Total' }}</th>
                                 <th class="text-center">Status</th>
                             </tr>
@@ -58,27 +65,37 @@
                         <tbody>
                             @forelse ($requests as $row)
                                 @php
-                                    // Hover card: what the row is (office, purpose, items), the columns the table leaves out
-                                    $items = $row->items->take(5)->map(fn ($i) => '<li>' . e($i->description) . ' <span class="text-muted">× ' . e(rtrim(rtrim(number_format((float) $i->quantity, 2), '0'), '.') . ' ' . $i->unit) . '</span></li>')->implode('');
-                                    $more = $row->items->count() > 5 ? '<li class="text-muted">and ' . ($row->items->count() - 5) . ' more</li>' : '';
-                                    $card = '<div class="small"><div class="text-muted">' . e($row->office->shortName() . ' — ' . $row->office->name) . '</div>'
-                                        . '<div class="mt-1">' . ($row->purpose ? e($row->purpose) : '<span class="text-muted">No purpose yet</span>') . '</div>'
-                                        . ($items ? '<div class="fw-semibold mt-2">' . $row->items->count() . ' ' . \Illuminate\Support\Str::plural('item', $row->items->count()) . '</div><ul class="ps-3 mb-0">' . $items . $more . '</ul>' : '<div class="text-muted mt-2">No items yet</div>')
-                                        . '</div>';
+                                    $itemText = fn ($i) => e($i->description) . ' <span class="text-muted">× ' . e(rtrim(rtrim(number_format((float) $i->quantity, 2), '0'), '.') . ' ' . $i->unit) . '</span>';
                                 @endphp
-                                <tr role="button" class="js-request-row" onclick="window.location='{{ route('procurement.requests.show', $row) }}'"
-                                    data-bs-toggle="popover" data-bs-trigger="hover" data-bs-placement="top" data-bs-html="true"
-                                    data-bs-title="{{ $row->title() }}" data-bs-content="{{ $card }}">
+                                <tr role="button" class="js-request-row" onclick="window.location='{{ route('procurement.requests.show', $row) }}'">
                                     <td class="fw-semibold text-nowrap">
                                         {{ $row->request_no ?? 'Draft' }}@if ($row->revision) <span class="badge bg-info text-dark">Rev. {{ $row->revision }}</span>@endif
                                     </td>
                                     <td class="text-nowrap">{{ ($row->submitted_at ?? $row->created_at)->format('M d, Y') }}</td>
                                     <td class="text-nowrap">{{ $row->pap?->code }}</td>
+                                    {{-- Up to 5 items listed; 6 or more: hover the count to see them all --}}
+                                    <td style="min-width: 220px;">
+                                        @if ($row->items->isEmpty())
+                                            <span class="text-muted">No items yet</span>
+                                        @elseif ($row->items->count() <= 5)
+                                            <ul class="list-unstyled mb-0">
+                                                @foreach ($row->items as $i)<li class="text-truncate" style="max-width: 360px;">{!! $itemText($i) !!}</li>@endforeach
+                                            </ul>
+                                        @else
+                                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle js-items-popover" tabindex="0"
+                                                  data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right" data-bs-html="true"
+                                                  data-bs-title="{{ $row->items->count() }} items"
+                                                  data-bs-content="{{ '<ul class="ps-3 mb-0 small">' . $row->items->map(fn ($i) => '<li>' . $itemText($i) . '</li>')->implode('') . '</ul>' }}">
+                                                <i class="fas fa-list me-1"></i>{{ $row->items->count() }} items
+                                            </span>
+                                            <span class="text-muted small ms-1 text-truncate d-inline-block align-middle" style="max-width: 240px;">{{ $row->items->take(2)->pluck('description')->implode(', ') }}, …</span>
+                                        @endif
+                                    </td>
                                     <td class="text-end text-nowrap">{{ number_format((float) $row->total_amount, 2) }}</td>
                                     <td class="text-center"><span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span></td>
                                 </tr>
                             @empty
-                                <tr><td colspan="5" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
+                                <tr><td colspan="6" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -112,9 +129,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.href = url; })
           .always(() => $('#requests_view').css('opacity', ''));
     }
-    // Hovering a row shows its office, purpose and items
+    // 6 or more items: hovering the count lists them all
     function initRowCards() {
-        document.querySelectorAll('#requests_view .js-request-row').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body', customClass: 'request-card' }));
+        document.querySelectorAll('#requests_view .js-items-popover').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body' }));
     }
     initRowCards();
 

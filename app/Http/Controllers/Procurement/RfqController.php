@@ -178,14 +178,16 @@ class RfqController extends Controller
         return [
             'title'                 => ['sometimes', 'required', 'string', 'max:500'],
             'delivery_place'        => ['nullable', 'string', 'max:500'],
-            'delivery_period'       => ['nullable', 'string', 'max:255'],
-            'price_validity'        => ['nullable', 'string', 'max:255'],
+            // Calendar days, printed in the RFQ notes (blank: filled in by hand)
+            'delivery_period'       => ['nullable', 'integer', 'min:1', 'max:3650'],
+            'price_validity'        => ['nullable', 'integer', 'min:1', 'max:3650'],
             'warranty'              => ['nullable', 'string', 'max:255'],
             'payment_terms'         => ['nullable', 'string', 'max:255'],
             'submission_deadline'   => ['nullable', 'date'],
             'remarks'               => ['nullable', 'string', 'max:2000'],
             'signatory_name'        => ['nullable', 'string', 'max:255'],
             'signatory_designation' => ['nullable', 'string', 'max:255'],
+            'canvassed_by_name'     => ['nullable', 'string', 'max:255'],
         ];
     }
 

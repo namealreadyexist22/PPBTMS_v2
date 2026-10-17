@@ -19,39 +19,40 @@ use Illuminate\Support\Facades\DB;
  *
  * An RFQ gathers lines of submitted PRs / JRs of one region and one procurement mode (several
  * requests can be canvassed together, or one request split over several RFQs). A line is on at
- * most one RFQ that is not cancelled. Issuing numbers it (YYYY-MM-XXXX, series per year); a
+ * most one RFQ that is not cancelled. Issuing numbers it (YYYY-NNNN, series per year); a
  * cancelled RFQ frees its lines. While its lines are on an RFQ, a request cannot be revised or cancelled.
  */
 class RfqService
 {
     public const HEADER_FIELDS = [
         'title', 'delivery_place', 'delivery_period', 'price_validity', 'warranty', 'payment_terms',
-        'submission_deadline', 'remarks', 'signatory_name', 'signatory_designation',
+        'submission_deadline', 'remarks', 'signatory_name', 'signatory_designation', 'canvassed_by_name',
     ];
+
+    /** Printed only, so they can still change after the RFQ is issued. */
+    public const PRINT_FIELDS = ['signatory_name', 'signatory_designation', 'canvassed_by_name'];
 
     public function create(User $user, Region $region, array $data): Rfq
     {
         $last = Rfq::where('region', $region)->latest('id')->first();
 
         return Rfq::create(array_intersect_key($data, array_flip(self::HEADER_FIELDS)) + [
-            'region'         => $region,
-            'status'         => RfqStatus::Draft,
-            // Terms and signatory as on the region's last RFQ
-            'delivery_place' => $last?->delivery_place,
-            'delivery_period'=> $last?->delivery_period ?? 'Within 15 calendar days upon receipt of Purchase Order',
-            'price_validity' => $last?->price_validity ?? '30 calendar days from the deadline of submission',
-            'warranty'       => $last?->warranty,
-            'payment_terms'  => $last?->payment_terms ?? 'Government terms (after delivery, inspection and acceptance)',
-            'signatory_name' => $last?->signatory_name,
+            'region'                => $region,
+            'status'                => RfqStatus::Draft,
+            // Delivery and price validity days, signatory and canvasser as on the region's last RFQ
+            'delivery_period'       => $last?->delivery_period,
+            'price_validity'        => $last?->price_validity,
+            'signatory_name'        => $last?->signatory_name,
             'signatory_designation' => $last?->signatory_designation,
-            'created_by'     => $user->id,
-            'updated_by'     => $user->id,
+            'canvassed_by_name'     => $last?->canvassed_by_name,
+            'created_by'            => $user->id,
+            'updated_by'            => $user->id,
         ]);
     }
 
     public function updateHeader(Rfq $rfq, User $user, array $data): Rfq
     {
-        $fields = $rfq->isEditable() ? self::HEADER_FIELDS : ['signatory_name', 'signatory_designation'];
+        $fields = $rfq->isEditable() ? self::HEADER_FIELDS : self::PRINT_FIELDS;
 
         if (! $rfq->isEditable() && $rfq->status !== RfqStatus::Issued) {
             throw new ProcurementException("{$rfq->title()} is {$rfq->status->label()} and can no longer be changed.");
@@ -152,7 +153,7 @@ class RfqService
         });
     }
 
-    /** Number the RFQ; it is then printed and sent out. Terms can no longer change, the signatory still can. */
+    /** Number the RFQ (Quotation No. YYYY-NNNN); it is then printed and sent out. Terms are fixed, the names printed on it are not. */
     public function issue(Rfq $rfq, User $user, array $data = []): Rfq
     {
         return DB::transaction(function () use ($rfq, $user, $data) {
@@ -184,7 +185,7 @@ class RfqService
             $rfq->fill([
                 'series_year' => $now->year,
                 'series'      => $series,
-                'rfq_no'      => sprintf('%d-%02d-%04d', $now->year, $now->month, $series),
+                'rfq_no'      => sprintf('%d-%04d', $now->year, $series),
                 'status'      => RfqStatus::Issued,
                 'issued_at'   => $now,
                 'updated_by'  => $user->id,

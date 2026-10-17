@@ -348,9 +348,7 @@ class PurchaseRequestService
             throw new ProcurementException('Add at least one item before submitting.');
         }
 
-        if (! trim((string) $request->purpose)) {
-            throw new ProcurementException('State the purpose before submitting.');
-        }
+        // The purpose is optional (left blank on the printed form when not given)
 
         if ($request->kind === RequestKind::Jr && ! $request->jr_type) {
             throw new ProcurementException('Choose the JR type before submitting.');
