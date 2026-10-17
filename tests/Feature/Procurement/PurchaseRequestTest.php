@@ -280,7 +280,10 @@ class PurchaseRequestTest extends TestCase
         $url = $this->postJson(route('procurement.requests.store'), ['kind' => 'pr', 'ppmp_pap_id' => $pap->id, 'purpose' => 'Upgrade of workstations'])
             ->assertOk()->json('url');
         $pr = PurchaseRequest::latest('id')->first();
-        $this->assertSame('Digna Gonzales', $pr->requested_by_name);   // defaults to the office head
+        $this->assertSame($this->staff->fullname, $pr->requested_by_name);   // the person preparing it
+        $this->assertSame('Information Systems Analyst III', $pr->requested_by_designation);
+        $this->assertSame('Digna Gonzales', $pr->approved_by_name);           // the department has no head set: the division head
+        $this->assertSame('Manager III', $pr->approved_by_designation);
 
         $this->get($url)->assertOk()->assertSee('Upgrade of workstations');
         $this->get(route('procurement.requests.lines.entry', $pr))->assertOk()->assertSee('Hard Drive (4 TB)');

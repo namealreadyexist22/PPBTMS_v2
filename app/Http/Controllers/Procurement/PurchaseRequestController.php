@@ -295,17 +295,20 @@ class PurchaseRequestController extends Controller
         ]);
     }
 
-    /** Requested by: the office head; Approved by: as on the office's last request. */
+    /**
+     * Requested by: the person preparing it. Approved by: the head of the department (or, if the
+     * department has none set, the nearest head above the office). Both can be changed on the request.
+     */
     protected function defaultSignatories(User $user, Office $office, RequestKind $kind): array
     {
-        $last = PurchaseRequest::where('office_id', $office->id)->whereNotNull('approved_by_name')->latest('id')->first();
-        $head = ($id = $office->approverId()) ? User::find($id) : null;
+        $headId = $office->department?->head_user_id ?: $office->approverId();
+        $head = $headId ? User::find($headId) : null;
 
         return array_filter([
-            'requested_by_name'        => $last?->requested_by_name ?? $head?->fullname,
-            'requested_by_designation' => $last?->requested_by_designation ?? $head?->designation,
-            'approved_by_name'         => $last?->approved_by_name,
-            'approved_by_designation'  => $last?->approved_by_designation,
+            'requested_by_name'        => $user->fullname,
+            'requested_by_designation' => $user->designation,
+            'approved_by_name'         => $head?->fullname,
+            'approved_by_designation'  => $head?->designation,
         ]);
     }
 

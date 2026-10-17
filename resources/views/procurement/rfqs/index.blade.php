@@ -140,12 +140,14 @@ document.addEventListener('DOMContentLoaded', function () {
         e.preventDefault();
         $('#btn_rfq_new').prop('disabled', true);
         $('#rfq_new_error').addClass('d-none');
-        $.post('{{ route("procurement.rfqs.store") }}', $(this).serialize())
+        $.ajax({ url: '{{ route("procurement.rfqs.store") }}', type: 'POST', data: $(this).serialize(), headers: { Accept: 'application/json' } })
             .done((res) => { toastr.success(res.message, 'Success'); window.location.href = res.url; })
             .fail(function (xhr) {
                 $('#btn_rfq_new').prop('disabled', false);
                 const res = xhr.responseJSON || {};
-                $('#rfq_new_error').removeClass('d-none').text(res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Something went wrong.'));
+                // Not a validation message: say what failed (e.g. 500 when a migration has not been run)
+                $('#rfq_new_error').removeClass('d-none').text(res.errors ? Object.values(res.errors)[0][0]
+                    : (res.message && res.message !== 'Server Error' ? res.message : 'Could not start the RFQ (error ' + xhr.status + ' ' + (xhr.statusText || '') + '). Please tell the system administrator.'));
             });
     });
 });

@@ -238,7 +238,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function errorText(xhr) {
         const res = xhr.responseJSON || {};
-        return res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Something went wrong.');
+        return res.errors ? Object.values(res.errors)[0][0]
+            : (res.message && res.message !== 'Server Error' ? res.message : 'Something went wrong (error ' + xhr.status + '). Please tell the system administrator.');
     }
 
     function refreshView() {
@@ -253,7 +254,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function post(url, data, method = 'POST') {
-        return $.ajax({ url: url, type: 'POST', data: Object.assign({ _token: csrf, _method: method }, data || {}) });
+        return $.ajax({ url: url, type: 'POST', data: Object.assign({ _token: csrf, _method: method }, data || {}), headers: { Accept: 'application/json' } });
     }
 
     function formData() {
