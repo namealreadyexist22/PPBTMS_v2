@@ -49,9 +49,9 @@ class RfqController extends Controller
     {
         $user = $request->user();
         $data = $this->validateJson($request, [
-            'title'  => ['required', 'string', 'max:500'],
+            'title'  => ['nullable', 'string', 'max:500'],
             'region' => ['nullable', Rule::enum(Region::class)],
-        ], ['title.required' => 'Give the RFQ a title, e.g. the project or items it is for.']);
+        ]);
 
         // Only a Super Admin picks the region; everyone else works in their own
         $region = $user->hasRole('Super Admin') && ! empty($data['region']) ? Region::from($data['region']) : ($user->region ?? Region::Lm);
@@ -188,7 +188,7 @@ class RfqController extends Controller
     protected function headerRules(): array
     {
         return [
-            'title'                 => ['sometimes', 'required', 'string', 'max:500'],
+            'title'                 => ['nullable', 'string', 'max:500'],
             'delivery_place'        => ['nullable', 'string', 'max:500'],
             // Calendar days, printed in the RFQ notes (blank: filled in by hand)
             'delivery_period'       => ['nullable', 'integer', 'min:1', 'max:3650'],

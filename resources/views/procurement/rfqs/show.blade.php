@@ -40,7 +40,7 @@
                     {{ $rfq->title() }}
                     <span class="badge rounded-pill bg-{{ $rfq->status->color() }}-subtle text-{{ $rfq->status->color() }}-emphasis border border-{{ $rfq->status->color() }}-subtle align-middle" style="font-size: .7rem;">{{ $rfq->status->label() }}</span>
                 </h4>
-                <div class="text-muted">{{ $rfq->title }}</div>
+                <div class="text-muted">{{ $rfq->label() }}</div>
             </div>
             <div class="d-flex flex-wrap gap-2">
                 @if ($rfq->items->isNotEmpty())
@@ -159,8 +159,8 @@
                 <div class="pr-label mb-2">Request</div>
                 <div class="row g-3">
                     <div class="col-lg-8">
-                        <label class="form-label small fw-semibold text-muted mb-1">Title</label>
-                        <input type="text" name="title" class="form-control form-control-sm" value="{{ $rfq->title }}" maxlength="500" required>
+                        <label class="form-label small fw-semibold text-muted mb-1">Title <span class="fw-normal">(optional, not printed)</span></label>
+                        <input type="text" name="title" class="form-control form-control-sm" value="{{ $rfq->title }}" maxlength="500" placeholder="Blank: named after its items">
                     </div>
                     <div class="col-lg-4">
                         <label class="form-label small fw-semibold text-muted mb-1">Deadline for quotations</label>

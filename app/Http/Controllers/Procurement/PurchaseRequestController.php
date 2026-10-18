@@ -171,7 +171,7 @@ class PurchaseRequestController extends Controller
                 'unit_cost'     => $p->unit_cost !== null ? (float) $p->unit_cost : null,
                 'standard'      => (bool) $p->item?->isStandard(),
                 'specs'         => $p->item?->specifications,
-                'mode'          => $p->procurementMode?->name,
+                'mode'          => $p->effectiveMode()?->name,   // the BAC's in the approved APP, else the PPMP's
                 'remaining'     => $p->remaining_cents / 100,
                 'budget'        => $p->budget_cents / 100,
                 'planned_qty'   => $p->planned_hundredths === null ? null : $p->planned_hundredths / 100,

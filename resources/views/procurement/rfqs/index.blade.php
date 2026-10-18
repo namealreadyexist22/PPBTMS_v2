@@ -63,7 +63,7 @@
                                 <tr role="button" class="js-rfq-row" onclick="window.location='{{ route('procurement.rfqs.show', $row) }}'">
                                     <td class="fw-semibold text-nowrap">{{ $row->rfq_no ?? 'Draft' }}</td>
                                     <td class="text-nowrap">{{ ($row->issued_at ?? $row->created_at)->format('M d, Y') }}</td>
-                                    <td class="text-truncate" style="max-width: 320px;" title="{{ $row->title }}">{{ $row->title }}</td>
+                                    <td class="text-truncate {{ filled($row->title) ? '' : 'text-muted' }}" style="max-width: 320px;" title="{{ $row->label() }}">{{ $row->label() }}</td>
                                     {{-- Up to 5 items listed; 6 or more: hover the count to see them all --}}
                                     <td style="min-width: 220px;">
                                         @if ($lines->isEmpty())
@@ -112,9 +112,9 @@
                 @csrf
                 <div class="modal-body p-4">
                     <div class="alert alert-danger d-none py-2 px-3 small" id="rfq_new_error"></div>
-                    <label class="form-label small fw-semibold text-muted mb-1">Title</label>
-                    <input type="text" name="title" class="form-control form-control-sm" maxlength="500" placeholder="e.g. ICT equipment and supplies" required>
-                    <div class="form-text">What the RFQ is for. Items from several submitted PRs / JRs of one procurement mode can go on it.</div>
+                    <label class="form-label small fw-semibold text-muted mb-1">Title <span class="fw-normal">(optional)</span></label>
+                    <input type="text" name="title" class="form-control form-control-sm" maxlength="500" placeholder="e.g. ICT equipment and supplies">
+                    <div class="form-text">A name to find it by in the list; not printed. Left blank, the RFQ is named after its items. Items from several submitted PRs / JRs of one procurement mode can go on it.</div>
                     @if ($regions)
                         <label class="form-label small fw-semibold text-muted mb-1 mt-3">Region</label>
                         <select name="region" class="form-select form-select-sm">

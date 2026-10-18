@@ -67,6 +67,36 @@ class PpmpItem extends Model
         return Quantity::toHundredths($this->committed_quantity);
     }
 
+    /** Loaded once per instance by appMode(); false = looked up, none. */
+    protected ProcurementMode|false|null $appModeCache = null;
+
+    /**
+     * The mode of procurement the BAC set for this project in the approved APP (the APP line that
+     * holds it, followed across PPMP amendments by line_uuid), or null when no approved APP has it.
+     * The BAC has the last say on the mode: PRs, JRs and RFQs follow this over the PPMP's own.
+     */
+    public function appMode(): ?ProcurementMode
+    {
+        if ($this->appModeCache === null) {
+            $this->appModeCache = AppItem::whereHas('ppmpItems', fn ($q) => $q->where('line_uuid', $this->line_uuid))
+                ->whereHas('plan', fn ($q) => $q->where('status', \App\Enums\AppStatus::Approved))
+                ->with('procurementMode')->latest('id')->first()?->procurementMode ?? false;
+        }
+
+        return $this->appModeCache ?: null;
+    }
+
+    /** The mode that applies: the BAC's in the approved APP, else the PPMP's. */
+    public function effectiveMode(): ?ProcurementMode
+    {
+        return $this->appMode() ?? $this->procurementMode;
+    }
+
+    public function effectiveModeId(): ?int
+    {
+        return ($id = $this->effectiveMode()?->id) ? (int) $id : null;
+    }
+
     /** Quantity x unit cost in centavos, or null when either is missing (lot budgets). */
     public static function computedBudgetCents($quantity, $unitCost): ?int
     {

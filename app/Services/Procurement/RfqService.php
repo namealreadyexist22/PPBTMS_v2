@@ -81,7 +81,7 @@ class RfqService
             ->each(function (PurchaseRequest $pr) use ($taken, $rfq) {
                 $pr->setRelation('available', $pr->items
                     ->reject(fn ($line) => in_array($line->id, $taken, true))
-                    ->filter(fn ($line) => ! $rfq->procurement_mode_id || (int) $line->ppmpItem?->procurement_mode_id === (int) $rfq->procurement_mode_id)
+                    ->filter(fn ($line) => ! $rfq->procurement_mode_id || $line->ppmpItem?->effectiveModeId() === (int) $rfq->procurement_mode_id)
                     ->values());
             })
             ->filter(fn (PurchaseRequest $pr) => $pr->available->isNotEmpty())
@@ -122,9 +122,11 @@ class RfqService
                     throw new ProcurementException("{$pr->title()} is being revised; submit or delete its revision first.");
                 }
 
-                $mode ??= $line->ppmpItem?->procurement_mode_id;
+                // The BAC's mode in the approved APP, else the PPMP's
+                $lineMode = $line->ppmpItem?->effectiveModeId();
+                $mode ??= $lineMode;
 
-                if ((int) $line->ppmpItem?->procurement_mode_id !== (int) $mode) {
+                if ($lineMode !== (int) $mode) {
                     throw new ProcurementException("\"{$line->description}\" has another procurement mode; an RFQ holds items of one mode.");
                 }
 

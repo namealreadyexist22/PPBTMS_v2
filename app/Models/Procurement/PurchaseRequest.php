@@ -63,7 +63,7 @@ class PurchaseRequest extends Model
     {
         $codes = config('procurement.bidding_mode_codes', ['CB']);
 
-        return $this->items->contains(fn ($line) => in_array($line->ppmpItem?->procurementMode?->code, $codes, true))
+        return $this->items->contains(fn ($line) => in_array($line->ppmpItem?->effectiveMode()?->code, $codes, true))
             ? 'FOR BIDDING' : 'REGULAR PROCUREMENT';
     }
 

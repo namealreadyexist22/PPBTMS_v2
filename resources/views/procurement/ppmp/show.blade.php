@@ -235,7 +235,17 @@
                                     @endif
                                     @if ($item->quantity_size)<div class="text-muted" style="white-space: pre-line;">{{ $item->quantity_size }}</div>@endif
                                 </td>
-                                <td class="text-nowrap" title="{{ $item->procurementMode->name }}">{{ $item->procurementMode->code }}</td>
+                                @php $bacMode = $item->appMode(); @endphp
+                                @if ($bacMode && $bacMode->id !== $item->procurement_mode_id)
+                                    {{-- The BAC set another mode in the approved APP; it applies to PRs and RFQs --}}
+                                    <td class="text-nowrap">
+                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" data-bs-toggle="tooltip"
+                                              title="Set by the BAC in the APP: {{ $bacMode->name }} (PPMP: {{ $item->procurementMode->name }})">{{ $bacMode->code }}</span>
+                                        <div class="text-muted text-decoration-line-through small">{{ $item->procurementMode->code }}</div>
+                                    </td>
+                                @else
+                                    <td class="text-nowrap" title="{{ $item->procurementMode->name }}">{{ $item->procurementMode->code }}</td>
+                                @endif
                                 <td class="text-center">{!! $item->pre_proc_conference ? '<i class="fas fa-check text-success"></i>' : '—' !!}</td>
                                 <td class="text-nowrap">
                                     @if ($item->proc_start->year === $item->proc_end->year)

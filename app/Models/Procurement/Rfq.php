@@ -55,6 +55,22 @@ class Rfq extends Model
         return 'RFQ ' . ($this->rfq_no ?? '(draft)');
     }
 
+    /** Its title, or (none given) its items: "Hard Drive (4 TB) and 2 more". Only shown in the system. */
+    public function label(): string
+    {
+        if (filled($this->title)) {
+            return $this->title;
+        }
+
+        $names = $this->items->map(fn (RfqItem $i) => $i->line?->description)->filter()->values();
+
+        return match ($names->count()) {
+            0       => 'No items yet',
+            1       => $names[0],
+            default => $names[0] . ' and ' . ($names->count() - 1) . ' more',
+        };
+    }
+
     public function isEditable(): bool
     {
         return $this->status === RfqStatus::Draft;

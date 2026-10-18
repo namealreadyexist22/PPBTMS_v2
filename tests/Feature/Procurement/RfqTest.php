@@ -194,6 +194,50 @@ class RfqTest extends TestCase
         $this->refused(fn () => $this->rfqs->addLines($vis, $this->bac, [$pr->items[0]->id]), 'this RFQ is for Visayas');
     }
 
+    /** An approved APP whose line for the project has the given mode (the BAC's decision). */
+    protected function approvedAppSetting(PpmpItem $project, string $mode): void
+    {
+        $app = \App\Models\Procurement\AnnualProcurementPlan::create(['fiscal_year' => 2027, 'region' => 'lm', 'status' => 'approved', 'approved_at' => now()]);
+        $line = $app->items()->create([
+            'project_title' => $project->description, 'end_user' => 'MIS', 'description' => $project->description,
+            'procurement_mode_id' => ProcurementMode::where('code', $mode)->value('id'), 'proc_start' => '2027-02-01', 'proc_end' => '2027-04-01',
+            'fund_source_id' => $project->fund_source_id, 'estimated_budget' => $project->estimated_budget,
+        ]);
+        $line->ppmpItems()->attach($project->id, ['annual_procurement_plan_id' => $app->id]);
+    }
+
+    public function test_the_bacs_mode_in_the_approved_app_applies(): void
+    {
+        // The PPMP says public bidding for the desktop; the BAC set it to SVP in the approved APP
+        $this->approvedAppSetting($this->desktop, 'SVP');
+        $this->assertSame('SVP', $this->desktop->fresh()->effectiveMode()->code);
+        $this->assertSame('CB', $this->desktop->fresh()->procurementMode->code);   // the PPMP itself is unchanged
+        $this->assertNull($this->hdd->fresh()->appMode());                        // not in an approved APP: the PPMP's mode
+        $this->assertSame('SVP', $this->hdd->fresh()->effectiveMode()->code);
+
+        $pr = $this->submittedPr([[$this->hdd, 1], [$this->desktop, 1]]);
+        $this->assertSame('REGULAR PROCUREMENT', $pr->fresh()->procurementLabel());   // no longer FOR BIDDING
+
+        $rfq = $this->draftRfq();
+        $this->rfqs->addLines($rfq, $this->bac, $pr->items->pluck('id')->all());   // one mode now
+        $this->assertSame('SVP', $rfq->fresh()->procurementMode->code);
+
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.show', $this->ppmp))->assertOk()->assertSee('Set by the BAC in the APP: Small Value Procurement');
+    }
+
+    public function test_the_title_is_optional(): void
+    {
+        $this->actingAs($this->bac)->postJson(route('procurement.rfqs.store'), [])->assertOk();
+        $rfq = Rfq::sole();
+        $this->assertNull($rfq->title);
+        $this->assertSame('No items yet', $rfq->label());
+
+        $pr = $this->submittedPr([[$this->hdd, 1], [$this->ram, 1]]);
+        $this->rfqs->addLines($rfq, $this->bac, $pr->items->pluck('id')->all());
+        $this->assertSame('Hard Drive (4 TB) and 1 more', $rfq->fresh()->label());
+        $this->get(route('procurement.rfqs.index'))->assertSee('Hard Drive (4 TB) and 1 more');
+    }
+
     public function test_pages_picker_print_and_access(): void
     {
         $pr = $this->submittedPr([[$this->hdd, 2], [$this->ram, 3]]);

@@ -53,11 +53,11 @@
                                         <span class="text-nowrap fw-semibold">₱{{ number_format($pr->available->sum(fn ($l) => (float) $l->total_cost), 2) }}</span>
                                     </label>
                                     @foreach ($pr->available as $line)
-                                        <label class="rq-line d-flex align-items-start gap-2 px-3 py-2 mb-0 border-top" data-mode="{{ $line->ppmpItem?->procurement_mode_id }}">
+                                        <label class="rq-line d-flex align-items-start gap-2 px-3 py-2 mb-0 border-top" data-mode="{{ $line->ppmpItem?->effectiveModeId() }}">
                                             <input type="checkbox" class="form-check-input mt-1 ms-3 js-line" name="lines[]" value="{{ $line->id }}">
                                             <span class="flex-grow-1">
                                                 <span class="fw-semibold">{{ $line->description }}</span>
-                                                <span class="d-block text-muted">{{ $qty($line->quantity) }} {{ $line->unit }} × ₱{{ number_format((float) $line->unit_cost, 2) }} · {{ $line->ppmpItem?->procurementMode?->name ?? 'No mode' }}</span>
+                                                <span class="d-block text-muted">{{ $qty($line->quantity) }} {{ $line->unit }} × ₱{{ number_format((float) $line->unit_cost, 2) }} · {{ $line->ppmpItem?->effectiveMode()?->name ?? 'No mode' }}</span>
                                             </span>
                                             <span class="text-nowrap">₱{{ number_format((float) $line->total_cost, 2) }}</span>
                                         </label>
