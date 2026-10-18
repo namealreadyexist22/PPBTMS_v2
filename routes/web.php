@@ -19,6 +19,7 @@ use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use App\Http\Controllers\Procurement\PurchaseRequestController;
 use App\Http\Controllers\Procurement\RfqController;
+use App\Http\Controllers\Procurement\OfficialsController;
 use Illuminate\Support\Facades\Route;
 
     Route::get('/', function () {
@@ -191,6 +192,12 @@ use Illuminate\Support\Facades\Route;
             Route::post('requests/{purchaseRequest}/revise', [PurchaseRequestController::class, 'revise'])->name('requests.revise');
             Route::post('requests/{purchaseRequest}/cancel', [PurchaseRequestController::class, 'cancel'])->name('requests.cancel');
             Route::delete('requests/{purchaseRequest}', [PurchaseRequestController::class, 'destroy'])->name('requests.destroy');
+        });
+
+        // Signatories & BAC of each region (HOPE, BAC, Secretariat); also open to the BAC Secretariat (APP)
+        Route::middleware('perm:manage officials|menu.app-manage')->group(function () {
+            Route::get('officials', [OfficialsController::class, 'index'])->name('officials.index');
+            Route::post('officials', [OfficialsController::class, 'update'])->name('officials.update');
         });
 
         // Requests for Quotation from submitted PRs / JRs; {rfq} is the uuid

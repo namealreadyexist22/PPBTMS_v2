@@ -28,7 +28,8 @@
                             <h6 class="fw-bold mb-1">APP FY {{ $fiscalYear }} — {{ $region->label() }}</h6>
                         </div>
                         @if ($r['canManage'])
-                            <button class="btn btn-sm btn-outline-secondary btn-signatories" data-region="{{ $region->value }}"><i class="fas fa-signature me-1"></i> Signatories</button>
+                            {{-- Set on the Signatories & BAC page (HOPE, BAC Chair, Secretariat head) --}}
+                            <a href="{{ route('procurement.officials.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-signature me-1"></i> Signatories</a>
                         @endif
                     </div>
 
@@ -82,38 +83,6 @@
             </div>
         </div>
 
-        {{-- Signatories for this region --}}
-        @if ($r['canManage'])
-            <div class="modal fade" id="signatories-{{ $region->value }}" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-dialog-centered">
-                    <form class="modal-content border-0 shadow form-signatories">
-                        <input type="hidden" name="region" value="{{ $region->value }}">
-                        <div class="modal-header bg-light py-3">
-                            <h5 class="modal-title fw-bold"><i class="fas fa-signature me-2"></i>{{ $region->label() }} APP Signatories</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body p-4 small">
-                            @foreach ($roles as $role => $label)
-                                <div class="mb-3">
-                                    <label class="form-label fw-semibold text-muted mb-1">{{ $label }}</label>
-                                    <select name="{{ $role }}" class="form-select form-select-sm">
-                                        <option value="">— Not set —</option>
-                                        @foreach ($users as $u)
-                                            <option value="{{ $u->id }}" @selected($r['signatories'][$role]?->id === $u->id)>{{ $u->fullname }}{{ $u->designation ? ' — ' . $u->designation : '' }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            @endforeach
-                            <div class="form-text">The BAC Chairperson recommends and the HOPE approves in the system; all three print on the APP.</div>
-                        </div>
-                        <div class="modal-footer bg-light py-2">
-                            <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-sm btn-primary px-3"><i class="fas fa-save me-1"></i> Save</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        @endif
     @endforeach
 </div>
 @endsection
@@ -134,16 +103,6 @@ document.addEventListener('DOMContentLoaded', function () {
             .fail(fail);
     });
 
-    $(document).on('click', '.btn-signatories', function () {
-        new bootstrap.Modal(document.getElementById('signatories-' + $(this).data('region'))).show();
-    });
-
-    $(document).on('submit', '.form-signatories', function (e) {
-        e.preventDefault();
-        $.post('{{ route("procurement.app.signatories") }}', $(this).serialize() + '&_token=' + csrf)
-            .done(function (res) { toastr.success(res.message, 'Saved'); setTimeout(() => window.location.reload(), 600); })
-            .fail(fail);
-    });
 });
 </script>
 @endpush

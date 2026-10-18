@@ -38,6 +38,7 @@ class ActionPermissionSeeder extends Seeder
             'manage items'    => 'Standard Items',
             'manage requests' => 'Purchase Requests',
             'manage rfq'      => 'Requests for Quotation',
+            'manage officials' => 'Signatories & BAC',
         ];
 
         foreach ($links as $permissionName => $menuName) {

@@ -100,6 +100,11 @@ class MenuSeeder extends Seeder
             ['nav_name' => 'RFQ', 'icon' => 'fas fa-file-signature', 'route' => 'procurement.rfqs.index', 'order' => 6]
         );
 
+        Menu::updateOrCreate(
+            ['name' => 'Signatories & BAC', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-user-tie', 'route' => 'procurement.officials.index', 'order' => 7]
+        );
+
         // Hidden gate: the BAC Secretariat prepares the APP of its own region (menu.app-manage)
         Menu::firstOrCreate(
             ['name' => 'APP Manage', 'parent_id' => $app->id],

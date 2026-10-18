@@ -35,6 +35,8 @@ class RfqService
     public function create(User $user, Region $region, array $data): Rfq
     {
         $last = Rfq::where('region', $region)->latest('id')->first();
+        // Signed by: the region's RFQ signatory (Signatories & BAC page), else as on its last RFQ
+        $signer = app(OfficialsService::class)->user($region, 'rfq_signatory');
 
         return Rfq::create(array_intersect_key($data, array_flip(self::HEADER_FIELDS)) + [
             'region'                => $region,
@@ -42,8 +44,8 @@ class RfqService
             // Delivery and price validity days, signatory and canvasser as on the region's last RFQ
             'delivery_period'       => $last?->delivery_period,
             'price_validity'        => $last?->price_validity,
-            'signatory_name'        => $last?->signatory_name,
-            'signatory_designation' => $last?->signatory_designation,
+            'signatory_name'        => $signer?->fullname ?? $last?->signatory_name,
+            'signatory_designation' => $signer ? $signer->designation : $last?->signatory_designation,
             'canvassed_by_name'     => $last?->canvassed_by_name,
             'created_by'            => $user->id,
             'updated_by'            => $user->id,
