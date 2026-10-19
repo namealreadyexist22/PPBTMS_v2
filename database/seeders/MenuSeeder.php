@@ -101,8 +101,13 @@ class MenuSeeder extends Seeder
         );
 
         Menu::updateOrCreate(
+            ['name' => 'Abstract of Quotations', 'parent_id' => $procurement->id],
+            ['nav_name' => 'AOQ', 'icon' => 'fas fa-balance-scale', 'route' => 'procurement.aoqs.index', 'order' => 7]
+        );
+
+        Menu::updateOrCreate(
             ['name' => 'Signatories & BAC', 'parent_id' => $procurement->id],
-            ['icon' => 'fas fa-user-tie', 'route' => 'procurement.officials.index', 'order' => 7]
+            ['icon' => 'fas fa-user-tie', 'route' => 'procurement.officials.index', 'order' => 8]
         );
 
         // Hidden gate: the BAC Secretariat prepares the APP of its own region (menu.app-manage)

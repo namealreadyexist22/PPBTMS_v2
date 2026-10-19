@@ -209,6 +209,12 @@ class RfqService
                 throw new ProcurementException("Only an issued RFQ can be cancelled. {$rfq->title()} is {$rfq->status->label()}.");
             }
 
+            if ($aoq = $rfq->aoq()->first()) {
+                throw new ProcurementException($aoq->isEditable()
+                    ? "{$rfq->title()} has an abstract of quotations; delete it first."
+                    : "{$rfq->title()} is awarded ({$aoq->title()}); reopen and delete the abstract first.");
+            }
+
             $rfq->update(['status' => RfqStatus::Cancelled, 'cancelled_at' => now(), 'cancel_reason' => $reason, 'updated_by' => $user->id]);
 
             return $rfq;

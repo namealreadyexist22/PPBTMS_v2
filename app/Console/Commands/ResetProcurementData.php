@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Development only: empties the procurement records (PPMPs, Division PPMPs, APPs, budgets, PR / JRs,
- * RFQs, their attachments, notifications and the activity log) and keeps everything needed to log in
+ * RFQs, AOQs, their attachments, notifications and the activity log) and keeps everything needed to log in
  * and start again: users, roles and permissions, User Access overrides, offices, menus, settings
  * (Signatories & BAC included) and the lookups (modes, units, fund sources, item categories).
  */
@@ -24,6 +24,7 @@ class ResetProcurementData extends Command
 
     /** Children first. */
     protected const TABLES = [
+        'aoq_quotes', 'aoq_suppliers', 'aoqs',
         'rfq_items', 'rfqs',
         'purchase_request_items', 'purchase_requests',
         'app_item_ppmp_item', 'app_items', 'annual_procurement_plans',

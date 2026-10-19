@@ -50,7 +50,16 @@
                     <button class="btn btn-sm btn-outline-danger" id="btn_delete"><i class="fas fa-trash-alt me-1"></i> Delete Draft</button>
                     <button class="btn btn-sm btn-primary" id="btn_issue" @disabled($rfq->items->isEmpty())><i class="fas fa-paper-plane me-1"></i> Issue</button>
                 @elseif ($issued)
-                    <button class="btn btn-sm btn-outline-danger" id="btn_cancel"><i class="fas fa-ban me-1"></i> Cancel RFQ</button>
+                    @unless ($rfq->aoq)
+                        <button class="btn btn-sm btn-outline-danger" id="btn_cancel"><i class="fas fa-ban me-1"></i> Cancel RFQ</button>
+                    @endunless
+                    @if (auth()->user()->canAccessPermission(\App\Models\Procurement\Aoq::MANAGE_PERMISSION))
+                        @if ($rfq->aoq)
+                            <a href="{{ route('procurement.aoqs.show', $rfq->aoq) }}" class="btn btn-sm btn-success"><i class="fas fa-balance-scale me-1"></i> Abstract of Quotations ({{ $rfq->aoq->status->label() }})</a>
+                        @else
+                            <button class="btn btn-sm btn-success" id="btn_start_aoq"><i class="fas fa-balance-scale me-1"></i> Abstract of Quotations</button>
+                        @endif
+                    @endif
                 @endif
             </div>
         </div>
@@ -343,6 +352,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 .done((res) => { toastr.success(res.message, 'Success'); setTimeout(() => window.location.reload(), 600); })
                 .fail((xhr) => toastr.error(errorText(xhr), 'Error'));
         });
+    });
+
+    $(document).on('click', '#btn_start_aoq', function () {
+        const btn = $(this).prop('disabled', true);
+        post('{{ route("procurement.aoqs.start", $rfq) }}', {})
+            .done((res) => { toastr.success(res.message, 'Success'); window.location.href = res.url; })
+            .fail((xhr) => { btn.prop('disabled', false); toastr.error(errorText(xhr), 'Error'); });
     });
 
     $(document).on('click', '#btn_cancel', function () {

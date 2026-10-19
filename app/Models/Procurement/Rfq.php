@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -92,6 +93,11 @@ class Rfq extends Model
     public function items(): HasMany
     {
         return $this->hasMany(RfqItem::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    public function aoq(): HasOne
+    {
+        return $this->hasOne(Aoq::class);
     }
 
     public function procurementMode(): BelongsTo

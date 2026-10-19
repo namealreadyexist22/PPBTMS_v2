@@ -12,6 +12,7 @@ use App\Core\Http\Controllers\UserAccessController;
 use App\Core\Http\Controllers\UserController;
 use App\Http\Controllers\BackEnd\LoginController;
 use App\Http\Controllers\BackEnd\MainController;
+use App\Http\Controllers\Procurement\AoqController;
 use App\Http\Controllers\Procurement\AppController;
 use App\Http\Controllers\Procurement\BudgetAllocationController;
 use App\Http\Controllers\Procurement\StandardItemController;
@@ -214,6 +215,21 @@ use Illuminate\Support\Facades\Route;
             Route::post('rfqs/{rfq}/issue', [RfqController::class, 'issue'])->name('rfqs.issue');
             Route::post('rfqs/{rfq}/cancel', [RfqController::class, 'cancel'])->name('rfqs.cancel');
             Route::delete('rfqs/{rfq}', [RfqController::class, 'destroy'])->name('rfqs.destroy');
+        });
+
+        // Abstract of Quotations of an issued RFQ; {aoq} is the uuid
+        Route::middleware('perm:manage aoq')->group(function () {
+            Route::get('aoqs', [AoqController::class, 'index'])->name('aoqs.index');
+            Route::post('rfqs/{rfq}/aoq', [AoqController::class, 'start'])->name('aoqs.start');
+            Route::get('aoqs/{aoq}', [AoqController::class, 'show'])->name('aoqs.show');
+            Route::get('aoqs/{aoq}/print', [AoqController::class, 'print'])->name('aoqs.print');
+            Route::post('aoqs/{aoq}/header', [AoqController::class, 'header'])->name('aoqs.header');
+            Route::get('aoqs/{aoq}/supplier', [AoqController::class, 'supplierEntry'])->name('aoqs.suppliers.entry');
+            Route::post('aoqs/{aoq}/suppliers', [AoqController::class, 'supplierStore'])->name('aoqs.suppliers.store');
+            Route::delete('aoqs/{aoq}/suppliers', [AoqController::class, 'supplierDestroy'])->name('aoqs.suppliers.destroy');
+            Route::post('aoqs/{aoq}/award', [AoqController::class, 'award'])->name('aoqs.award');
+            Route::post('aoqs/{aoq}/reopen', [AoqController::class, 'reopen'])->name('aoqs.reopen');
+            Route::delete('aoqs/{aoq}', [AoqController::class, 'destroy'])->name('aoqs.destroy');
         });
 
         Route::middleware('perm:manage ppmp')->group(function () {
