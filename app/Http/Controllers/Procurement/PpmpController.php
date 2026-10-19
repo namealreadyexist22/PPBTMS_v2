@@ -346,11 +346,18 @@ class PpmpController extends Controller
     {
         $signatories = $ppmp->load('office')->printSignatories();
 
+        // End-user as the office writes it: department-unit, e.g. "PPSPD-MIS" (just the acronym for a department)
+        $office = $ppmp->office;
+        $department = $office->department;
+        $endUser = collect([$department?->acronym, $department?->id !== $office->id ? $office->acronym : null])->filter()->implode('-')
+            ?: $office->name;
+
         return view('procurement.ppmp.market_scoping_print', [
             'ppmp'     => $ppmp,
             'items'    => $items,
             'prepared' => $signatories['prepared'],
             'head'     => $signatories['submitted'],
+            'endUser'  => $endUser,
         ]);
     }
 

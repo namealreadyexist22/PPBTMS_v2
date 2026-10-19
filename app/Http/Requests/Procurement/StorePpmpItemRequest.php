@@ -97,9 +97,13 @@ class StorePpmpItemRequest extends FormRequest
             'market_scoping.activities'                   => ['nullable', 'array'],
             'market_scoping.activities.*'                 => [Rule::in(array_keys(config('market_scoping.activities')))],
             'market_scoping.activity_other'               => ['nullable', 'string', 'max:500'],
+            // What was gathered for each activity, printed in the Documentation column (e.g. "Price quotations, Screen Shot")
+            'market_scoping.documentation'                => ['nullable', 'array'],
+            'market_scoping.documentation.*'              => ['nullable', 'string', 'max:500'],
+            'market_scoping.signed_on'                    => ['nullable', 'date'],
             'market_scoping.parameters'                   => ['nullable', 'array'],
             'market_scoping.parameters.*.answer'          => ['nullable', Rule::in(array_keys(config('market_scoping.answers')))],
-            'market_scoping.parameters.*.recommendation'  => ['nullable', 'string', 'max:1000'],
+            'market_scoping.parameters.*.recommendation'  => ['nullable', 'string', 'max:3000'],
         ];
     }
 

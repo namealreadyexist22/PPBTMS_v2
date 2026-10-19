@@ -4,7 +4,7 @@
     $msDone = $item->marketScopingComplete();
 @endphp
 <div class="modal fade" id="MARKET_SCOPING_MODAL" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
         <form class="modal-content border-0 shadow" id="form_market_scoping" autocomplete="off" novalidate>
             <div class="modal-header bg-light py-3">
                 <div>
@@ -29,19 +29,39 @@
                             <input type="month" name="market_scoping[period_to]" class="form-control form-control-sm" value="{{ $ms['period_to'] ?? '' }}">
                             <div class="invalid-feedback"></div>
                         </div>
-                        <div class="col-md-4 text-muted d-flex align-items-end">Agency, end-user, project name, budget and delivery are taken from the project.</div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold text-muted mb-1">Date signed <span class="fw-normal">(printed under both names)</span></label>
+                            <input type="date" name="market_scoping[signed_on]" class="form-control form-control-sm" value="{{ $ms['signed_on'] ?? '' }}">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-12 text-muted mt-1">Agency, end-user, representative, project name, budget and delivery are taken from the PPMP and the project.</div>
                     </div>
 
                     <div class="fw-semibold text-muted mb-1">Market scoping activity/ies conducted <span class="fw-normal">(check all that apply)</span></div>
+                    {{-- Each checked activity: what was gathered (printed in the Documentation column; unchecked ones print N/A) --}}
                     @foreach (config('market_scoping.activities') as $key => [$label, $docs])
-                        <div class="form-check mb-1">
-                            <input class="form-check-input" type="checkbox" name="market_scoping[activities][]" value="{{ $key }}" id="ms_act_{{ $key }}" @checked(in_array($key, $ms['activities'] ?? []))>
-                            <label class="form-check-label" for="ms_act_{{ $key }}">{{ $label }}
-                                <span class="d-block text-muted" style="font-size: .72rem;">Documentation: {{ $docs }}</span>
-                            </label>
+                        @php $on = in_array($key, $ms['activities'] ?? []); @endphp
+                        <div class="row g-2 align-items-start mb-2 ms-activity">
+                            <div class="col-md-7">
+                                <div class="form-check mb-0">
+                                    <input class="form-check-input js-ms-act" type="checkbox" name="market_scoping[activities][]" value="{{ $key }}" id="ms_act_{{ $key }}" @checked($on)>
+                                    <label class="form-check-label" for="ms_act_{{ $key }}">{{ $label }}</label>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" name="market_scoping[documentation][{{ $key }}]" class="form-control form-control-sm js-ms-doc" value="{{ $ms['documentation'][$key] ?? '' }}" maxlength="500"
+                                       placeholder="Documentation, e.g. Price quotations, Screen Shot" title="May be: {{ $docs }}" @disabled(! $on)>
+                            </div>
                         </div>
                     @endforeach
-                    <input type="text" name="market_scoping[activity_other]" class="form-control form-control-sm mt-1 mb-3" value="{{ $ms['activity_other'] ?? '' }}" placeholder="Other analogous market scoping activity/ies undertaken (specify)">
+                    <div class="row g-2 align-items-start mb-3">
+                        <div class="col-md-7">
+                            <input type="text" name="market_scoping[activity_other]" class="form-control form-control-sm js-ms-other" value="{{ $ms['activity_other'] ?? '' }}" maxlength="500" placeholder="Other analogous market scoping activity/ies undertaken (specify)">
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" name="market_scoping[documentation][other]" class="form-control form-control-sm js-ms-other-doc" value="{{ $ms['documentation']['other'] ?? '' }}" maxlength="500" placeholder="Documentation" @disabled(empty($ms['activity_other']))>
+                        </div>
+                    </div>
 
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
@@ -58,7 +78,8 @@
                                                 @endforeach
                                             </select>
                                         </td>
-                                        <td><input type="text" name="market_scoping[parameters][{{ $key }}][recommendation]" class="form-control form-control-sm" value="{{ $ms['parameters'][$key]['recommendation'] ?? '' }}"></td>
+                                        {{-- Several lines allowed (e.g. one requirement per line); printed as typed --}}
+                                        <td><textarea name="market_scoping[parameters][{{ $key }}][recommendation]" class="form-control form-control-sm" rows="2" maxlength="3000">{{ $ms['parameters'][$key]['recommendation'] ?? '' }}</textarea></td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -67,6 +88,14 @@
                     <div class="text-muted mt-2"><i class="fas fa-paperclip me-1"></i>Attach the market survey, quotations or canvass sheets to the project (Edit project → Attached Supporting Documents).</div>
                 </fieldset>
             </div>
+            <script>
+                // Documentation is filled in for the activities checked
+                $('#form_market_scoping').on('change', '.js-ms-act', function () {
+                    $(this).closest('.ms-activity').find('.js-ms-doc').prop('disabled', !this.checked).trigger(this.checked ? 'focus' : 'blur');
+                }).on('input', '.js-ms-other', function () {
+                    $('#form_market_scoping .js-ms-other-doc').prop('disabled', !this.value.trim());
+                });
+            </script>
             <div class="modal-footer bg-light py-2">
                 <a href="{{ route('procurement.ppmp.items.market-scoping', [$ppmp, $item]) }}" target="_blank" class="btn btn-sm btn-outline-secondary me-auto"><i class="fas fa-print me-1"></i> Print</a>
                 <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">{{ $canEdit ? 'Cancel' : 'Close' }}</button>

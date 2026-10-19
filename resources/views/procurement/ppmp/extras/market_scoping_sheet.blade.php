@@ -1,95 +1,119 @@
-{{-- One Market Scoping Checklist sheet (NGPA form). Expects $ppmp, $item, $prepared, $head. --}}
+{{--
+    One Market Scoping Checklist sheet, as the SRA form (NGPA, RA 12009 Sec. 10): letterhead, agency
+    information, project overview, activities with their documentation, results, signatures, footer logos.
+    Expects $ppmp, $item, $prepared, $head, $endUser.
+--}}
 @php
     $ms = $item->market_scoping ?? [];
-    $month = fn ($ym) => $ym ? \Carbon\Carbon::createFromFormat('Y-m', $ym)->format('m/Y') : '__________';
-    $answers = config('market_scoping.answers');
+    $month = fn ($ym) => $ym ? \Carbon\Carbon::createFromFormat('Y-m', $ym)->format('m/Y') : '_______';
+    $answers = ['yes' => 'Yes', 'no' => 'No', 'na' => 'Not Applicable'];
+    $docs = $ms['documentation'] ?? [];
+    // Expected delivery as mm/yyyy: the project's delivery period when it reads as a date ("June 2027"), else the end of procurement
+    $delivery = rescue(fn () => $item->delivery_period ? \Carbon\Carbon::parse('1 ' . $item->delivery_period)->format('m/Y') : null, null, false)
+        ?? $item->proc_end?->format('m/Y') ?? $item->delivery_period;
+    $signedOn = ! empty($ms['signed_on']) ? \Carbon\Carbon::parse($ms['signed_on'])->format('F d, Y') : null;
+    $checked = fn ($on) => $on ? '🗹' : '☐';
 @endphp
 <div class="sheet">
-    <div class="head">
-        <div class="agency">{{ setting('agency_name', 'Sugar Regulatory Administration') }}</div>
-        <div>{{ setting('agency_address', 'Sugar Center Building, North Avenue, Diliman, Quezon City') }}</div>
-        <div class="title">MARKET SCOPING CHECKLIST</div>
+    <div class="letterhead">
+        <img src="{{ asset('assets/img/sra-da.png') }}" alt="">
+        <div class="lh-text">
+            <div>Republic of the Philippines</div>
+            <div>Department of Agriculture</div>
+            <div class="lh-agency">SUGAR REGULATORY ADMINISTRATION</div>
+            <div>Sugar Center Bldg., North Avenue, Diliman, Quezon City, Philippines 1101</div>
+            <div>TIN 000-784-336</div>
+            <div>Website: http://www.sra.gov.ph</div>
+            <div>Email Address: srahead@sra.gov.ph</div>
+            <div>Tel No. (632) 8929-3633, (632) 3455-2135, (632) 3455-3376</div>
+        </div>
     </div>
 
-    <h3>1. Agency Information</h3>
+    <div class="title">MARKET SCOPING CHECKLIST</div>
+
+    <h3>AGENCY INFORMATION</h3>
     <table>
-        <tr><td class="label">Name of Procuring Entity</td><td>{{ setting('agency_name', 'Sugar Regulatory Administration') }}</td></tr>
-        <tr><td class="label">End-User / Implementing Unit</td><td>{{ $ppmp->office->name }}</td></tr>
-        <tr><td class="label">Name &amp; Designation of Representative</td><td>{{ $prepared['name'] }}{{ $prepared['position'] ? ', ' . $prepared['position'] : '' }}</td></tr>
+        <tr><td class="label">Name of Procuring Entity</td><td>Sugar Regulatory Administration</td></tr>
+        <tr><td class="label">End-User/Implementing Unit</td><td>{{ $endUser }}</td></tr>
+        <tr><td class="label">Name &amp; Designation of Representative</td><td>{{ $prepared['name'] }}{{ $prepared['position'] ? ' / ' . $prepared['position'] : '' }}</td></tr>
     </table>
 
-    <h3>2. Project Overview</h3>
+    <h3>PROJECT OVERVIEW</h3>
     <table>
         <tr><td class="label">Project Name</td><td>{{ $item->description }}</td></tr>
-        <tr><td class="label">Estimated Budget</td><td>₱{{ number_format((float) $item->estimated_budget, 2) }}</td></tr>
-        <tr><td class="label">Period of Market Scoping<br><span style="font-weight: normal; font-size: 8.5pt;">[From (mm/yyyy) To (mm/yyyy)]</span></td><td>From {{ $month($ms['period_from'] ?? null) }} To {{ $month($ms['period_to'] ?? null) }}</td></tr>
-        <tr><td class="label">Expected Date of Delivery (mm/yyyy)</td><td>{{ $item->delivery_period ?: $item->proc_end?->format('m/Y') }}</td></tr>
+        <tr><td class="label">Estimated Budget</td><td>{{ number_format((float) $item->estimated_budget, 2) }} Pesos</td></tr>
+        <tr><td class="label">Period of Market Scoping<br><span class="sub">[From (mm/yyyy) To (mm/yyyy)]</span></td><td>{{ $month($ms['period_from'] ?? null) }} to {{ $month($ms['period_to'] ?? null) }}</td></tr>
+        <tr><td class="label">Expected Date of Delivery (mm/yyyy)</td><td>{{ $delivery }}</td></tr>
     </table>
 
-    <h3>3. Market Scoping Activity/ies Conducted <span style="text-transform: none; font-weight: normal;">(Check all that apply)</span></h3>
-    <div class="note">This confirms that market scoping activities were conducted in accordance with Section 10 of Republic Act No. 12009 and its Implementing Rules and Regulations (IRR), and considered in the Project Procurement Management Plan, consistent with the Principle of Proportionality.</div>
+    <h3>MARKET SCOPING ACTIVITY/IES CONDUCTED <span class="normal">(Check all that apply)</span></h3>
+    <p class="note">This confirms that market scoping activities were conducted in accordance with Section 10 of Republic Act No. 12009 and its Implementing Rules and Regulations (IRR), and considered in the Project Procurement Management Plan, consistent with the Principle of Proportionality.</p>
     <table>
-        <thead><tr><th style="width: 9%;">Check (✓)</th><th style="width: 45%;">Activity/ies Conducted</th><th>Documentation (as may be applicable)</th></tr></thead>
+        <thead><tr><th style="width: 12%;">Check (✓)</th><th>Activity/ies Conducted</th><th style="width: 30%;">Documentation<br><span class="normal">(as may be applicable)</span></th></tr></thead>
         <tbody>
-            @foreach (config('market_scoping.activities') as $key => [$label, $docs])
+            @foreach (config('market_scoping.activities') as $key => [$label])
+                @php $on = in_array($key, $ms['activities'] ?? []); @endphp
                 <tr>
-                    <td class="center"><span class="box" style="margin: 0;">{{ in_array($key, $ms['activities'] ?? []) ? '✓' : '' }}</span></td>
+                    <td class="center check">{{ $checked($on) }}</td>
                     <td>{{ $label }}</td>
-                    <td style="font-size: 8.5pt;">{{ $docs }}</td>
+                    <td class="center">{{ $on ? ($docs[$key] ?? '') : 'N/A' }}</td>
                 </tr>
             @endforeach
+            @php $other = trim((string) ($ms['activity_other'] ?? '')); @endphp
             <tr>
-                <td class="center"><span class="box" style="margin: 0;">{{ ! empty($ms['activity_other']) ? '✓' : '' }}</span></td>
-                <td colspan="2">Other analogous market scoping activity/ies undertaken: <u>{{ $ms['activity_other'] ?? '' }}</u></td>
+                <td class="center check">{{ $checked($other !== '') }}</td>
+                <td>Other analogous market scoping activity/ies undertaken:<br>{!! $other !== '' ? '<u>' . e($other) . '</u>' : '_________________________' !!}</td>
+                <td class="center">{{ $other !== '' ? ($docs['other'] ?? '') : 'N/A' }}</td>
             </tr>
         </tbody>
     </table>
-    <div class="note" style="margin-top: 6px;">
-        Notes: i. The market scoping activities shall be identified and undertaken at the option of the End-User or Implementing Unit based on its needs and objectives.
-        ii. The list of supporting documents in the Documentation column is not exclusive and may include other documents that may be gathered by the End-User or Implementing Unit pertinent to the activity/ies conducted.
+    <div class="note">
+        <div>Notes:</div>
+        <ul>
+            <li>The market scoping activities shall be identified and undertaken at the option of the End-User or Implementing Unit based on its needs and objectives.</li>
+            <li>The list of supporting documents in the Documentation column is not exclusive and may include other documents that may be gathered by the End-User or Implementing Unit pertinent to the activity/ies conducted.</li>
+        </ul>
     </div>
 
-    <h3>4. Market Scoping Results</h3>
-    <div class="note">Indicate recommendations in the column provided based on the results of the market scoping activities undertaken. These recommendations shall be considered in the development of a comprehensive and realistic PPMP, taking into account the parameters outlined under Section 10.4 of the IRR of RA 12009, as may be applicable.</div>
+    <h3>MARKET SCOPING RESULTS</h3>
+    <p class="note">Indicate recommendations in the column provided based on the results of the market scoping activities undertaken. These recommendations shall be considered in the development of a comprehensive and realistic PPMP, taking into account the parameters outlined under Section 10.4 of the IRR of RA 12009, as may be applicable.</p>
     <table>
-        <thead><tr><th style="width: 40%;">Parameters</th><th style="width: 15%;">Considered?<br><span style="font-weight: normal;">(Yes/No/Not Applicable)</span></th><th>Recommendations based on the Market Scoping<br><span style="font-weight: normal;">(Attach additional documents if necessary)</span></th></tr></thead>
+        <thead><tr><th style="width: 36%;">Parameters</th><th style="width: 16%;">Considered?<br><span class="normal">(Yes/No/ Not Applicable)</span></th><th>Recommendations<br><span class="normal">based on the Market Scoping<br>(Attach additional documents if necessary)</span></th></tr></thead>
         <tbody>
-            @foreach (array_values(array_keys(config('market_scoping.parameters'))) as $i => $key)
-                @php [$label, $question] = config("market_scoping.parameters.$key"); @endphp
+            @foreach (config('market_scoping.parameters') as $key => [$label, $question])
                 <tr>
-                    <td><b>{{ chr(97 + $i) }}. {{ $label }}</b><br><span style="font-size: 8.5pt;">[{{ $question }}]</span></td>
+                    <td><b>{{ $label }}</b><br><span class="sub">[{{ $question }}]</span></td>
                     <td class="center">{{ $answers[$ms['parameters'][$key]['answer'] ?? ''] ?? '' }}</td>
-                    <td>{{ $ms['parameters'][$key]['recommendation'] ?? '' }}</td>
+                    <td class="rec">{{ $ms['parameters'][$key]['recommendation'] ?? '' }}</td>
                 </tr>
             @endforeach
         </tbody>
     </table>
 
-    @if ($item->attachments->isNotEmpty())
-        <h3>Attached Documents</h3>
-        <table>
-            @foreach ($item->attachments as $attachment)
-                <tr><td style="width: 40%;">{{ $attachment->kindLabel() }}</td><td>{{ $attachment->original_name }}</td></tr>
-            @endforeach
-        </table>
-    @endif
+    <table class="sigs">
+        <tr>
+            <td>
+                <div>Prepared by:</div>
+                <div class="role">Personnel-in-Charge, End-User or Implementing Unit</div>
+                <div class="sign-line"></div>
+                <div class="name">{{ $prepared['name'] }}</div>
+                <div>{{ $prepared['position'] }}</div>
+                <div>{{ $signedOn ?? 'Date: ______________' }}</div>
+            </td>
+            <td>
+                <div>Approved by:</div>
+                <div class="role">Head, End-User or Implementing Unit</div>
+                <div class="sign-line"></div>
+                <div class="name">{{ $head['name'] }}</div>
+                <div>{{ $head['position'] }}</div>
+                <div>{{ $signedOn ?? 'Date: ______________' }}</div>
+            </td>
+        </tr>
+    </table>
 
-    <div class="sigs">
-        <div class="sig">
-            <div>Prepared by:</div>
-            <div class="role" style="text-align: left;">Personnel-in-Charge, End-User or Implementing Unit</div>
-            <div class="name">{{ $prepared['name'] }}</div>
-            <div class="pos">[Signature over Printed Name]</div>
-            <div class="pos">{{ $prepared['position'] ?: '[Position/Designation]' }}</div>
-            <div class="pos">Date: ______________</div>
-        </div>
-        <div class="sig">
-            <div>Approved by:</div>
-            <div class="role" style="text-align: left;">Head, End-User or Implementing Unit</div>
-            <div class="name">{{ $head['name'] }}</div>
-            <div class="pos">[Signature over Printed Name]</div>
-            <div class="pos">{{ $head['position'] ?: '[Position/Designation]' }}</div>
-            <div class="pos">Date: ______________</div>
-        </div>
+    <div class="footer">
+        <img src="{{ asset('assets/img/bagong-pilipinas.jpg') }}" alt="Bagong Pilipinas" class="bp">
+        <span class="ft">Market Scoping Checklist</span>
+        <img src="{{ asset('assets/img/tuv-iso-9001.jpg') }}" alt="ISO 9001:2015 certified" class="iso">
     </div>
 </div>

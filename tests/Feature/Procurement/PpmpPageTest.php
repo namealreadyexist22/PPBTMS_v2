@@ -235,7 +235,8 @@ class PpmpPageTest extends TestCase
 
         // Project with the checklist and a market survey PDF, sent as multipart form data
         $this->post(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, [
-            'market_scoping' => ['period_from' => '2026-08', 'period_to' => '2026-09', 'activities' => ['consultations', 'price_sourcing', 'philgeps'], 'parameters' => $parameters],
+            'market_scoping' => ['period_from' => '2026-08', 'period_to' => '2026-09', 'activities' => ['consultations', 'price_sourcing', 'philgeps'], 'parameters' => $parameters,
+                'documentation' => ['consultations' => 'Price quotations, Screen Shot'], 'signed_on' => '2027-01-15'],
             'attachments' => [\Illuminate\Http\UploadedFile::fake()->create('canvass.pdf', 120, 'application/pdf')],
             'attachment_kinds' => ['market_survey'],
         ]), ['Accept' => 'application/json'])->assertOk();
@@ -250,8 +251,10 @@ class PpmpPageTest extends TestCase
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Market Scoping Checklist: complete')->assertSee('canvass.pdf');
         $this->get(route('procurement.ppmp.attachments.show', [$ppmp, $attachment]))->assertOk();
         $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertOk()
-            ->assertSee('MARKET SCOPING CHECKLIST')->assertSee('From 08/2026 To 09/2026')->assertSee('ok cost')->assertSee('canvass.pdf')
-            ->assertSee('Use of data from PhilGEPS or agency websites')->assertSee('f. Identified Risk/s')->assertSee('Approved by:');
+            ->assertSee('MARKET SCOPING CHECKLIST')->assertSee('SUGAR REGULATORY ADMINISTRATION')->assertSee('08/2026 to 09/2026')->assertSee('ok cost')
+            ->assertSee('Use of data from PhilGEPS or agency websites')->assertSee('Identified Risk/s')->assertSee('Approved by:')
+            ->assertSee('Price quotations, Screen Shot')->assertSee('N/A')->assertSee('January 15, 2027')->assertSee('Pesos')
+            ->assertSee('bagong-pilipinas.jpg')->assertSee('Head, End-User or Implementing Unit');
         $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Market Scoping Checklist')->assertSee('Market survey / price quotations');
 
         // The checklist on its own, from the project's menu: open, change, save
@@ -263,13 +266,13 @@ class PpmpPageTest extends TestCase
         ]])->assertOk();
         $this->assertSame('2026-07', $item->fresh()->market_scoping['period_from']);
         $this->assertSame('canvass.pdf', $item->fresh()->attachments()->sole()->original_name);   // project untouched
-        $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertSee('From 07/2026 To 09/2026');
+        $this->get(route('procurement.ppmp.items.market-scoping', [$ppmp, $item]))->assertSee('07/2026 to 09/2026');
 
         // Print all: every project's checklist, one sheet each (second project has none filled yet)
         $service->addItem($ppmp, array_merge($this->project($pap->id), ['description' => 'Supply of UPS', 'proc_start' => '2027-02-01', 'proc_end' => '2027-04-01', 'estimated_budget' => '20000']));
         $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('Print Checklists');
         $all = $this->get(route('procurement.ppmp.market-scoping', $ppmp))->assertOk()
-            ->assertSee('Market Scoping Checklists (2 projects)')->assertSeeInOrder(['Supply and Delivery of Hard Drive', 'ok cost', 'Supply of UPS', 'From __________ To __________']);
+            ->assertSee('Market Scoping Checklists (2 projects)')->assertSeeInOrder(['Supply and Delivery of Hard Drive', 'ok cost', 'Supply of UPS', '_______ to _______']);
         $this->assertSame(2, substr_count($all->getContent(), 'class="sheet"'));
         $ppmp->items()->where('description', 'Supply of UPS')->delete();
 
