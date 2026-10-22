@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Str;
@@ -20,9 +21,15 @@ class Aoq extends Model
 {
     public const MANAGE_PERMISSION = 'manage aoq';
 
+    /** TWG members; the BAC assigns some of them to evaluate each AOQ. */
+    public const EVALUATE_PERMISSION = 'evaluate aoq';
+
     protected $fillable = [
-        'uuid', 'rfq_id', 'region', 'status', 'opened_at', 'remarks', 'bac_chair_name', 'bac_vice_chair_name',
-        'bac_members', 'hope_name', 'awarded_at', 'created_by', 'updated_by',
+        'uuid', 'rfq_id', 'region', 'status', 'opened_at', 'sent_to_twg_at', 'evaluated_at', 'evaluated_by', 'return_reason',
+        'remarks', 'technical_comment', 'prepared_by_name',
+        'prepared_by_designation', 'evaluated_by_name', 'evaluated_by_designation', 'certified_by_name',
+        'certified_by_designation', 'bac_chair_name', 'bac_vice_chair_name', 'bac_members', 'hope_name',
+        'awarded_at', 'created_by', 'updated_by',
     ];
 
     protected function casts(): array
@@ -30,9 +37,11 @@ class Aoq extends Model
         return [
             'region'      => Region::class,
             'status'      => AoqStatus::class,
-            'opened_at'   => 'datetime',
-            'bac_members' => 'array',
-            'awarded_at'  => 'datetime',
+            'opened_at'      => 'datetime',
+            'sent_to_twg_at' => 'datetime',
+            'evaluated_at'   => 'datetime',
+            'bac_members'    => 'array',
+            'awarded_at'     => 'datetime',
         ];
     }
 
@@ -76,6 +85,28 @@ class Aoq extends Model
     public function quotes(): HasManyThrough
     {
         return $this->hasManyThrough(AoqQuote::class, AoqSupplier::class);
+    }
+
+    /** The TWG members the BAC assigned to evaluate it. */
+    public function evaluators(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'aoq_evaluators')->withTimestamps();
+    }
+
+    public function isEvaluator(User $user): bool
+    {
+        return $this->evaluators()->whereKey($user->id)->exists();
+    }
+
+    /** An assigned evaluator (or Super Admin) while it is with the TWG. */
+    public function canBeEvaluatedBy(User $user): bool
+    {
+        return $this->status === AoqStatus::ForEvaluation && ($user->hasRole('Super Admin') || $this->isEvaluator($user));
+    }
+
+    public function evaluator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'evaluated_by');
     }
 
     public function creator(): BelongsTo

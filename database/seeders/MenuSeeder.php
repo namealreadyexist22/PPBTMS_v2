@@ -106,8 +106,18 @@ class MenuSeeder extends Seeder
         );
 
         Menu::updateOrCreate(
+            ['name' => 'TWG Evaluation', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-clipboard-check', 'route' => 'procurement.twg.index', 'order' => 8]
+        );
+
+        Menu::updateOrCreate(
+            ['name' => 'Suppliers', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-store', 'route' => 'procurement.suppliers.index', 'order' => 9]
+        );
+
+        Menu::updateOrCreate(
             ['name' => 'Signatories & BAC', 'parent_id' => $procurement->id],
-            ['icon' => 'fas fa-user-tie', 'route' => 'procurement.officials.index', 'order' => 8]
+            ['icon' => 'fas fa-user-tie', 'route' => 'procurement.officials.index', 'order' => 10]
         );
 
         // Hidden gate: the BAC Secretariat prepares the APP of its own region (menu.app-manage)

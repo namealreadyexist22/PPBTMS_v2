@@ -11,6 +11,7 @@ use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpPap;
 use App\Models\Procurement\PurchaseRequest;
+use App\Models\Procurement\PurchaseRequestEvent;
 use App\Models\User;
 use App\Services\Procurement\PurchaseRequestService;
 use Closure;
@@ -118,6 +119,52 @@ class PurchaseRequestController extends Controller
             // Being quoted: revise / cancel wait until its items are off the RFQ
             'rfq'          => $pr->status === RequestStatus::Submitted ? app(\App\Services\Procurement\RfqService::class)->openRfqFor($pr) : null,
         ]);
+    }
+
+    /** The PPMP the request is charged to, read-only in a modal. */
+    public function ppmpModal(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        $this->authorizeView($request, $purchaseRequest);
+        $ppmp = $purchaseRequest->ppmp->load(['office.parent.parent', 'paps.items.unit', 'paps.items.procurementMode', 'paps.items.fundSource']);
+
+        return view('procurement.requests.extras.ppmp_modal', [
+            'ppmp'    => $ppmp,
+            'pr'      => $purchaseRequest,
+            'canOpen' => $request->user()->canAccessPermission('manage ppmp'),
+        ]);
+    }
+
+    /** The open RFQ the request's items are on, read-only in a modal. */
+    public function rfqModal(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        $this->authorizeView($request, $purchaseRequest);
+        $rfq = app(\App\Services\Procurement\RfqService::class)->openRfqFor($purchaseRequest);
+        abort_unless($rfq, 404, 'The request is not on an RFQ.');
+
+        return view('procurement.rfqs.extras.details_modal', [
+            'rfq'     => $rfq->load(['procurementMode', 'items.line.request']),
+            'canOpen' => $request->user()->canAccessPermission(\App\Models\Procurement\Rfq::MANAGE_PERMISSION),
+        ]);
+    }
+
+    /** The status trail in a modal, from the list or the request's page. */
+    public function trailModal(Request $request, PurchaseRequest $purchaseRequest)
+    {
+        $this->authorizeView($request, $purchaseRequest);
+
+        return view('procurement.requests.extras.trail_modal', ['pr' => $purchaseRequest, 'events' => $this->trail($purchaseRequest)]);
+    }
+
+    /** The status trail of the request and the revisions before it. */
+    protected function trail(PurchaseRequest $pr): \Illuminate\Support\Collection
+    {
+        $ids = [$pr->id];
+        for ($at = $pr; $at->revised_from_id && count($ids) < 50; $at = $at->revisedFrom) {
+            $ids[] = $at->revised_from_id;
+        }
+
+        return PurchaseRequestEvent::with(['user', 'request'])->whereIn('purchase_request_id', $ids)
+            ->orderBy('created_at')->orderBy('id')->get();
     }
 
     public function header(Request $request, PurchaseRequest $purchaseRequest)

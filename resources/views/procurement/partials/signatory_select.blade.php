@@ -42,8 +42,9 @@
                     insertTag: function (data, tag) { data.push(tag); },
                     templateResult: function (data) {
                         if (data.newTag) return $('<span class="text-muted">').text('Use "' + data.text + '"');
+                        // Name, then the designation (the office still matches a search)
                         const el = data.element;
-                        const sub = el ? [el.dataset.designation, el.dataset.office].filter(Boolean).join(' · ') : '';
+                        const sub = el ? (el.dataset.designation || '') : '';
                         if (!sub) return data.text;
                         return $('<div>').append($('<div>').text(data.text), $('<div class="small text-muted">').text(sub));
                     },

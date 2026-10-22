@@ -137,13 +137,12 @@
         @auth
             @php $recentNotifications = auth()->user()->notifications()->latest()->take(8)->get(); @endphp
 
-            @if ($recentNotifications->isNotEmpty())
-                <div class="p-2 border-bottom d-flex justify-content-end">
-                    <button type="button" id="btn-mark-all-read" class="btn btn-sm btn-link text-decoration-none">
-                        Mark all as read
-                    </button>
-                </div>
-            @endif
+            {{-- Shown while something is unread (also when a notification arrives live) --}}
+            <div class="p-2 border-bottom d-flex justify-content-end {{ auth()->user()->unreadNotifications()->exists() ? '' : 'd-none' }}" id="mark-all-read-bar">
+                <button type="button" id="btn-mark-all-read" class="btn btn-sm btn-link text-decoration-none">
+                    Mark all as read
+                </button>
+            </div>
 
             <div class="list-group list-group-flush" id="notification-list">
                 @forelse ($recentNotifications as $notification)
@@ -175,38 +174,59 @@
 
 @push('script')
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.notification-item').forEach(function (item) {
-        item.addEventListener('click', function () {
-            const id = this.dataset.id;
-            const url = this.dataset.url;
+// Read state is updated in place (no reload): the item's highlight, the badge count, the "Mark all" bar
+window.notifRead = {
+    post(url) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json' },
+        }).then((res) => { if (!res.ok) throw new Error(res.status); return res; });
+    },
+    unread() {
+        return document.querySelectorAll('#notification-list .notification-item.bg-primary').length;
+    },
+    setBadge(count) {
+        const badge = document.getElementById('notif-badge');
+        if (badge) {
+            badge.textContent = count > 9 ? '9+' : count;
+            badge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+        document.getElementById('mark-all-read-bar')?.classList.toggle('d-none', count <= 0);
+    },
+    markItem(item) {
+        if (!item.classList.contains('bg-primary')) return;
+        item.classList.remove('bg-primary', 'bg-opacity-10');
+        const badge = document.getElementById('notif-badge');
+        const text = (badge?.textContent || '').trim();
+        const current = text === '9+' ? 10 : parseInt(text) || 0;
+        this.setBadge(Math.max(current - 1, this.unread()));
+    },
+};
 
-            fetch(`/core/notifications/${id}/read`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                },
-            }).finally(function () {
-                if (url) window.location.href = url;
-            });
-        });
+document.addEventListener('DOMContentLoaded', function () {
+    // One handler for every item, including those that arrive live
+    document.getElementById('notification-list')?.addEventListener('click', function (e) {
+        const item = e.target.closest('.notification-item');
+        if (!item) return;
+        const url = item.dataset.url;
+        notifRead.post(`/core/notifications/${item.dataset.id}/read`)
+            .then(() => notifRead.markItem(item))
+            .catch(() => {})
+            .finally(() => { if (url) window.location.href = url; });
     });
 
-    const markAllBtn = document.getElementById('btn-mark-all-read');
-    if (markAllBtn) {
-        markAllBtn.addEventListener('click', function () {
-            fetch('/core/notifications/read-all', {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                },
-            }).then(function () {
-                window.location.reload();
-            });
-        });
-    }
+    document.getElementById('btn-mark-all-read')?.addEventListener('click', function () {
+        const btn = this;
+        btn.disabled = true;
+        notifRead.post('/core/notifications/read-all')
+            .then(() => {
+                document.querySelectorAll('#notification-list .notification-item').forEach((item) => item.classList.remove('bg-primary', 'bg-opacity-10'));
+                notifRead.setBadge(0);
+                if (window.toastr) toastr.success('All notifications marked as read.');
+            })
+            .catch(() => { if (window.toastr) toastr.error('Could not mark the notifications as read.'); })
+            .finally(() => { btn.disabled = false; });
+    });
 });
 
 @auth
@@ -239,19 +259,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
 
-            item.addEventListener('click', function () {
-                fetch(`/core/notifications/${this.dataset.id}/read`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                        'Accept': 'application/json',
-                    },
-                }).finally(() => {
-                    if (this.dataset.url) window.location.href = this.dataset.url;
-                });
-            });
-
-            list.prepend(item);
+            list.prepend(item);   // clicks: the list's handler
+            document.getElementById('mark-all-read-bar')?.classList.remove('d-none');
 
             if (window.toastr) {
                 toastr.info(notification.message, notification.title);

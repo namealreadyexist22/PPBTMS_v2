@@ -39,6 +39,8 @@ class ActionPermissionSeeder extends Seeder
             'manage requests' => 'Purchase Requests',
             'manage rfq'      => 'Requests for Quotation',
             'manage aoq'      => 'Abstract of Quotations',
+            'evaluate aoq'    => 'TWG Evaluation',
+            'manage suppliers' => 'Suppliers',
             'manage officials' => 'Signatories & BAC',
         ];
 

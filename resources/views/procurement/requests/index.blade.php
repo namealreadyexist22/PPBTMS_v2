@@ -5,8 +5,6 @@
 
 <style>
     /* The row under the pointer stands out (the whole row opens the request) */
-    #requests_view .js-request-row:hover > td { background-color: var(--bs-primary-bg-subtle); box-shadow: none; }
-    #requests_view .js-request-row:hover > td:first-child { box-shadow: inset 3px 0 0 var(--bs-primary); }
 </style>
 
 <div class="row">
@@ -60,6 +58,7 @@
                                 <th>Items</th>
                                 <th class="text-end">{{ $kind === RequestKind::Jr ? 'ABC' : 'Total' }}</th>
                                 <th class="text-center">Status</th>
+                                <th class="text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -67,9 +66,12 @@
                                 @php
                                     $itemText = fn ($i) => e($i->description) . ' <span class="text-muted">× ' . e(rtrim(rtrim(number_format((float) $i->quantity, 2), '0'), '.') . ' ' . $i->unit) . '</span>';
                                 @endphp
-                                <tr role="button" class="js-request-row" onclick="window.location='{{ route('procurement.requests.show', $row) }}'">
+                                <tr>
                                     <td class="fw-semibold text-nowrap">
-                                        {{ $row->request_no ?? 'Draft' }}@if ($row->revision) <span class="badge bg-info text-dark">Rev. {{ $row->revision }}</span>@endif
+                                        <a href="{{ route('procurement.requests.show', $row) }}" class="text-decoration-none" title="Open {{ $row->title() }}">
+                                            <i class="fas fa-file-invoice me-1 small"></i>{{ $row->request_no ?? 'Draft' }}
+                                        </a>
+                                        @if ($row->revision) <span class="badge bg-info text-dark">Rev. {{ $row->revision }}</span>@endif
                                     </td>
                                     <td class="text-nowrap">{{ ($row->submitted_at ?? $row->created_at)->format('M d, Y') }}</td>
                                     <td class="text-nowrap">{{ $row->pap?->code }}</td>
@@ -93,9 +95,14 @@
                                     </td>
                                     <td class="text-end text-nowrap">{{ number_format((float) $row->total_amount, 2) }}</td>
                                     <td class="text-center"><span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span></td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 js-trail" data-url="{{ route('procurement.requests.trail', $row) }}" title="Status trail of {{ $row->title() }}">
+                                            <i class="fas fa-route me-1"></i>Status
+                                        </button>
+                                    </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="6" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
+                                <tr><td colspan="7" class="text-center text-muted py-4">{{ $search !== '' || $status ? 'No ' . strtolower($kind->label()) . 's match the search.' : 'No ' . strtolower($kind->label()) . 's yet.' }}</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -155,6 +162,18 @@ document.addEventListener('DOMContentLoaded', function () {
         $('#btn_add').data('kind', $(this).data('kind'));
         $('#btn_add_kind').text($(this).data('short'));
         applyFilter();
+    });
+
+    // Status trail in a modal
+    $(document).on('click', '.js-trail', function () {
+        if (isModalOpen) return;
+        isModalOpen = true;
+        $.get($(this).data('url'), function (html) {
+            $('#modal-body').html(html);
+            const el = document.getElementById('REQUEST_TRAIL_MODAL');
+            new bootstrap.Modal(el).show();
+            el.addEventListener('hidden.bs.modal', function () { isModalOpen = false; $('#modal-body').html(''); });
+        }).fail(function () { isModalOpen = false; toastr.error('Could not load the status trail.', 'Error'); });
     });
 
     $(document).on('click', '#requests_view .pagination a', function (e) {

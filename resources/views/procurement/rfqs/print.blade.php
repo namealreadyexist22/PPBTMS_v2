@@ -150,6 +150,7 @@
             <li>Warranty shall be for a period of six (6) months for supplies &amp; materials, one (1) year for equipment, <b>from date of acceptance by the procuring entity.</b></li>
             <li><b>PhilGEPS certificate of registration and membership shall be attached upon submission of the quotation.</b></li>
             <li>Other requirements such as the updated <b>Mayor's/Business Permit, Income/Business Tax Return, Professional License/Curriculum Vitae (Consulting Services), PCAB License (Infrastructure Projects) and Omnibus Sworn Statement (for Small Value Procurement with Approved Budget for the Contract of ₱ 50,000.00 and above)</b> shall be submitted <b>prior to the issuance of Notice of Award.</b></li>
+            @if ($rfq->isPerLot())<li><b>Quotations shall be evaluated and awarded per lot: quote all the items below; a quotation that leaves out an item shall not be considered.</b></li>@endif
             @if ($rfq->remarks)<li>{{ $rfq->remarks }}</li>@endif
         </ol>
     </div>

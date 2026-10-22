@@ -189,6 +189,7 @@ class RfqController extends Controller
     {
         return [
             'title'                 => ['nullable', 'string', 'max:500'],
+            'award_basis'           => ['nullable', \Illuminate\Validation\Rule::enum(\App\Enums\AwardBasis::class)],
             'delivery_place'        => ['nullable', 'string', 'max:500'],
             // Calendar days, printed in the RFQ notes (blank: filled in by hand)
             'delivery_period'       => ['nullable', 'integer', 'min:1', 'max:3650'],

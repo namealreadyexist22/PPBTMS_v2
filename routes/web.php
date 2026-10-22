@@ -20,6 +20,8 @@ use App\Http\Controllers\Procurement\DivisionPpmpController;
 use App\Http\Controllers\Procurement\PpmpController;
 use App\Http\Controllers\Procurement\PurchaseRequestController;
 use App\Http\Controllers\Procurement\RfqController;
+use App\Http\Controllers\Procurement\SupplierController;
+use App\Http\Controllers\Procurement\TwgController;
 use App\Http\Controllers\Procurement\OfficialsController;
 use Illuminate\Support\Facades\Route;
 
@@ -157,6 +159,14 @@ use Illuminate\Support\Facades\Route;
             Route::delete('items/destroy', [StandardItemController::class, 'destroy'])->name('items.destroy');
         });
 
+        // Supplier directory (picked on the AOQ)
+        Route::middleware('perm:manage suppliers')->group(function () {
+            Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
+            Route::get('suppliers/entry', [SupplierController::class, 'entry'])->name('suppliers.entry');
+            Route::post('suppliers/store', [SupplierController::class, 'store'])->name('suppliers.store');
+            Route::delete('suppliers/destroy', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
+        });
+
         // Annual Procurement Plan (per fiscal year and region)
         Route::middleware('perm:manage app')->group(function () {
             Route::get('app', [AppController::class, 'index'])->name('app.index');
@@ -184,6 +194,9 @@ use Illuminate\Support\Facades\Route;
             Route::post('requests/store', [PurchaseRequestController::class, 'store'])->name('requests.store');
             Route::get('requests/{purchaseRequest}', [PurchaseRequestController::class, 'show'])->name('requests.show');
             Route::get('requests/{purchaseRequest}/print', [PurchaseRequestController::class, 'print'])->name('requests.print');
+            Route::get('requests/{purchaseRequest}/trail', [PurchaseRequestController::class, 'trailModal'])->name('requests.trail');
+            Route::get('requests/{purchaseRequest}/ppmp', [PurchaseRequestController::class, 'ppmpModal'])->name('requests.ppmp');
+            Route::get('requests/{purchaseRequest}/rfq', [PurchaseRequestController::class, 'rfqModal'])->name('requests.rfq');
             Route::post('requests/{purchaseRequest}/header', [PurchaseRequestController::class, 'header'])->name('requests.header');
             Route::post('requests/{purchaseRequest}/signatories', [PurchaseRequestController::class, 'signatories'])->name('requests.signatories');
             Route::get('requests/{purchaseRequest}/lines/entry', [PurchaseRequestController::class, 'lineEntry'])->name('requests.lines.entry');
@@ -227,9 +240,26 @@ use Illuminate\Support\Facades\Route;
             Route::get('aoqs/{aoq}/supplier', [AoqController::class, 'supplierEntry'])->name('aoqs.suppliers.entry');
             Route::post('aoqs/{aoq}/suppliers', [AoqController::class, 'supplierStore'])->name('aoqs.suppliers.store');
             Route::delete('aoqs/{aoq}/suppliers', [AoqController::class, 'supplierDestroy'])->name('aoqs.suppliers.destroy');
+            Route::post('aoqs/{aoq}/twg', [AoqController::class, 'sendToTwg'])->name('aoqs.twg');
             Route::post('aoqs/{aoq}/award', [AoqController::class, 'award'])->name('aoqs.award');
             Route::post('aoqs/{aoq}/reopen', [AoqController::class, 'reopen'])->name('aoqs.reopen');
             Route::delete('aoqs/{aoq}', [AoqController::class, 'destroy'])->name('aoqs.destroy');
+        });
+
+        // The suppliers' PDFs and the RFQ's details: the BAC and the TWG member assigned to the AOQ
+        Route::middleware('perm:manage aoq|evaluate aoq')->group(function () {
+            Route::get('aoqs/{aoq}/rfq', [AoqController::class, 'rfq'])->name('aoqs.rfq');
+            Route::get('aoqs/{aoq}/attachments/{type}/{id}', [AoqController::class, 'attachment'])
+                ->whereIn('type', ['supplier', 'quote'])->whereNumber('id')->name('aoqs.attachment');
+        });
+
+        // TWG evaluation of the AOQs assigned to the user
+        Route::middleware('perm:evaluate aoq')->group(function () {
+            Route::get('twg', [TwgController::class, 'index'])->name('twg.index');
+            Route::get('twg/{aoq}', [TwgController::class, 'show'])->name('twg.show');
+            Route::post('twg/{aoq}/save', [TwgController::class, 'save'])->name('twg.save');
+            Route::post('twg/{aoq}/complete', [TwgController::class, 'complete'])->name('twg.complete');
+            Route::post('twg/{aoq}/return', [TwgController::class, 'return'])->name('twg.return');
         });
 
         Route::middleware('perm:manage ppmp')->group(function () {

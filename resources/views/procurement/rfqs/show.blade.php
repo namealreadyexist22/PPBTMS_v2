@@ -190,7 +190,16 @@
                             <span class="input-group-text">calendar days</span>
                         </div>
                     </div>
-                    <div class="col-lg-6">
+                    {{-- How the quotations are evaluated and awarded; per lot is printed as a note for the suppliers --}}
+                    <div class="col-sm-6 col-lg-3">
+                        <label class="form-label small fw-semibold text-muted mb-1">Award</label>
+                        <select name="award_basis" class="form-select form-select-sm" title="Per item: each item to its lowest offer that meets the specs. Per lot: all items to the one supplier with the lowest total.">
+                            @foreach (\App\Enums\AwardBasis::cases() as $basis)
+                                <option value="{{ $basis->value }}" @selected(($rfq->award_basis ?? \App\Enums\AwardBasis::Item) === $basis)>{{ $basis->label() }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
                         <label class="form-label small fw-semibold text-muted mb-1">Other note</label>
                         <textarea name="remarks" class="form-control form-control-sm" rows="1" maxlength="2000" style="resize: none;" placeholder="Printed as note 7, e.g. samples may be required">{{ $rfq->remarks }}</textarea>
                     </div>

@@ -56,12 +56,9 @@
                     @php $c = $pr->status->color(); @endphp
                     <span class="badge rounded-pill bg-{{ $c }}-subtle text-{{ $c }}-emphasis border border-{{ $c }}-subtle align-middle" style="font-size: .7rem;">{{ $pr->status->label() }}</span>
                     @if ($rfq)
-                        {{-- Link only for those who may open RFQs --}}
-                        @if (auth()->user()->canAccessPermission(\App\Models\Procurement\Rfq::MANAGE_PERMISSION))
-                            <a href="{{ route('procurement.rfqs.show', $rfq) }}" class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle align-middle text-decoration-none" style="font-size: .7rem;">On {{ $rfq->title() }}</a>
-                        @else
-                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle align-middle" style="font-size: .7rem;">On {{ $rfq->title() }}</span>
-                        @endif
+                        {{-- The RFQ's details in a modal (its page linked there for those who may open RFQs) --}}
+                        <a href="#" class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle align-middle text-decoration-none js-modal-view"
+                           data-url="{{ route('procurement.requests.rfq', $pr) }}" data-modal="RFQ_DETAILS_MODAL" style="font-size: .7rem;" title="View the RFQ's details">On {{ $rfq->title() }} <i class="fas fa-eye ms-1"></i></a>
                     @endif
                 </h4>
                 <div class="text-muted small">{{ $pr->office->pathLabel() }}</div>
@@ -74,6 +71,7 @@
                 @else
                     <a href="{{ route('procurement.requests.print', $pr) }}" target="_blank" class="btn btn-sm btn-outline-secondary flex-fill flex-md-grow-0"><i class="fas fa-print me-1"></i> Print</a>
                 @endif
+                <button type="button" class="btn btn-sm btn-outline-secondary flex-fill flex-md-grow-0 js-modal-view" data-url="{{ route('procurement.requests.trail', $pr) }}" data-modal="REQUEST_TRAIL_MODAL"><i class="fas fa-route me-1"></i> Status</button>
                 @if ($canEdit)
                     <button class="btn btn-sm btn-outline-danger flex-fill flex-md-grow-0" id="btn_delete"><i class="fas fa-trash-alt me-1"></i> Delete Draft</button>
                     <button class="btn btn-sm btn-primary flex-fill flex-md-grow-0" id="btn_submit" @disabled($pr->items->isEmpty())><i class="fas fa-paper-plane me-1"></i> Submit</button>
@@ -94,7 +92,7 @@
                 <div class="pr-stat">
                     <div class="pr-label">Charge to</div>
                     <div class="fw-semibold">{{ $pr->pap->label() }}</div>
-                    <div><a href="{{ route('procurement.ppmp.show', $pr->ppmp) }}" class="text-decoration-none">PPMP {{ $pr->ppmp->ppmp_no }}</a> · FY {{ $pr->fiscal_year }}</div>
+                    <div><a href="#" class="text-decoration-none js-modal-view" data-url="{{ route('procurement.requests.ppmp', $pr) }}" data-modal="PPMP_DETAILS_MODAL" title="View the PPMP's details">PPMP {{ $pr->ppmp->ppmp_no }} <i class="fas fa-eye ms-1" style="font-size: .7rem;"></i></a> · FY {{ $pr->fiscal_year }}</div>
                 </div>
             </div>
             <div class="col-6 col-md-2">
@@ -307,6 +305,7 @@
 </div>
 </div>{{-- one card --}}
 
+
 {{-- Print: set the signatories, then print --}}
 @if ($canPrintSign)
     <div class="modal fade" id="PRINT_MODAL" tabindex="-1" aria-hidden="true">
@@ -349,6 +348,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const res = xhr.responseJSON || {};
         return res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Something went wrong.');
     }
+
+    // Read-only views in a modal: the status trail, the PPMP's details
+    $(document).on('click', '.js-modal-view', function (e) {
+        e.preventDefault();
+        if (isModalOpen) return;
+        isModalOpen = true;
+        const modalId = $(this).data('modal');
+        $.get($(this).data('url'), function (html) {
+            $('#modal-body').html(html);
+            const el = document.getElementById(modalId);
+            new bootstrap.Modal(el).show();
+            el.addEventListener('hidden.bs.modal', function () { isModalOpen = false; $('#modal-body').html(''); });
+        }).fail(function (xhr) { isModalOpen = false; toastr.error(errorText(xhr), 'Error'); });
+    });
 
     // Redraw the header (total, Submit button) and the items table from the server
     function refreshView() {

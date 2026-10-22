@@ -5,14 +5,25 @@ namespace App\Models\Procurement;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** A supplier's offer for one RFQ item; no unit price = no quote. */
+/**
+ * A supplier's offer for one RFQ item; no unit price = no quote. Its brand / specs PDF is attached
+ * by the BAC; the TWG finds whether it meets the specs (null = not evaluated yet).
+ */
 class AoqQuote extends Model
 {
-    protected $fillable = ['aoq_supplier_id', 'rfq_item_id', 'unit_price', 'brand', 'is_compliant', 'is_awarded'];
+    protected $fillable = [
+        'aoq_supplier_id', 'rfq_item_id', 'unit_price', 'brand', 'attachment_name', 'attachment_path', 'attachment_size',
+        'is_compliant', 'twg_remarks', 'is_awarded',
+    ];
 
     protected function casts(): array
     {
         return ['unit_price' => 'decimal:2', 'is_compliant' => 'boolean', 'is_awarded' => 'boolean'];
+    }
+
+    public function isPriced(): bool
+    {
+        return $this->unit_price !== null;
     }
 
     public function supplier(): BelongsTo

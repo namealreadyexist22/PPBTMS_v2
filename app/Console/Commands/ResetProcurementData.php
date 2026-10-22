@@ -24,9 +24,9 @@ class ResetProcurementData extends Command
 
     /** Children first. */
     protected const TABLES = [
-        'aoq_quotes', 'aoq_suppliers', 'aoqs',
+        'aoq_quotes', 'aoq_suppliers', 'aoq_evaluators', 'aoqs',
         'rfq_items', 'rfqs',
-        'purchase_request_items', 'purchase_requests',
+        'purchase_request_events', 'purchase_request_items', 'purchase_requests',
         'app_item_ppmp_item', 'app_items', 'annual_procurement_plans',
         'division_ppmp_ppmp', 'division_ppmps',
         'ppmp_item_attachments', 'ppmp_item_distributions', 'ppmp_items', 'ppmp_paps', 'ppmps',
@@ -61,6 +61,7 @@ class ResetProcurementData extends Command
         $disk = Storage::disk(PpmpAttachmentService::DISK);
         $paths->each(fn ($path) => $disk->delete($path));
         $disk->deleteDirectory('ppmp-attachments');
+        $disk->deleteDirectory('aoq-attachments');   // the suppliers' quotation / spec PDFs
 
         Schema::disableForeignKeyConstraints();
         try {

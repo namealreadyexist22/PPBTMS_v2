@@ -8,8 +8,11 @@ use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\Aoq;
 use App\Models\Procurement\Rfq;
+use App\Models\Procurement\Supplier;
 use App\Models\User;
+use App\Services\Procurement\AoqAttachmentService;
 use App\Services\Procurement\AoqService;
+use Illuminate\Support\Collection;
 use Closure;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
@@ -64,13 +67,17 @@ class AoqController extends Controller
     public function show(Request $request, Aoq $aoq)
     {
         $this->authorizeView($request, $aoq);
-        $aoq->load(['rfq.procurementMode', 'rfq.items.line.request.office', 'suppliers.quotes', 'creator']);
+        $aoq->load(['rfq.procurementMode', 'rfq.items.line.request.office', 'suppliers.quotes', 'creator', 'evaluators', 'evaluator']);
 
         return view('procurement.aoqs.show', [
-            'aoq'     => $aoq,
-            'rows'    => $this->service->evaluate($aoq),
-            'canEdit' => $aoq->isEditable(),
-            'people'  => $this->people(),
+            'aoq'         => $aoq,
+            'rows'        => $this->service->evaluate($aoq),
+            'canEdit'     => $aoq->isEditable(),
+            'people'      => $this->people(),
+            'twg'         => $aoq->isEditable() ? $this->twgMembers() : collect(),
+            'signatories' => $this->service->signatories($aoq),
+            'defaults'    => $this->service->defaultSignatories($aoq),
+            'lot'         => $aoq->rfq->isPerLot() ? $this->service->lotStanding($aoq) : null,
         ]);
     }
 
@@ -78,16 +85,19 @@ class AoqController extends Controller
     {
         $this->authorizeView($request, $aoq);
         $data = $this->validateJson($request, [
-            'opened_at'           => ['nullable', 'date'],
-            'remarks'             => ['nullable', 'string', 'max:2000'],
-            'bac_chair_name'      => ['nullable', 'string', 'max:255'],
-            'bac_vice_chair_name' => ['nullable', 'string', 'max:255'],
-            'bac_members'         => ['nullable', 'array', 'max:10'],
-            'bac_members.*'       => ['nullable', 'string', 'max:255'],
-            'hope_name'           => ['nullable', 'string', 'max:255'],
+            'opened_at'                => ['nullable', 'date'],
+            'remarks'                  => ['nullable', 'string', 'max:2000'],
+            'evaluator_id'             => ['nullable', 'integer'],
+            'prepared_by_name'         => ['nullable', 'string', 'max:255'],
+            'prepared_by_designation'  => ['nullable', 'string', 'max:255'],
+            'certified_by_name'        => ['nullable', 'string', 'max:255'],
+            'certified_by_designation' => ['nullable', 'string', 'max:255'],
+            'bac_chair_name'           => ['nullable', 'string', 'max:255'],
+            'bac_vice_chair_name'      => ['nullable', 'string', 'max:255'],
+            'bac_members'              => ['nullable', 'array', 'max:10'],
+            'bac_members.*'            => ['nullable', 'string', 'max:255'],
+            'hope_name'                => ['nullable', 'string', 'max:255'],
         ]);
-        $data['bac_members'] ??= [];
-
         return $this->attempt(function () use ($request, $aoq, $data) {
             $this->service->updateHeader($aoq, $request->user(), $data);
 
@@ -111,14 +121,15 @@ class AoqController extends Controller
             'modalName' => 'AOQ_SUPPLIER_MODAL',
             'aoq'       => $aoq,
             'supplier'  => $supplier,
-            // Suppliers on earlier abstracts, to pick from
-            'known'     => \App\Models\Procurement\AoqSupplier::query()->latest('id')->limit(300)->get(['name', 'address', 'tin', 'contact'])->unique(fn ($s) => mb_strtolower($s->name))->values(),
+            // The supplier directory, to pick from
+            'known'     => Supplier::where('is_active', true)->orderBy('name')->get(['name', 'address', 'tin', 'contact']),
         ]);
     }
 
     public function supplierStore(Request $request, Aoq $aoq)
     {
         $this->authorizeView($request, $aoq);
+        $pdf = ['nullable', 'file', 'mimes:pdf', 'max:' . AoqAttachmentService::MAX_KB];
         $data = $this->validateJson($request, [
             'id'                    => ['nullable', 'integer'],
             'name'                  => ['required', 'string', 'max:255'],
@@ -127,11 +138,18 @@ class AoqController extends Controller
             'contact'               => ['nullable', 'string', 'max:255'],
             'is_responsive'         => ['required', 'boolean'],
             'remarks'               => ['nullable', 'string', 'max:500'],
+            'attachment'            => $pdf,
+            'remove_attachment'     => ['nullable', 'boolean'],
             'quotes'                => ['nullable', 'array'],
             'quotes.*.unit_price'   => ['nullable', 'numeric', 'min:0', 'max:9999999999999'],
             'quotes.*.brand'        => ['nullable', 'string', 'max:500'],
-            'quotes.*.is_compliant' => ['nullable', 'boolean'],
-        ], ['name.required' => 'Enter the supplier\'s name.'], ['quotes.*.unit_price' => 'unit price']);
+            'quotes.*.file'         => $pdf,
+            'quotes.*.remove_file'  => ['nullable', 'boolean'],
+        ], [
+            'name.required'        => 'Enter the supplier\'s name.',
+            'attachment.mimes'     => 'Attach the quotation as a PDF.',
+            'quotes.*.file.mimes'  => 'Attach the brand / specs as a PDF.',
+        ], ['quotes.*.unit_price' => 'unit price', 'quotes.*.file' => 'specs PDF', 'attachment' => 'quotation PDF']);
 
         return $this->attempt(function () use ($request, $aoq, $data) {
             $supplier = $this->service->saveSupplier($aoq, $request->user(), $data, $data['quotes'] ?? [], $data['id'] ?? null);
@@ -150,6 +168,51 @@ class AoqController extends Controller
 
             return 'Supplier removed.';
         });
+    }
+
+    /** To the TWG evaluator chosen under "Evaluated by". */
+    public function sendToTwg(Request $request, Aoq $aoq)
+    {
+        $this->authorizeView($request, $aoq);
+
+        return $this->attempt(function () use ($request, $aoq) {
+            $aoq = $this->service->sendToTwg($aoq, $request->user());
+
+            return "{$aoq->title()} sent to {$aoq->evaluated_by_name} for TWG evaluation.";
+        });
+    }
+
+    /** The AOQ's RFQ, read-only in a modal: the BAC and the assigned TWG. */
+    public function rfq(Request $request, Aoq $aoq)
+    {
+        abort_unless($this->canSee($request->user(), $aoq), 403);
+        $rfq = $aoq->rfq->load(['procurementMode', 'items.line.request']);
+
+        return view('procurement.rfqs.extras.details_modal', [
+            'rfq'     => $rfq,
+            'canOpen' => $request->user()->canAccessPermission(\App\Models\Procurement\Rfq::MANAGE_PERMISSION),
+        ]);
+    }
+
+    /** The BAC of the AOQ's region, Super Admin, or its TWG evaluator. */
+    protected function canSee(User $user, Aoq $aoq): bool
+    {
+        return ($user->canAccessPermission(Aoq::MANAGE_PERMISSION) && Aoq::visibleTo($user)->whereKey($aoq->id)->exists())
+            || $user->hasRole('Super Admin') || $aoq->isEvaluator($user);
+    }
+
+    /** A supplier's quotation PDF ($type 'supplier') or an offer's specs PDF ('quote'): the BAC and the assigned TWG. */
+    public function attachment(Request $request, Aoq $aoq, string $type, int $id)
+    {
+        abort_unless($this->canSee($request->user(), $aoq), 403);
+
+        $owner = match ($type) {
+            'supplier' => $aoq->suppliers()->whereKey($id)->firstOrFail(),
+            'quote'    => $aoq->quotes()->where('aoq_quotes.id', $id)->firstOrFail(),
+            default    => abort(404),
+        };
+
+        return app(AoqAttachmentService::class)->response($owner);
     }
 
     public function award(Request $request, Aoq $aoq)
@@ -171,7 +234,7 @@ class AoqController extends Controller
         return $this->attempt(function () use ($request, $aoq) {
             $this->service->reopen($aoq, $request->user());
 
-            return 'Reopened. The award is cleared until it is awarded again.';
+            return 'Back to draft. Correct the quotations, then send it to the TWG again.';
         });
     }
 
@@ -189,9 +252,14 @@ class AoqController extends Controller
     public function print(Request $request, Aoq $aoq)
     {
         $this->authorizeView($request, $aoq);
-        $aoq->load(['rfq.procurementMode', 'rfq.items.line.request', 'suppliers.quotes']);
+        $aoq->load(['rfq.procurementMode', 'rfq.items.line.request.office', 'rfq.items.line.request.pap', 'suppliers.quotes']);
 
-        return view('procurement.aoqs.print', ['aoq' => $aoq, 'rows' => $this->service->evaluate($aoq)]);
+        return view('procurement.aoqs.print', [
+            'aoq'         => $aoq,
+            'rows'        => $this->service->evaluate($aoq),
+            'signatories' => $this->service->signatories($aoq),
+            'lot'         => $aoq->rfq->isPerLot() ? $this->service->lotStanding($aoq) : null,
+        ]);
     }
 
     /** Signatory picker: active users. */
@@ -200,6 +268,13 @@ class AoqController extends Controller
         return User::where('is_activated', true)->with('office')->orderBy('fname')->orderBy('lname')->get()->toBase()
             ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation, 'office' => $u->office?->acronym ?: $u->office?->name])
             ->all();
+    }
+
+    /** Active users who may evaluate (TWG members), to assign. */
+    protected function twgMembers(): Collection
+    {
+        return User::where('is_activated', true)->with('office')->orderBy('fname')->orderBy('lname')->get()
+            ->filter(fn (User $u) => $u->canAccessPermission(Aoq::EVALUATE_PERMISSION))->values();
     }
 
     protected function attempt(Closure $action): JsonResponse

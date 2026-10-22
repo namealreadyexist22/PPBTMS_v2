@@ -2,6 +2,7 @@
 
 namespace App\Services\Procurement;
 
+use App\Enums\AwardBasis;
 use App\Enums\Region;
 use App\Enums\RequestStatus;
 use App\Enums\RfqStatus;
@@ -25,7 +26,7 @@ use Illuminate\Support\Facades\DB;
 class RfqService
 {
     public const HEADER_FIELDS = [
-        'title', 'delivery_place', 'delivery_period', 'price_validity', 'warranty', 'payment_terms',
+        'title', 'award_basis', 'delivery_place', 'delivery_period', 'price_validity', 'warranty', 'payment_terms',
         'submission_deadline', 'remarks', 'signatory_name', 'signatory_designation', 'canvassed_by_name',
     ];
 
@@ -38,7 +39,8 @@ class RfqService
         // Signed by: the region's RFQ signatory (Signatories & BAC page), else as on its last RFQ
         $signer = app(OfficialsService::class)->user($region, 'rfq_signatory');
 
-        return Rfq::create(array_intersect_key($data, array_flip(self::HEADER_FIELDS)) + [
+        return Rfq::create(array_intersect_key(array_filter($data, fn ($v) => $v !== null), array_flip(self::HEADER_FIELDS)) + [
+            'award_basis'           => AwardBasis::Item,
             'region'                => $region,
             'status'                => RfqStatus::Draft,
             // Delivery and price validity days, signatory and canvasser as on the region's last RFQ
@@ -58,6 +60,10 @@ class RfqService
 
         if (! $rfq->isEditable() && $rfq->status !== RfqStatus::Issued) {
             throw new ProcurementException("{$rfq->title()} is {$rfq->status->label()} and can no longer be changed.");
+        }
+
+        if (array_key_exists('award_basis', $data) && blank($data['award_basis'])) {
+            unset($data['award_basis']);   // kept as it is
         }
 
         $rfq->update(array_intersect_key($data, array_flip($fields)) + ['updated_by' => $user->id]);
@@ -139,6 +145,11 @@ class RfqService
             $rfq->update(['procurement_mode_id' => $mode, 'updated_by' => $user->id]);
             $this->recalculate($rfq);
 
+            foreach ($lines->groupBy('purchase_request_id') as $prLines) {
+                $names = $prLines->pluck('description')->implode(', ');
+                app(RequestTrail::class)->record($prLines->first()->request, 'rfq_added', "Put on {$rfq->title()} for quotation: {$names}", $user);
+            }
+
             return $rfq;
         });
     }
@@ -147,7 +158,9 @@ class RfqService
     {
         return DB::transaction(function () use ($rfq, $user, $rfqItemId) {
             $rfq = $this->lockEditable($rfq);
-            $rfq->items()->whereKey($rfqItemId)->firstOrFail()->delete();
+            $item = $rfq->items()->with('line.request')->whereKey($rfqItemId)->firstOrFail();
+            $item->delete();
+            app(RequestTrail::class)->record($item->line->request, 'rfq_removed', "\"{$item->line->description}\" taken off {$rfq->title()}", $user);
 
             // Empty again: any mode can be added
             $rfq->update(['procurement_mode_id' => $rfq->items()->exists() ? $rfq->procurement_mode_id : null, 'updated_by' => $user->id]);
@@ -194,6 +207,7 @@ class RfqService
                 'issued_at'   => $now,
                 'updated_by'  => $user->id,
             ])->save();
+            app(RequestTrail::class)->recordForRfq($rfq, 'rfq_issued', "{$rfq->title()} issued to suppliers; quotations due {$rfq->submission_deadline->format('M d, Y g:i A')}", $user);
 
             return $rfq;
         });
@@ -216,6 +230,7 @@ class RfqService
             }
 
             $rfq->update(['status' => RfqStatus::Cancelled, 'cancelled_at' => now(), 'cancel_reason' => $reason, 'updated_by' => $user->id]);
+            app(RequestTrail::class)->recordForRfq($rfq, 'rfq_cancelled', "{$rfq->title()} cancelled; the items can go on another RFQ", $user, $reason);
 
             return $rfq;
         });
@@ -223,7 +238,11 @@ class RfqService
 
     public function deleteDraft(Rfq $rfq): void
     {
-        DB::transaction(fn () => $this->lockEditable($rfq)->delete());
+        DB::transaction(function () use ($rfq) {
+            $rfq = $this->lockEditable($rfq);
+            app(RequestTrail::class)->recordForRfq($rfq, 'rfq_removed', "{$rfq->title()} deleted; the items can go on another RFQ", auth()->user());
+            $rfq->delete();
+        });
     }
 
     /** The open RFQ a request's lines are on, if any (blocks revising or cancelling the request). */

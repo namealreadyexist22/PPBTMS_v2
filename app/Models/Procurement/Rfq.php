@@ -2,6 +2,7 @@
 
 namespace App\Models\Procurement;
 
+use App\Enums\AwardBasis;
 use App\Enums\Region;
 use App\Enums\RfqStatus;
 use App\Models\User;
@@ -22,7 +23,7 @@ class Rfq extends Model
     public const MANAGE_PERMISSION = 'manage rfq';
 
     protected $fillable = [
-        'uuid', 'rfq_no', 'series_year', 'series', 'region', 'procurement_mode_id', 'title', 'delivery_place',
+        'uuid', 'rfq_no', 'series_year', 'series', 'region', 'procurement_mode_id', 'award_basis', 'title', 'delivery_place',
         'delivery_period', 'price_validity', 'warranty', 'payment_terms', 'submission_deadline', 'remarks',
         'signatory_name', 'signatory_designation', 'canvassed_by_name', 'status', 'total_abc', 'issued_at', 'cancelled_at', 'cancel_reason',
         'created_by', 'updated_by',
@@ -33,6 +34,7 @@ class Rfq extends Model
         return [
             'region'              => Region::class,
             'status'              => RfqStatus::class,
+            'award_basis'         => AwardBasis::class,
             'submission_deadline' => 'datetime',
             'total_abc'           => 'decimal:2',
             'issued_at'           => 'datetime',
@@ -70,6 +72,12 @@ class Rfq extends Model
             1       => $names[0],
             default => $names[0] . ' and ' . ($names->count() - 1) . ' more',
         };
+    }
+
+    /** All items awarded as one lot to a single supplier. */
+    public function isPerLot(): bool
+    {
+        return $this->award_basis === AwardBasis::Lot;
     }
 
     public function isEditable(): bool

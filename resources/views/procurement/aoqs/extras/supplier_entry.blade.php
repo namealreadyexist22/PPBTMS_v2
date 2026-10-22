@@ -1,5 +1,5 @@
 {{-- A supplier's quotation on the AOQ: its details and a unit price per RFQ item (blank = no quote).
-     Expects $aoq (with rfq.items.line), $supplier (null when adding), $known (suppliers of earlier abstracts). --}}
+     Expects $aoq (with rfq.items.line), $supplier (null when adding), $known (the active supplier directory). --}}
 @php
     $qty = fn ($q) => rtrim(rtrim(number_format((float) $q, 2), '0'), '.');
     $quotes = $supplier?->quotes->keyBy('rfq_item_id') ?? collect();
@@ -21,12 +21,16 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold text-muted mb-1" for="aoq_sup_name">Supplier</label>
-                            <input type="text" name="name" id="aoq_sup_name" class="form-control form-control-sm" value="{{ $supplier?->name }}" maxlength="255" list="aoq_known_suppliers" required placeholder="Business name">
-                            <datalist id="aoq_known_suppliers">
+                            <select name="name" id="aoq_sup_name" class="form-select form-select-sm" required data-placeholder="Search the supplier list or type a new business name">
+                                <option value=""></option>
+                                @if ($supplier && ! $known->contains(fn ($k) => mb_strtolower($k->name) === mb_strtolower($supplier->name)))
+                                    <option value="{{ $supplier->name }}" data-address="{{ $supplier->address }}" data-tin="{{ $supplier->tin }}" data-contact="{{ $supplier->contact }}" selected>{{ $supplier->name }}</option>
+                                @endif
                                 @foreach ($known as $k)
-                                    <option value="{{ $k->name }}" data-address="{{ $k->address }}" data-tin="{{ $k->tin }}" data-contact="{{ $k->contact }}"></option>
+                                    <option value="{{ $k->name }}" data-address="{{ $k->address }}" data-tin="{{ $k->tin }}" data-contact="{{ $k->contact }}" @selected($supplier && mb_strtolower($supplier->name) === mb_strtolower($k->name))>{{ $k->name }}</option>
                                 @endforeach
-                            </datalist>
+                            </select>
+                            <div class="form-text">Picking a listed supplier fills in its details; a name not on the list is added to the Suppliers list on save.</div>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold text-muted mb-1">Address</label>
@@ -51,10 +55,15 @@
                             <label class="form-label small fw-semibold text-muted mb-1">Remarks</label>
                             <input type="text" name="remarks" class="form-control form-control-sm" value="{{ $supplier?->remarks }}" maxlength="500" placeholder="e.g. no PhilGEPS registration">
                         </div>
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold text-muted mb-1">Quotation / proposal (PDF)</label>
+                            @include('procurement.aoqs.extras.attachment_input', ['owner' => $supplier, 'type' => 'supplier', 'input' => 'attachment', 'remove' => 'remove_attachment'])
+                            <div class="form-text">The supplier's signed quotation or bid proposal, for the TWG. Up to 10 MB.</div>
+                        </div>
                     </div>
 
                     <div class="fw-semibold mt-4 mb-1">Offer per item</div>
-                    <div class="small text-muted mb-2">Leave the unit price blank for an item it did not quote. Untick "Meets specs" when the offer does not comply.</div>
+                    <div class="small text-muted mb-2">Leave the unit price blank for an item it did not quote. Attach the brochure / spec sheet of an offer if it is separate from the quotation; the TWG checks each offer against the specs.</div>
                     <div class="table-responsive border rounded-3">
                         <table class="table align-middle small mb-0">
                             <thead class="table-light">
@@ -65,7 +74,7 @@
                                     <th style="width: 150px;">Unit price</th>
                                     <th class="text-end" style="width: 130px;">Total</th>
                                     <th style="min-width: 200px;">Brand / offer</th>
-                                    <th class="text-center pe-3" style="width: 90px;">Meets specs</th>
+                                    <th class="pe-3" style="min-width: 220px;">Specs (PDF)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -81,9 +90,8 @@
                                         <td><input type="number" name="quotes[{{ $item->id }}][unit_price]" class="form-control form-control-sm text-end js-price" value="{{ $q?->unit_price }}" min="0" step="0.01" placeholder="No quote" aria-label="Unit price of {{ $line->description }}"></td>
                                         <td class="text-end text-nowrap fw-semibold js-total">—</td>
                                         <td><input type="text" name="quotes[{{ $item->id }}][brand]" class="form-control form-control-sm" value="{{ $q?->brand }}" maxlength="500" aria-label="Brand or offer for {{ $line->description }}"></td>
-                                        <td class="text-center pe-3">
-                                            <input type="hidden" name="quotes[{{ $item->id }}][is_compliant]" value="0">
-                                            <input type="checkbox" class="form-check-input" name="quotes[{{ $item->id }}][is_compliant]" value="1" @checked($q?->is_compliant ?? true) aria-label="{{ $line->description }} meets the specifications">
+                                        <td class="pe-3">
+                                            @include('procurement.aoqs.extras.attachment_input', ['owner' => $q, 'type' => 'quote', 'input' => "quotes[{$item->id}][file]", 'remove' => "quotes[{$item->id}][remove_file]"])
                                         </td>
                                     </tr>
                                 @endforeach
@@ -125,14 +133,34 @@
     $('#form_aoq_supplier').on('input', '.js-price', totals);
     totals();
 
-    // A supplier from an earlier abstract fills in its details
-    $('#aoq_sup_name').on('change', function () {
-        const opt = $('#aoq_known_suppliers option').filter((_, o) => o.value === this.value).get(0);
-        if (!opt) return;
-        ['address', 'tin', 'contact'].forEach((f) => {
-            const input = $('#form_aoq_supplier [name=' + f + ']');
-            if (!input.val()) input.val(opt.dataset[f] || '');
-        });
+    // "remove" on an attached PDF: offer a file to put in its place
+    $('#form_aoq_supplier').on('change', '.js-replace', function () {
+        $(this).closest('td, .col-12').find('.js-file').toggleClass('d-none', !this.checked).val('');
+    });
+
+    // Supplier: pick from the directory (fills in its details) or type a new name (added to the directory on save)
+    const name = $('#aoq_sup_name');
+    name.select2({
+        theme: 'bootstrap-5', width: '100%', tags: true, allowClear: true,
+        placeholder: name.data('placeholder'), dropdownParent: name.closest('.modal'),
+        selectionCssClass: 'select2--small', dropdownCssClass: 'select2--small',
+        // A typed name matching a listed supplier (any case) picks it instead of adding a duplicate
+        createTag: function (params) {
+            const term = (params.term || '').trim();
+            if (!term) return null;
+            const listed = name.find('option').filter((_, o) => o.value.toLowerCase() === term.toLowerCase()).length;
+            return listed ? null : { id: term, text: term, newTag: true };
+        },
+        insertTag: function (data, tag) { data.push(tag); },
+        templateResult: function (data) {
+            if (data.newTag) return $('<span>').append($('<i class="fas fa-plus me-1 text-success">'), document.createTextNode('Add "' + data.text + '" as a new supplier'));
+            const address = data.element ? data.element.dataset.address : '';
+            return address ? $('<div>').append($('<div>').text(data.text), $('<div class="small text-muted">').text(address)) : data.text;
+        },
+    }).on('select2:select', function (e) {
+        const el = e.params.data.element;
+        if (!el || e.params.data.newTag) return;   // a new supplier: its details are typed below
+        ['address', 'tin', 'contact'].forEach((f) => $('#form_aoq_supplier [name=' + f + ']').val(el.dataset[f] || ''));
     });
 })();
 </script>

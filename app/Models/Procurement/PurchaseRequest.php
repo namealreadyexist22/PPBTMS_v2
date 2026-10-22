@@ -110,6 +110,12 @@ class PurchaseRequest extends Model
         return $this->belongsTo(self::class, 'revised_from_id');
     }
 
+    /** Its status trail, oldest first. */
+    public function events(): HasMany
+    {
+        return $this->hasMany(PurchaseRequestEvent::class)->orderBy('created_at')->orderBy('id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

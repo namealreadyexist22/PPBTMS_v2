@@ -43,7 +43,7 @@ class PurchaseRequestService
             throw new ProcurementException("You cannot prepare requests for {$ppmp->office->shortName()}.");
         }
 
-        return PurchaseRequest::create($this->header($kind, $data) + [
+        $request = PurchaseRequest::create($this->header($kind, $data) + [
             'kind'        => $kind,
             'fiscal_year' => $ppmp->fiscal_year,
             'office_id'   => $ppmp->office_id,
@@ -53,6 +53,9 @@ class PurchaseRequestService
             'created_by'  => $user->id,
             'updated_by'  => $user->id,
         ]);
+        app(RequestTrail::class)->record($request, 'created', "Prepared as a draft, charged to {$pap->code}", $user);
+
+        return $request;
     }
 
     /** Purpose, JR type and the signatories (set on save or print). SAI is filled in by Property later. */
@@ -225,6 +228,7 @@ class PurchaseRequestService
 
                 $this->releaseLines($previous);
                 $previous->update(['status' => RequestStatus::Superseded, 'updated_by' => $user->id]);
+                app(RequestTrail::class)->record($previous, 'superseded', "Replaced by {$request->title()}", $user);
             } else {
                 $this->assignNumber($request);
             }
@@ -240,6 +244,7 @@ class PurchaseRequestService
                 'submitted_at' => now(),
                 'updated_by'   => $user->id,
             ])->save();
+            app(RequestTrail::class)->record($request, 'submitted', "Submitted as {$request->title()}; charged to the PPMP", $user);
 
             return $request;
         });
@@ -271,6 +276,10 @@ class PurchaseRequestService
             foreach ($request->items as $line) {
                 $copy->items()->create($line->replicate(['purchase_request_id'])->toArray());
             }
+
+            $trail = app(RequestTrail::class);
+            $trail->record($request, 'revision', "Revision {$copy->title()} started", $user);
+            $trail->record($copy, 'created', "Prepared as a revision of {$request->title()}", $user);
 
             return $copy;
         });
@@ -313,6 +322,7 @@ class PurchaseRequestService
                 'cancel_reason' => $reason,
                 'updated_by'    => $user->id,
             ]);
+            app(RequestTrail::class)->record($request, 'cancelled', 'Cancelled; the PPMP budget was given back', $user, $reason);
 
             return $request;
         });
