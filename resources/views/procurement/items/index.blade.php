@@ -42,7 +42,8 @@
                             @php $twg = trim($item->twg_reference . ($item->twg_approved_at ? ' · ' . $item->twg_approved_at->format('M d, Y') : ''), ' ·'); @endphp
                             @if ($item->specifications)
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 btn-view-specs"
-                                        data-title="{{ $item->code }} — {{ $item->name }}" data-specs="{{ $item->specifications }}" data-twg="{{ $twg }}">
+                                        data-title="{{ $item->code }} — {{ $item->name }}" data-twg="{{ $twg }}"
+                                        data-html="{{ view('procurement.partials.specs', ['text' => $item->specifications])->render() }}">
                                     <i class="fas fa-eye me-1"></i>View specs
                                 </button>
                             @else
@@ -79,7 +80,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 small">
-                <div id="specs_body" style="white-space: pre-line;"></div>
+                <div id="specs_body"></div>
                 <div class="text-muted mt-3 d-none" id="specs_twg"><i class="fas fa-stamp me-1"></i><span></span></div>
             </div>
             <div class="modal-footer bg-light py-2"><button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Close</button></div>
@@ -121,7 +122,7 @@ document.addEventListener('DOMContentLoaded', function () {
     $(document).on('click', '.btn-view-specs', function () {
         const data = $(this).data();
         $('#specs_title').text(data.title);
-        $('#specs_body').text(data.specs);
+        $('#specs_body').html(data.html);   // the specs table (rendered by the server, escaped)
         $('#specs_twg').toggleClass('d-none', !data.twg).find('span').text(data.twg || '');
         bootstrap.Modal.getOrCreateInstance(document.getElementById('SPECS_MODAL')).show();
     });

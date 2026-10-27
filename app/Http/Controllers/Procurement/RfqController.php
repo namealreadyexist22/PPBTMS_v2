@@ -151,6 +151,49 @@ class RfqController extends Controller
         });
     }
 
+    /** Return a request in process to its office, for revision or cancellation (its items come off the RFQ). */
+    public function returnRequest(Request $request, Rfq $rfq, \App\Models\Procurement\PurchaseRequest $purchaseRequest)
+    {
+        $this->authorizeView($request, $rfq);
+        $data = $this->validateJson($request, [
+            'return_for' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Models\Procurement\PurchaseRequest::RETURN_FOR))],
+            'reason'     => ['required', 'string', 'max:1000'],
+        ], ['return_for.required' => 'Choose whether it is for revision or for cancellation.', 'reason.required' => 'State why it is returned.']);
+
+        try {
+            $this->service->returnRequest($rfq, $purchaseRequest, $request->user(), $data['return_for'], $data['reason']);
+        } catch (ProcurementException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        }
+
+        // A draft RFQ left without items is deleted: back to the list
+        return response()->json([
+            'status'  => 'success',
+            'message' => "{$purchaseRequest->title()} returned to the office " . \App\Models\Procurement\PurchaseRequest::RETURN_FOR[$data['return_for']] . '.',
+            'url'     => Rfq::whereKey($rfq->id)->exists() ? null : route('procurement.rfqs.index'),
+        ]);
+    }
+
+    /** Return a submitted request not yet on an RFQ to its office (from the item picker), for revision or cancellation. */
+    public function returnToOffice(Request $request, \App\Models\Procurement\PurchaseRequest $purchaseRequest)
+    {
+        $user = $request->user();
+        if (! $user->hasRole('Super Admin') && $purchaseRequest->ppmp->region !== ($user->region ?? \App\Enums\Region::Lm)) {
+            $this->deny($request, 'This request belongs to another region.');
+        }
+
+        $data = $this->validateJson($request, [
+            'return_for' => ['required', \Illuminate\Validation\Rule::in(array_keys(\App\Models\Procurement\PurchaseRequest::RETURN_FOR))],
+            'reason'     => ['required', 'string', 'max:1000'],
+        ], ['return_for.required' => 'Choose whether it is for revision or for cancellation.', 'reason.required' => 'State why it is returned.']);
+
+        return $this->attempt(function () use ($user, $purchaseRequest, $data) {
+            app(\App\Services\Procurement\PurchaseRequestService::class)->returnToOffice($purchaseRequest, $user, $data['return_for'], $data['reason']);
+
+            return "{$purchaseRequest->title()} returned to the office " . \App\Models\Procurement\PurchaseRequest::RETURN_FOR[$data['return_for']] . '.';
+        });
+    }
+
     public function destroy(Request $request, Rfq $rfq)
     {
         $this->authorizeView($request, $rfq);

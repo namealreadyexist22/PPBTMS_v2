@@ -167,18 +167,81 @@ class RfqTest extends TestCase
         $rfq = $this->draftRfq();
         $this->rfqs->addLines($rfq, $this->bac, [$pr->items[0]->id]);
 
-        $this->refused(fn () => $this->requests->revise($pr, $this->staff), 'has items on RFQ (draft)');
-        $this->refused(fn () => $this->requests->cancel($pr, $this->staff, 'x'), 'cannot be cancelled');
+        $this->refused(fn () => $this->requests->revise($pr, $this->staff), 'is in process at the BAC (RFQ (draft))');
+        $this->refused(fn () => $this->requests->cancel($pr, $this->staff, 'x'), 'Ask the BAC to return it');
+
+        // The office's page: no Revise / Cancel while in process
+        $this->actingAs($this->staff)->get(route('procurement.requests.show', $pr))->assertOk()
+            ->assertSee('In process at the BAC')->assertDontSee('id="btn_cancel"', false)->assertDontSee('id="btn_revise"', false);
 
         $this->rfqs->removeLine($rfq, $this->bac, $rfq->items()->first()->id);
         $this->assertNull($rfq->fresh()->procurement_mode_id);
-        $revision = $this->requests->revise($pr, $this->staff);
+
+        // Off the RFQ it is still locked: the BAC returns it (from the item picker) for revision
+        $this->refused(fn () => $this->requests->revise($pr, $this->staff), 'submitted and locked');
+        $this->actingAs($this->bac)->postJson(route('procurement.rfqs.return-to-office', $pr), ['return_for' => 'revision', 'reason' => 'Wrong unit'])->assertOk();
+        $this->assertCount(0, $this->rfqs->availableRequests($rfq->fresh()));   // returned: off the list
+        $revision = $this->requests->revise($pr->fresh(), $this->staff);
 
         // Being revised: it waits off the list
-        $this->assertCount(0, $this->rfqs->availableRequests($rfq->fresh()));
-        $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$pr->items[0]->id]), 'is being revised');
-        $this->requests->deleteDraft($revision);
-        $this->assertCount(1, $this->rfqs->availableRequests($rfq->fresh()));
+        $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$pr->items[0]->id]), 'was returned to the office');
+        $revision = $this->requests->submit($revision->fresh(), $this->staff);
+        $this->assertSame([$revision->id], $this->rfqs->availableRequests($rfq->fresh())->pluck('id')->all());
+    }
+
+    public function test_the_bac_returns_a_request_in_process_for_revision_or_cancellation(): void
+    {
+        $a = $this->submittedPr([[$this->hdd, 2]]);
+        $b = $this->submittedPr([[$this->ram, 4]]);
+        $rfq = $this->rfqs->addLines($this->draftRfq(), $this->bac, [$a->items[0]->id, $b->items[0]->id]);
+        $rfq = $this->rfqs->issue($rfq, $this->bac, ['submission_deadline' => '2026-10-23 17:00', 'signatory_name' => 'Ana Santos']);
+        $aoqs = app(\App\Services\Procurement\AoqService::class);
+        $aoq = $aoqs->start($rfq, $this->bac);
+        $items = $rfq->items()->with('line')->get()->keyBy(fn ($i) => $i->line->purchase_request_id);
+        $aoqs->saveSupplier($aoq, $this->bac, ['name' => 'Alpha Trading'], [$items[$a->id]->id => ['unit_price' => '4800'], $items[$b->id]->id => ['unit_price' => '2900']]);
+
+        // For revision, over HTTP: A's items and quotation come off; the RFQ goes on with B
+        $this->bac->givePermissionTo('manage rfq');
+        $this->actingAs($this->bac)->postJson(route('procurement.rfqs.return-request', [$rfq, $a]), ['return_for' => 'revision'])
+            ->assertStatus(422)->assertJsonPath('errors.reason.0', 'State why it is returned.');
+        $this->postJson(route('procurement.rfqs.return-request', [$rfq, $a]), ['return_for' => 'revision', 'reason' => 'Specs unclear'])
+            ->assertOk()->assertJsonPath('url', null);
+        $a->refresh();
+        $this->assertTrue($a->isReturned());
+        $this->assertSame([$b->id], $rfq->fresh()->requests()->pluck('id')->all());
+        $this->assertEquals('12000.00', $rfq->fresh()->total_abc);
+        $this->assertSame(1, $aoq->quotes()->count());
+        $this->assertSame('returned', $a->events()->get()->last()->event);
+        $this->assertSame(1, $this->staff->notifications()->count());
+
+        // Returned: on no RFQ until revised; the office revises it
+        $this->refused(fn () => $this->rfqs->addLines($this->draftRfq(), $this->bac, [$a->items[0]->id]), 'returned to the office for revision');
+        $this->actingAs($this->staff)->get(route('procurement.requests.show', $a))->assertSee('Returned by the BAC for revision')->assertSee('Specs unclear')->assertSee('id="btn_revise"', false);
+        $revision = $this->requests->submit($this->requests->revise($a, $this->staff), $this->staff);
+        $this->assertFalse($revision->fresh()->isReturned());
+        $this->assertCount(1, $this->rfqs->availableRequests($this->draftRfq()));
+
+        // For cancellation: the last request out, the RFQ is cancelled and its draft AOQ deleted; the office cancels it
+        app(\App\Services\Procurement\RfqService::class)->returnRequest($rfq, $b, $this->bac, 'cancellation', 'Budget withdrawn');
+        $this->assertSame(RfqStatus::Cancelled, $rfq->fresh()->status);
+        $this->assertNull($aoq->fresh());
+        $this->assertSame(\App\Enums\RequestStatus::Cancelled, $this->requests->cancel($b->fresh(), $this->staff, 'Budget withdrawn')->status);
+    }
+
+    public function test_a_request_cannot_be_returned_once_the_aoq_is_with_the_twg(): void
+    {
+        $pr = $this->submittedPr([[$this->hdd, 2]]);
+        $rfq = $this->rfqs->issue($this->rfqs->addLines($this->draftRfq(), $this->bac, [$pr->items[0]->id]), $this->bac,
+            ['submission_deadline' => '2026-10-23 17:00', 'signatory_name' => 'Ana Santos']);
+        $aoqs = app(\App\Services\Procurement\AoqService::class);
+        $aoq = $aoqs->start($rfq, $this->bac);
+        $aoqs->saveSupplier($aoq, $this->bac, ['name' => 'Alpha Trading'], [$rfq->items()->first()->id => ['unit_price' => '4800']]);
+        $twg = User::factory()->create(['is_activated' => 1]);
+        $twg->givePermissionTo(\App\Models\Procurement\Aoq::EVALUATE_PERMISSION);
+        $aoqs->sendToTwg($aoq, $this->bac, $twg);
+
+        $this->refused(fn () => $this->rfqs->returnRequest($rfq, $pr, $this->bac, 'revision', 'x'), 'recall or reopen it first');
+        $this->refused(fn () => $this->rfqs->returnRequest($rfq, $pr, $this->bac, 'later', 'x'), 'for revision or for cancellation');
     }
 
     public function test_only_submitted_requests_of_the_region_go_on_an_rfq(): void

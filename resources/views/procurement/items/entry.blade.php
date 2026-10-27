@@ -1,5 +1,5 @@
 <div class="modal fade" id="ITEM_MODAL" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <form class="modal-content border-0 shadow" id="form_item" novalidate autocomplete="off">
             @csrf
             @if ($item)<input type="hidden" name="id" value="{{ $item->id }}">@endif
@@ -65,8 +65,8 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label fw-semibold text-muted mb-1">Specifications (set by the TWG)</label>
-                        <textarea name="specifications" class="form-control form-control-sm" rows="5" placeholder="e.g. 55-inch 4K UHD LED, Smart TV, 3 HDMI, wall mount bracket, 1-year warranty">{{ $item->specifications ?? '' }}</textarea>
-                        <div class="invalid-feedback"></div>
+                        @include('procurement.partials.specs_editor', ['name' => 'specifications', 'value' => $item->specifications ?? ''])
+                        <div class="invalid-feedback d-block"></div>
                         <div class="form-text">Printed under the project on the PPMP. Offices cannot change it.</div>
                     </div>
                     <div class="col-12">

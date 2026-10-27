@@ -26,12 +26,12 @@ trait HasSignatories
         ]);
     }
 
-    /** "Juan M. Cruz", same format as the users.fullname column. */
+    /** "Atty. Juan M. Cruz Jr.", same format as the users.fullname column. */
     protected function signatoryName(User $user): string
     {
         $initial = $user->minitial ? rtrim($user->minitial, '.') . '.' : null;
 
-        return implode(' ', array_filter([$user->fname, $initial, $user->lname])) ?: $user->username;
+        return implode(' ', array_filter([$user->name_title, $user->fname, $initial, $user->lname, $user->name_suffix])) ?: $user->username;
     }
 
     public function latestSignatory(string $role): ?DocumentSignatory

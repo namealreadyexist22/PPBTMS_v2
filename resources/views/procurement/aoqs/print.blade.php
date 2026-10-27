@@ -1,5 +1,5 @@
 {{--
-    Abstract of Quotation, SRA form: one column per supplier/dealer (name, address, then per item its total,
+    Abstract of Quotation, SRA form: one column per supplier/dealer (its name, then per item its total,
     unit price and brand, or "Invited but no quote"), the technical comment and approved budget rows, the
     Prepared / Evaluated / Certified signatories and the BAC's approval. Once the TWG has evaluated, the lowest
     counting quote per item (once awarded, the awarded one) is underlined.
@@ -138,13 +138,13 @@
                 <th>Description of Articles</th>
                 @foreach ($suppliers as $s)<th>SUPPLIER/DEALER</th>@endforeach
             </tr>
+            {{-- The supplier's name only (no address), over both rows --}}
             <tr>
                 <th>{{ $charged }}</th>
-                @foreach ($suppliers as $s)<th>{{ $upper($s->name) }}</th>@endforeach
+                @foreach ($suppliers as $s)<th rowspan="2">{{ $upper($s->name) }}</th>@endforeach
             </tr>
             <tr>
                 <th>{{ $endUsers }}</th>
-                @foreach ($suppliers as $s)<th>{{ $upper($s->address) }}</th>@endforeach
             </tr>
         </thead>
         <tbody>
@@ -157,7 +157,7 @@
                     <td class="c">{{ $upper($line->unit) }}</td>
                     <td>
                         <div>{{ $line->description }}</div>
-                        @if ($line->specifications)<div class="specs">{{ $line->specifications }}</div>@endif
+                        @if ($line->specifications)<div style="margin-top: 6px;">@include('procurement.partials.specs', ['text' => $line->specifications, 'print' => true])</div>@endif
                     </td>
                     @foreach ($suppliers as $s)
                         @php

@@ -22,8 +22,12 @@ class PurchaseRequest extends Model
         'uuid', 'kind', 'request_no', 'series_year', 'series', 'revision', 'revised_from_id', 'fiscal_year', 'office_id',
         'ppmp_id', 'ppmp_pap_id', 'jr_type', 'purpose', 'sai_no', 'sai_date', 'status', 'total_amount',
         'requested_by_name', 'requested_by_designation', 'approved_by_name', 'approved_by_designation',
-        'submitted_at', 'cancelled_at', 'cancel_reason', 'created_by', 'updated_by',
+        'submitted_at', 'cancelled_at', 'cancel_reason', 'returned_at', 'return_for', 'return_reason', 'returned_by',
+        'created_by', 'updated_by',
     ];
+
+    /** Why the BAC returns a request in process: return_for => label. */
+    public const RETURN_FOR = ['revision' => 'for revision', 'cancellation' => 'for cancellation'];
 
     protected function casts(): array
     {
@@ -34,6 +38,7 @@ class PurchaseRequest extends Model
             'total_amount' => 'decimal:2',
             'submitted_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'returned_at'  => 'datetime',
         ];
     }
 
@@ -51,6 +56,12 @@ class PurchaseRequest extends Model
     public function title(): string
     {
         return $this->kind->short() . ' ' . ($this->request_no ?? '(draft)') . ($this->revision ? " Rev. {$this->revision}" : '');
+    }
+
+    /** Returned by the BAC and not yet revised or cancelled: the office acts on it, it goes on no RFQ. */
+    public function isReturned(): bool
+    {
+        return $this->returned_at !== null && $this->status === RequestStatus::Submitted;
     }
 
     public function isEditable(): bool

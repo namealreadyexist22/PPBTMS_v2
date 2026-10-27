@@ -168,7 +168,7 @@
                     <td class="c">{{ mb_strtoupper((string) $item->line->unit) }}</td>
                     <td>
                         <div class="name">{{ $item->line->description }}</div>
-                        @if ($item->line->specifications)<div class="specs">{{ $item->line->specifications }}</div>@endif
+                        @if ($item->line->specifications)<div>@include('procurement.partials.specs', ['text' => $item->line->specifications, 'print' => true])</div>@endif
                     </td>
                     <td class="r">{{ $money($item->line->total_cost) }}</td>
                     <td class="offer"><div></div></td>

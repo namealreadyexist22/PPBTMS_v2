@@ -51,6 +51,9 @@
                                             @if ($pr->purpose)<span class="d-block text-muted">{{ \Illuminate\Support\Str::limit($pr->purpose, 160) }}</span>@endif
                                         </span>
                                         <span class="text-nowrap fw-semibold">₱{{ number_format($pr->available->sum(fn ($l) => (float) $l->total_cost), 2) }}</span>
+                                        {{-- Submitted requests are locked: the BAC returns one to its office for revision or cancellation --}}
+                                        <button type="button" class="btn btn-link btn-sm p-0 ms-2 text-danger js-return-request" data-url="{{ route('procurement.rfqs.return-to-office', $pr) }}"
+                                                data-title="{{ $pr->title() }}" title="Return {{ $pr->title() }} to the office" aria-label="Return {{ $pr->title() }} to the office"><i class="fas fa-undo"></i></button>
                                     </label>
                                     @foreach ($pr->available as $line)
                                         <label class="rq-line d-flex align-items-start gap-2 px-3 py-2 mb-0 border-top" data-mode="{{ $line->ppmpItem?->effectiveModeId() }}">

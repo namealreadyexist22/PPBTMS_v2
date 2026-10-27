@@ -38,7 +38,7 @@ class UsersDataTable extends DataTable
 
     public function query(User $model): QueryBuilder
     {
-        return $model->newQuery()->with('roles');
+        return $model->newQuery()->with(['roles', 'office']);
     }
 
     public function html(): HtmlBuilder
@@ -49,8 +49,8 @@ class UsersDataTable extends DataTable
     public function getColumns(): array
     {
         return [
-            Column::computed('user_details')->title('User Details')->addClass('text-right'),
-            Column::computed('is_activated')->title('Status')->addClass('text-center'),
+            Column::computed('user_details')->title('User Details')->addClass('text-start'),
+            Column::computed('is_activated')->title('Status')->addClass('text-center')->width(140),
             Column::computed('action')->title('')->addClass('text-center')->width(50),
         ];
     }

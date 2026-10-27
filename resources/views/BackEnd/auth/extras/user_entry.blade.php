@@ -54,20 +54,37 @@
                         <i class="fas fa-id-card me-1"></i> Personal Profile Information
                     </small>
 
+                    {{-- Title and suffix are part of the printed name: "Atty. Juan M. Cruz Jr." --}}
                     <div class="row g-3 mb-4">
-                        <div class="col-md-5">
+                        <div class="col-6 col-md-2">
+                            <label for="name_title" class="form-label small fw-semibold text-muted mb-1">Title</label>
+                            <input type="text" class="form-control form-control-sm rounded" id="name_title" name="name_title" maxlength="20" list="name_titles" placeholder="e.g. Atty." value="{{ $user->name_title ?? '' }}">
+                            <datalist id="name_titles">
+                                @foreach (['Atty.', 'Engr.', 'Dr.', 'Arch.', 'Hon.', 'Dir.'] as $t)<option value="{{ $t }}"></option>@endforeach
+                            </datalist>
+                            <div class="invalid-feedback small fw-medium"></div>
+                        </div>
+                        <div class="col-md-4">
                             <label for="fname" class="form-label small fw-semibold text-muted mb-1">First Name</label>
                             <input type="text" class="form-control form-control-sm rounded" id="fname" name="fname" placeholder="e.g. John" value="{{ $user->fname ?? '' }}" required>
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
-                        <div class="col-md-2">
+                        <div class="col-6 col-md-1">
                             <label for="minitial" class="form-label small fw-semibold text-muted mb-1">M.I.</label>
                             <input type="text" class="form-control form-control-sm text-center rounded" id="minitial" name="minitial" maxlength="1" placeholder="M" value="{{ $user->minitial ?? '' }}">
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
-                        <div class="col-md-5">
+                        <div class="col-md-3">
                             <label for="lname" class="form-label small fw-semibold text-muted mb-1">Last Name</label>
                             <input type="text" class="form-control form-control-sm rounded" id="lname" name="lname" placeholder="e.g. Doe" value="{{ $user->lname ?? '' }}" required>
+                            <div class="invalid-feedback small fw-medium"></div>
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label for="name_suffix" class="form-label small fw-semibold text-muted mb-1">Suffix</label>
+                            <input type="text" class="form-control form-control-sm rounded" id="name_suffix" name="name_suffix" maxlength="10" list="name_suffixes" placeholder="e.g. Jr." value="{{ $user->name_suffix ?? '' }}">
+                            <datalist id="name_suffixes">
+                                @foreach (['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'] as $s)<option value="{{ $s }}"></option>@endforeach
+                            </datalist>
                             <div class="invalid-feedback small fw-medium"></div>
                         </div>
                     </div>

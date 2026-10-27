@@ -73,6 +73,14 @@ class StandardItemTest extends TestCase
         $this->get(route('procurement.items.index', ['q' => 'zzz']))->assertSee('No items match the search.');
         $this->get(route('procurement.items.index'))->assertOk()->assertSee('ICT-0001')->assertSee('₱50,000.00')->assertSee('TWG-ICT Res. 2026-03');
 
+        // Specs as a two-column table: "Label: value" lines, edited row by row and shown as a table
+        $laptop = Item::where('name', 'Laptop')->sole();
+        $this->postJson(route('procurement.items.store'), ['id' => $laptop->id, 'code' => $laptop->code, 'name' => 'Laptop', 'unit_id' => $unit->id, 'project_type' => 'goods',
+            'specifications' => "Memory: 16GB DDR5\nStorage: 512GB SSD M.2 2280 PCIe Gen4"])->assertOk();
+        $this->get(route('procurement.items.entry', ['id' => $laptop->id]))->assertOk()->assertSee('js-specs-row', false)
+            ->assertSee('value="Memory"', false)->assertSee('value="512GB SSD M.2 2280 PCIe Gen4"', false);
+        $this->get(route('procurement.items.index'))->assertSee('&lt;td', false)->assertSee('16GB DDR5');   // the table, in the View specs button
+
         // Editing keeps the code; it can be corrected but must stay unique
         $tv = Item::where('code', 'ICT-0001')->sole();
         $this->postJson(route('procurement.items.store'), ['id' => $tv->id, 'code' => 'ICT-0002', 'name' => $tv->name, 'unit_id' => $unit->id, 'project_type' => 'goods'])
@@ -108,6 +116,11 @@ class StandardItemTest extends TestCase
         $this->assertEquals('100000.00', $item->estimated_budget);
         $this->assertSame('55-inch 4K UHD, 3 HDMI', $item->quantity_size);
         $this->assertSame($unit->id, $item->unit_id);
+
+        // On the PPMP page its tag badge opens the TWG specifications
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('btn-standard-specs', false)
+            ->assertSee('data-title="ICT-TV-55 — LED Smart TV, 55&quot;"', false)->assertSee('₱50,000.00 per', false)->assertSee('55-inch 4K UHD, 3 HDMI')
+            ->assertSee('STANDARD_SPECS_MODAL', false);
 
         // Quantity is required for a standard item
         try {

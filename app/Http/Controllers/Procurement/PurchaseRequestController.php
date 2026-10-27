@@ -12,6 +12,7 @@ use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpPap;
 use App\Models\Procurement\PurchaseRequest;
 use App\Models\Procurement\PurchaseRequestEvent;
+use App\Models\Procurement\Rfq;
 use App\Models\User;
 use App\Services\Procurement\PurchaseRequestService;
 use Closure;
@@ -152,19 +153,74 @@ class PurchaseRequestController extends Controller
     {
         $this->authorizeView($request, $purchaseRequest);
 
-        return view('procurement.requests.extras.trail_modal', ['pr' => $purchaseRequest, 'events' => $this->trail($purchaseRequest)]);
+        $events = $this->trail($purchaseRequest);
+
+        // The RFQs / AOQs that can be opened: still there, and an AOQ only once its quotations are opened
+        // or it is awarded (otherwise, or deleted, the step is only text on the trail)
+        $uuids = $events->pluck('url')->filter()->map(fn ($url) => preg_match('#/(?:rfqs|aoqs)/([0-9a-f-]{36})#', $url, $m) ? $m[1] : null)->filter()->unique();
+        $existing = Rfq::whereIn('uuid', $uuids)->pluck('uuid')
+            ->merge(\App\Models\Procurement\Aoq::whereIn('uuid', $uuids)->get()->filter->isOpenToView()->pluck('uuid'))->all();
+
+        return view('procurement.requests.extras.trail_modal', ['pr' => $purchaseRequest, 'events' => $events, 'existing' => $existing]);
     }
 
     /** The status trail of the request and the revisions before it. */
     protected function trail(PurchaseRequest $pr): \Illuminate\Support\Collection
+    {
+        return PurchaseRequestEvent::with(['user', 'request'])->whereIn('purchase_request_id', $this->revisionIds($pr))
+            ->orderBy('created_at')->orderBy('id')->get();
+    }
+
+    /** The request and the revisions before it. */
+    protected function revisionIds(PurchaseRequest $pr): array
     {
         $ids = [$pr->id];
         for ($at = $pr; $at->revised_from_id && count($ids) < 50; $at = $at->revisedFrom) {
             $ids[] = $at->revised_from_id;
         }
 
-        return PurchaseRequestEvent::with(['user', 'request'])->whereIn('purchase_request_id', $ids)
-            ->orderBy('created_at')->orderBy('id')->get();
+        return $ids;
+    }
+
+    /**
+     * An RFQ on the request's trail, read-only (from the trail): for anyone who can view the
+     * request, without the RFQ permission, as long as the RFQ holds the request's items.
+     */
+    public function rfqView(Request $request, PurchaseRequest $purchaseRequest, Rfq $rfq)
+    {
+        $this->authorizeView($request, $purchaseRequest);
+        $this->assertHoldsRequest($rfq, $purchaseRequest);
+
+        return view('procurement.rfqs.extras.details_modal', [
+            'rfq'     => $rfq->load(['procurementMode', 'items.line.request']),
+            'canOpen' => $request->user()->canAccessPermission(Rfq::MANAGE_PERMISSION),
+        ]);
+    }
+
+    /** An AOQ on the request's trail, read-only: the quotations, the TWG's findings and the award. */
+    public function aoqView(Request $request, PurchaseRequest $purchaseRequest, \App\Models\Procurement\Aoq $aoq)
+    {
+        $this->authorizeView($request, $purchaseRequest);
+        $this->assertHoldsRequest($aoq->rfq, $purchaseRequest);
+        if (! $aoq->isOpenToView()) {
+            $this->deny($request, "{$aoq->title()} can be viewed once the quotations are opened" . ($aoq->opened_at ? ' (' . $aoq->opened_at->format('M d, Y g:i A') . ')' : '') . ' or it is awarded.');
+        }
+        $aoq->load(['rfq.procurementMode', 'rfq.items.line.request', 'suppliers.quotes', 'evaluator']);
+        $service = app(\App\Services\Procurement\AoqService::class);
+
+        return view('procurement.aoqs.extras.details_modal', [
+            'aoq'     => $aoq,
+            'rows'    => $service->evaluate($aoq),
+            'lot'     => $aoq->rfq->isPerLot() ? $service->lotStanding($aoq) : null,
+            'mine'    => $this->revisionIds($purchaseRequest),
+            'canOpen' => $request->user()->canAccessPermission(\App\Models\Procurement\Aoq::MANAGE_PERMISSION),
+        ]);
+    }
+
+    protected function assertHoldsRequest(Rfq $rfq, PurchaseRequest $pr): void
+    {
+        $holds = $rfq->items()->whereHas('line', fn ($q) => $q->whereIn('purchase_request_id', $this->revisionIds($pr)))->exists();
+        abort_unless($holds, 404, 'This is not on the request\'s trail.');
     }
 
     public function header(Request $request, PurchaseRequest $purchaseRequest)

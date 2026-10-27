@@ -12,9 +12,11 @@ use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable([
     'img_slug',
+    'name_title',  // Atty., Engr., Dr., ... (part of fullname)
     'fname',
     'lname',
     'minitial',
+    'name_suffix', // Jr., Sr., III, ... (part of fullname)
     'designation',
     'office_id',
     'region',      // virtual: stored in categories (see region())

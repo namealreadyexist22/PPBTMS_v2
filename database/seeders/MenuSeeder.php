@@ -75,6 +75,12 @@ class MenuSeeder extends Seeder
             ['icon' => 'fas fa-clipboard-list', 'route' => 'procurement.ppmp.index', 'order' => 1]
         );
 
+        // Offices ask the procuring office (e.g. MIS for ICT) for items; it approves into its PPMP distribution
+        Menu::updateOrCreate(
+            ['name' => 'Item Requests', 'parent_id' => $procurement->id],
+            ['icon' => 'fas fa-hand-holding', 'route' => 'procurement.item-requests.index', 'order' => 1]
+        );
+
         Menu::updateOrCreate(
             ['name' => 'Division PPMP', 'parent_id' => $procurement->id],
             ['icon' => 'fas fa-layer-group', 'route' => 'procurement.division-ppmp.index', 'order' => 2]

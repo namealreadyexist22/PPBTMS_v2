@@ -40,8 +40,9 @@
     padding-bottom: 0.68rem !important;
 }
 
+/* Only the hover colour: animating "all" also animates the menu's position, so it slid in from the left */
 .custom-menu-item {
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease;
 }
 
 .custom-menu-item:hover {

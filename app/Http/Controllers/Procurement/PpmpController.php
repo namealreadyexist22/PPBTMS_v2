@@ -79,7 +79,7 @@ class PpmpController extends Controller
         $this->authorizeView($request, $ppmp);
 
         $user = $request->user();
-        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'paps.items.distributions', 'items', 'signatories', 'divisionPpmps']);
+        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'paps.items.distributions', 'paps.items.item.unit', 'items', 'signatories', 'divisionPpmps']);
 
         $hasOpenAmendment = Ppmp::where('amended_from_id', $ppmp->id)
             ->whereIn('status', [PpmpStatus::Draft, PpmpStatus::Submitted, PpmpStatus::Returned])

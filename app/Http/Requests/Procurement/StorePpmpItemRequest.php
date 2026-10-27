@@ -63,7 +63,7 @@ class StorePpmpItemRequest extends FormRequest
             'quantity'             => ['nullable', 'numeric', 'min:0'],
             'unit_id'              => ['nullable', 'integer', 'exists:units,id'],
             'unit_cost'            => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
-            'quantity_size'        => ['nullable', 'string', 'max:2000'],   // specifications
+            'quantity_size'        => ['nullable', 'string', 'max:5000'],   // specifications (as long as a standard item's)
             'procurement_mode_id'  => ['required', 'integer', 'exists:procurement_modes,id'],
             'pre_proc_conference'  => ['boolean'],
             'is_epa'               => ['boolean'],

@@ -153,7 +153,13 @@
                     <div class="twg-label">Item {{ $i + 1 }} · {{ $qty($line->quantity) }} {{ $line->unit }} · ABC {{ $cents($row['abc_cents']) }}</div>
                     <div class="fw-bold mb-2">{{ $line->description }}</div>
                     <div class="twg-label mb-1">Specifications required</div>
-                    <div class="small twg-specs border rounded-3 p-2 bg-body-tertiary">{{ $line->specifications ?: 'No specifications on the PR.' }}</div>
+                    <div class="small border rounded-3 p-2 bg-body-tertiary">
+                        @if ($line->specifications)
+                            @include('procurement.partials.specs', ['text' => $line->specifications])
+                        @else
+                            No specifications on the PR.
+                        @endif
+                    </div>
                 </div>
                 <div class="col-lg-8">
                     <div class="table-responsive">

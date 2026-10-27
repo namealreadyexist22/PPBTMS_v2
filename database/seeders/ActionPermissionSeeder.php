@@ -14,6 +14,19 @@ class ActionPermissionSeeder extends Seeder
         $this->linkBasePermissions();
         $this->createDestroySubmenus();
         $this->grantAdminPageLinks();
+        $this->grantItemRequestsToPpmpRoles();
+    }
+
+    /** Item Requests is part of PPMP planning: every role that prepares PPMPs gets its sidebar link. */
+    protected function grantItemRequestsToPpmpRoles(): void
+    {
+        $menu = Menu::where('name', 'Item Requests')->first();
+        if (! $menu) {
+            return;
+        }
+
+        Role::whereHas('permissions', fn ($q) => $q->where('name', 'manage ppmp'))->get()
+            ->each(fn (Role $role) => $role->givePermissionTo($menu->permission_name));
     }
 
     /**

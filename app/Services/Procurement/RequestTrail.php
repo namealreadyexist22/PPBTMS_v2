@@ -28,11 +28,11 @@ class RequestTrail
         ]);
     }
 
-    /** The same step on every request with lines on the RFQ. */
-    public function recordForRfq(Rfq $rfq, string $event, string $description, ?User $user = null, ?string $remarks = null): void
+    /** The same step on every request with lines on the RFQ ($link false: the RFQ is being deleted). */
+    public function recordForRfq(Rfq $rfq, string $event, string $description, ?User $user = null, ?string $remarks = null, bool $link = true): void
     {
         foreach ($rfq->load('items.line.request')->requests() as $request) {
-            $this->record($request, $event, $description, $user, $remarks, $rfq->rfq_no ? route('procurement.rfqs.show', $rfq, false) : null);
+            $this->record($request, $event, $description, $user, $remarks, $link ? route('procurement.rfqs.show', $rfq, false) : null);
         }
     }
 

@@ -76,13 +76,17 @@
                     <button class="btn btn-sm btn-outline-danger flex-fill flex-md-grow-0" id="btn_delete"><i class="fas fa-trash-alt me-1"></i> Delete Draft</button>
                     <button class="btn btn-sm btn-primary flex-fill flex-md-grow-0" id="btn_submit" @disabled($pr->items->isEmpty())><i class="fas fa-paper-plane me-1"></i> Submit</button>
                 @endif
-                @if ($canManage && $pr->status === RequestStatus::Submitted)
-                    @if ($openRevision)
-                        <a href="{{ route('procurement.requests.show', $openRevision) }}" class="btn btn-sm btn-outline-primary flex-fill flex-md-grow-0"><i class="fas fa-code-branch me-1"></i> Open Rev. {{ $openRevision->revision }} (draft)</a>
+                {{-- Submitted = locked: Revise / Cancel only once the BAC returns it for that --}}
+                @if ($canManage && $pr->isReturned())
+                    @if ($pr->return_for === 'revision')
+                        @if ($openRevision)
+                            <a href="{{ route('procurement.requests.show', $openRevision) }}" class="btn btn-sm btn-outline-primary flex-fill flex-md-grow-0"><i class="fas fa-code-branch me-1"></i> Open Rev. {{ $openRevision->revision }} (draft)</a>
+                        @else
+                            <button class="btn btn-sm btn-outline-primary flex-fill flex-md-grow-0" id="btn_revise"><i class="fas fa-code-branch me-1"></i> Revise</button>
+                        @endif
                     @else
-                        <button class="btn btn-sm btn-outline-primary flex-fill flex-md-grow-0" id="btn_revise"><i class="fas fa-code-branch me-1"></i> Revise</button>
+                        <button class="btn btn-sm btn-outline-danger flex-fill flex-md-grow-0" id="btn_cancel"><i class="fas fa-ban me-1"></i> Cancel</button>
                     @endif
-                    <button class="btn btn-sm btn-outline-danger flex-fill flex-md-grow-0" id="btn_cancel"><i class="fas fa-ban me-1"></i> Cancel</button>
                 @endif
             </div>
         </div>
@@ -132,11 +136,23 @@
                 when submitted, it replaces the request before it and the PPMP charges are updated to this revision's amounts. Have it signed again by the same signatories.</div>
             </div>
         @endif
-        @if ($pr->status === RequestStatus::Submitted)
+        @if ($pr->status === RequestStatus::Submitted && $rfq)
+            <div class="alert alert-primary d-flex gap-2 align-items-start border-0 small mt-3 mb-0">
+                <i class="fas fa-cogs mt-1"></i>
+                <div>In process at the BAC ({{ $rfq->title() }}{{ $rfq->aoq ? ', ' . $rfq->aoq->title() . ' ' . mb_strtolower($rfq->aoq->status->label()) : '' }}).
+                It can no longer be revised or cancelled by the office; if it needs to be, ask the BAC to <strong>return it</strong> for revision or for cancellation.</div>
+            </div>
+        @elseif ($pr->isReturned())
+            <div class="alert alert-danger d-flex gap-2 align-items-start border-0 small mt-3 mb-0">
+                <i class="fas fa-undo mt-1"></i>
+                <div><strong>Returned by the BAC {{ \App\Models\Procurement\PurchaseRequest::RETURN_FOR[$pr->return_for] ?? '' }}</strong> {{ $pr->returned_at->format('M d, Y h:i A') }}: {{ $pr->return_reason }}
+                    <div class="mt-1">{{ $pr->return_for === 'cancellation' ? 'Cancel it' : 'Revise it and submit the revision' }}{{ $canManage ? '' : ' (the requesting office does this)' }}; it goes on an RFQ again only once revised.</div></div>
+            </div>
+        @elseif ($pr->status === RequestStatus::Submitted)
             <div class="alert alert-success d-flex gap-2 align-items-start border-0 small mt-3 mb-0">
                 <i class="fas fa-check-circle mt-1"></i>
                 <div>Submitted {{ $pr->submitted_at->format('M d, Y h:i A') }}. ₱{{ number_format((float) $pr->total_amount, 2) }} is charged to the PPMP projects.
-                To change it, use <strong>Revise</strong>; to drop it, <strong>Cancel</strong> (the amount goes back to the PPMP).</div>
+                It is now locked with the BAC: to change or drop it, ask the BAC to <strong>return it</strong> for revision or for cancellation.</div>
             </div>
         @endif
         @if ($pr->status === RequestStatus::Superseded)
@@ -198,7 +214,7 @@
                             <td style="min-width: 180px;">
                                 <div class="fw-semibold">{{ $line->description }}</div>
                                 @if ($line->ppmpItem)<div class="text-muted small"><i class="fas fa-diagram-project me-1"></i>{{ $line->ppmpItem->description }}</div>@endif
-                                @if ($line->specifications)<div class="text-muted fst-italic mt-1" style="white-space: pre-line;">{{ \Illuminate\Support\Str::limit($line->specifications, 300) }}</div>@endif
+                                @if ($line->specifications)<div class="mt-2">@include('procurement.partials.specs', ['text' => $line->specifications])</div>@endif
                             </td>
                             <td class="text-end">{{ rtrim(rtrim(number_format((float) $line->quantity, 2), '0'), '.') }}</td>
                             <td class="text-end">{{ number_format((float) $line->unit_cost, 2) }}</td>
@@ -239,7 +255,7 @@
                             </div>
                         @endif
                     </div>
-                    @if ($line->specifications)<div class="text-muted fst-italic mt-1" style="white-space: pre-line;">{{ \Illuminate\Support\Str::limit($line->specifications, 300) }}</div>@endif
+                    @if ($line->specifications)<div class="mt-2">@include('procurement.partials.specs', ['text' => $line->specifications])</div>@endif
                     @if ($jr && $line->nature_of_work)
                         <div class="mt-2"><div class="pr-label">Nature of Work</div><div style="white-space: pre-line;">{{ $line->nature_of_work }}</div></div>
                     @endif

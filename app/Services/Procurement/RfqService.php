@@ -81,6 +81,7 @@ class RfqService
 
         return PurchaseRequest::with(['office', 'pap', 'items.ppmpItem.procurementMode'])
             ->where('status', RequestStatus::Submitted)
+            ->whereNull('returned_at')   // returned to the office: it revises or cancels it first
             ->whereHas('ppmp', fn ($q) => $q->where('region', $rfq->region))
             // Being revised: wait for the revision
             ->whereNotIn('id', PurchaseRequest::where('status', RequestStatus::Draft)->whereNotNull('revised_from_id')->select('revised_from_id'))
@@ -118,6 +119,10 @@ class RfqService
                     throw new ProcurementException("{$pr->title()} is {$pr->status->label()}; only submitted requests go on an RFQ.");
                 }
 
+                if ($pr->returned_at) {
+                    throw new ProcurementException("{$pr->title()} was returned to the office " . PurchaseRequest::RETURN_FOR[$pr->return_for] . '; it goes on an RFQ again once revised.');
+                }
+
                 if ($pr->ppmp->region !== $rfq->region) {
                     throw new ProcurementException("{$pr->title()} is a {$pr->ppmp->region->label()} request; this RFQ is for {$rfq->region->label()}.");
                 }
@@ -147,7 +152,7 @@ class RfqService
 
             foreach ($lines->groupBy('purchase_request_id') as $prLines) {
                 $names = $prLines->pluck('description')->implode(', ');
-                app(RequestTrail::class)->record($prLines->first()->request, 'rfq_added', "Put on {$rfq->title()} for quotation: {$names}", $user);
+                app(RequestTrail::class)->record($prLines->first()->request, 'rfq_added', "Put on {$rfq->title()} for quotation: {$names}", $user, null, route('procurement.rfqs.show', $rfq, false));
             }
 
             return $rfq;
@@ -160,7 +165,7 @@ class RfqService
             $rfq = $this->lockEditable($rfq);
             $item = $rfq->items()->with('line.request')->whereKey($rfqItemId)->firstOrFail();
             $item->delete();
-            app(RequestTrail::class)->record($item->line->request, 'rfq_removed', "\"{$item->line->description}\" taken off {$rfq->title()}", $user);
+            app(RequestTrail::class)->record($item->line->request, 'rfq_removed', "\"{$item->line->description}\" taken off {$rfq->title()}", $user, null, route('procurement.rfqs.show', $rfq, false));
 
             // Empty again: any mode can be added
             $rfq->update(['procurement_mode_id' => $rfq->items()->exists() ? $rfq->procurement_mode_id : null, 'updated_by' => $user->id]);
@@ -240,9 +245,71 @@ class RfqService
     {
         DB::transaction(function () use ($rfq) {
             $rfq = $this->lockEditable($rfq);
-            app(RequestTrail::class)->recordForRfq($rfq, 'rfq_removed', "{$rfq->title()} deleted; the items can go on another RFQ", auth()->user());
+            app(RequestTrail::class)->recordForRfq($rfq, 'rfq_removed', "{$rfq->title()} deleted; the items can go on another RFQ", auth()->user(), null, false);
             $rfq->delete();
         });
+    }
+
+    /**
+     * Return a request in process to its office, for revision or for cancellation: its items come off
+     * the RFQ (with any quotations for them on a draft AOQ). An RFQ left without items is deleted
+     * (draft) or cancelled (issued). Refused once the AOQ is with the TWG, evaluated or awarded.
+     */
+    public function returnRequest(Rfq $rfq, PurchaseRequest $request, User $user, string $for, string $reason): PurchaseRequest
+    {
+        if (! array_key_exists($for, PurchaseRequest::RETURN_FOR)) {
+            throw new ProcurementException('Say whether it is returned for revision or for cancellation.');
+        }
+
+        $files = [];
+        $request = DB::transaction(function () use ($rfq, $request, $user, $for, $reason, &$files) {
+            $rfq = Rfq::whereKey($rfq->id)->lockForUpdate()->firstOrFail();
+            $request = PurchaseRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+
+            if (! in_array($rfq->status, [RfqStatus::Draft, RfqStatus::Issued], true)) {
+                throw new ProcurementException("{$rfq->title()} is {$rfq->status->label()}.");
+            }
+
+            $aoq = $rfq->aoq()->first();
+            if ($aoq && ! $aoq->isEditable()) {
+                throw new ProcurementException("{$aoq->title()} is {$aoq->status->label()}; recall or reopen it first, then return the request.");
+            }
+
+            $items = $rfq->items()->whereHas('line', fn ($q) => $q->where('purchase_request_id', $request->id))->get();
+            if ($items->isEmpty()) {
+                throw new ProcurementException("{$request->title()} has no items on {$rfq->title()}.");
+            }
+
+            // The quotations for its items go with them (their PDFs once committed)
+            if ($aoq) {
+                $files = \App\Models\Procurement\AoqQuote::whereIn('rfq_item_id', $items->pluck('id'))->pluck('attachment_path')->filter()->all();
+            }
+            $rfq->items()->whereKey($items->pluck('id'))->delete();
+
+            app(PurchaseRequestService::class)->markReturned($request, $user, $for, $reason, $rfq->title());
+
+            if (! $rfq->items()->exists()) {
+                // Nothing left to quote
+                if ($rfq->status === RfqStatus::Draft) {
+                    $rfq->delete();
+                } else {
+                    if ($aoq) {
+                        $files = array_merge($files, app(AoqAttachmentService::class)->pathsOfAoq($aoq));
+                        $aoq->delete();
+                    }
+                    $rfq->update(['status' => RfqStatus::Cancelled, 'cancelled_at' => now(), 'cancel_reason' => "Its requests were returned to the office: {$reason}", 'updated_by' => $user->id]);
+                }
+            } else {
+                $rfq->update(['updated_by' => $user->id]);
+                $this->recalculate($rfq);
+            }
+
+            return $request;
+        });
+
+        app(AoqAttachmentService::class)->deleteFiles($files);
+
+        return $request;
     }
 
     /** The open RFQ a request's lines are on, if any (blocks revising or cancelling the request). */

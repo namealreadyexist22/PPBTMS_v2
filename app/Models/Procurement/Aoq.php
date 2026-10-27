@@ -61,6 +61,12 @@ class Aoq extends Model
         return 'AOQ ' . ($this->rfq?->rfq_no ?? '');
     }
 
+    /** Outside the BAC (e.g. the requesting office on its trail): only once the quotations are opened, or it is awarded. */
+    public function isOpenToView(): bool
+    {
+        return $this->status === AoqStatus::Awarded || ($this->opened_at !== null && $this->opened_at->lte(now()));
+    }
+
     public function isEditable(): bool
     {
         return $this->status === AoqStatus::Draft;

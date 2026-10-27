@@ -37,9 +37,11 @@ class StoreUserRequest extends FormRequest
 
         return [
             'id'         => ['nullable', 'integer', 'exists:users,id'],
-            'fname'      => ['required', 'string', 'max:255'],
-            'minitial'   => ['nullable', 'string', 'max:1'],
-            'lname'      => ['required', 'string', 'max:255'],
+            'name_title'  => ['nullable', 'string', 'max:20'],
+            'fname'       => ['required', 'string', 'max:255'],
+            'minitial'    => ['nullable', 'string', 'max:1'],
+            'lname'       => ['required', 'string', 'max:255'],
+            'name_suffix' => ['nullable', 'string', 'max:10'],
 
             // Ignore the current user record context unique tracking pointer when updating
             'username'   => ['required', 'string', 'min:4', 'max:50', 'unique:users,username,' . ($userId ?? 'NULL')],

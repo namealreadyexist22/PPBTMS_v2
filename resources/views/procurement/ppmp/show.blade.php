@@ -201,7 +201,20 @@
                                     @php $msComplete = $item->marketScopingComplete(); @endphp
                                     <div class="mt-1 d-flex flex-wrap gap-1 align-items-center ppmp-chips">
                                         @if ($item->is_epa)<span class="badge bg-info text-dark" data-bs-toggle="tooltip" title="Early Procurement Activity (RA 12009 Sec. 12): no award until the funds are effective">EPA</span>@endif
-                                        @if ($item->item_id)<span class="badge bg-light text-dark border" data-bs-toggle="tooltip" title="Standard item: unit, price and specs from the catalog"><i class="fas fa-tag"></i></span>@endif
+                                        @if ($item->item_id)
+                                            {{-- Standard item: click for its TWG specifications (as on this project) --}}
+                                            @php
+                                                $std = $item->item;
+                                                $stdInfo = collect([
+                                                    $std?->isStandard() ? '₱' . number_format((float) $std->standard_unit_cost, 2) . ' per ' . ($std->unit?->name ?? $item->unit?->name ?? 'unit') : null,
+                                                    trim(($std?->twg_reference ?? '') . ($std?->twg_approved_at ? ' · ' . $std->twg_approved_at->format('M d, Y') : ''), ' ·') ?: null,
+                                                ])->filter()->implode(' · ');
+                                            @endphp
+                                            <a href="#" class="badge bg-light text-dark border text-decoration-none btn-standard-specs"
+                                               data-title="{{ $std ? $std->code . ' — ' . $std->name : $item->description }}" data-info="{{ $stdInfo }}"
+                                               data-html="{{ filled($item->quantity_size ?: $std?->specifications) ? view('procurement.partials.specs', ['text' => $item->quantity_size ?: $std?->specifications])->render() : '' }}"
+                                               data-bs-toggle="tooltip" title="Standard item: click to view its TWG specifications"><i class="fas fa-tag"></i></a>
+                                        @endif
                                         <a href="#" class="badge text-decoration-none btn-market-scoping {{ $msComplete ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' }}"
                                            data-url="{{ route('procurement.ppmp.items.market-scoping.entry', [$ppmp, $item]) }}"
                                            data-bs-toggle="tooltip" title="Market Scoping Checklist: {{ $msComplete ? 'complete' : 'not complete' }}"><i class="fas fa-clipboard-check"></i></a>
@@ -405,6 +418,25 @@
     ])
 @endif
 
+{{-- A standard item's TWG specifications (from its badge) --}}
+<div class="modal fade" id="STANDARD_SPECS_MODAL" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light py-3">
+                <div>
+                    <h5 class="modal-title fw-bold"><i class="fas fa-tag text-muted me-2"></i>Specifications (TWG)</h5>
+                    <div class="small text-muted" id="std_specs_title"></div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4 small">
+                <div class="text-muted mb-3 d-none" id="std_specs_info"><i class="fas fa-stamp me-1"></i><span></span></div>
+                <div id="std_specs_body"></div>
+            </div>
+            <div class="modal-footer bg-light py-2"><button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Close</button></div>
+        </div>
+    </div>
+</div>
 
 <div id="modal-body"></div>
 @endsection
@@ -547,6 +579,17 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Market Scoping Checklist of a project (from its menu or its checklist icon)
+    // Standard item badge: its TWG specifications (rendered by the server, escaped)
+    $(document).on('click', '.btn-standard-specs', function (e) {
+        e.preventDefault();
+        bootstrap.Tooltip.getInstance(this)?.hide();
+        const data = $(this).data();
+        $('#std_specs_title').text(data.title);
+        $('#std_specs_info').toggleClass('d-none', !data.info).find('span').text(data.info || '');
+        $('#std_specs_body').html(data.html || '<span class="text-muted">No specifications set by the TWG.</span>');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('STANDARD_SPECS_MODAL')).show();
+    });
+
     $(document).on('click', '.btn-market-scoping', function (e) {
         e.preventDefault();
         if (isModalOpen) return;

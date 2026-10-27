@@ -68,7 +68,7 @@
                                     <td class="ps-3 text-muted align-top">{{ $i + 1 }}</td>
                                     <td>
                                         <div class="fw-semibold">{{ $line->description }}</div>
-                                        @if ($line->specifications)<div class="text-muted" style="white-space: pre-line;">{{ $line->specifications }}</div>@endif
+                                        @if ($line->specifications)<div class="text-muted mt-1">@include('procurement.partials.specs', ['text' => $line->specifications])</div>@endif
                                         <div class="text-muted">{{ $line->request?->title() }}</div>
                                     </td>
                                     <td class="text-center align-top">{{ $qty($line->quantity) }}</td>

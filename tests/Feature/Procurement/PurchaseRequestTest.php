@@ -104,6 +104,14 @@ class PurchaseRequestTest extends TestCase
         return $this->requests->create($kind, $this->ppmp->paps()->first(), $this->staff, $this->signed($data));
     }
 
+    /** A submitted request is locked: the BAC returns it to the office for revision or cancellation. */
+    protected function returnedFor(PurchaseRequest $pr, string $for = 'revision'): PurchaseRequest
+    {
+        $bac = User::factory()->create(['is_activated' => 1]);
+
+        return $this->requests->returnToOffice($pr, $bac, $for, 'Returned for the test')->fresh();
+    }
+
     protected function line(PpmpItem $project, $quantity, $unitCost, array $extra = []): array
     {
         return $extra + ['ppmp_item_id' => $project->id, 'unit' => 'units', 'description' => $project->description, 'quantity' => $quantity, 'unit_cost' => $unitCost];
@@ -187,7 +195,7 @@ class PurchaseRequestTest extends TestCase
         $this->requests->saveLine($pr, $this->line($this->hdd, 8, '5000'));   // the whole project
         $pr = $this->requests->submit($pr->fresh(), $this->staff);
 
-        $rev = $this->requests->revise($pr, $this->staff);
+        $rev = $this->requests->revise($this->returnedFor($pr), $this->staff);
         $this->assertSame(RequestStatus::Draft, $rev->status);
         $this->assertSame(1, $rev->revision);
         $this->assertSame('2026-06-0001', $rev->request_no);
@@ -212,6 +220,7 @@ class PurchaseRequestTest extends TestCase
         $pr = $this->draft();
         $this->requests->saveLine($pr, $this->line($this->hdd, 1, '5000'));
         $pr = $this->requests->submit($pr->fresh(), $this->staff);
+        $pr = $this->returnedFor($pr);
         $this->requests->revise($pr, $this->staff);
 
         $this->expectExceptionMessage('already being prepared');
@@ -224,7 +233,7 @@ class PurchaseRequestTest extends TestCase
         $this->requests->saveLine($pr, $this->line($this->hdd, 4, '5000'));
         $pr = $this->requests->submit($pr->fresh(), $this->staff);
 
-        $this->requests->cancel($pr, $this->staff, 'Items donated');
+        $this->requests->cancel($this->returnedFor($pr, 'cancellation'), $this->staff, 'Items donated');
 
         $this->assertSame(RequestStatus::Cancelled, $pr->fresh()->status);
         $this->assertEquals('0.00', $this->hdd->fresh()->committed_amount);
@@ -256,7 +265,7 @@ class PurchaseRequestTest extends TestCase
         $next = $this->requests->create(RequestKind::Pr, $v2->paps()->first(), $this->staff, $this->signed());
         $this->assertTrue($this->requests->availableLines($next)->contains('id', $newHdd->id));
 
-        $this->requests->cancel($pr, $this->staff, 'Re-done');
+        $this->requests->cancel($this->returnedFor($pr, 'cancellation'), $this->staff, 'Re-done');
         $this->assertEquals('0.00', $newHdd->fresh()->committed_amount);
     }
 
@@ -309,6 +318,12 @@ class PurchaseRequestTest extends TestCase
             ->assertSee('26-05012-51')->assertSee('20,000.00')->assertSee('PABLO LUIS S. AZCONA', false)
             ->assertSee('FM-AFD-PPS-003');
 
+        // Submitted = locked: no Revise / Cancel until the BAC returns it
+        $this->get(route('procurement.requests.show', $pr))->assertSee('locked with the BAC')->assertDontSee('id="btn_revise"', false)->assertDontSee('id="btn_cancel"', false);
+        $this->postJson(route('procurement.requests.revise', $pr))->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'Ask the BAC to return it for revision'));
+        $this->returnedFor($pr);
+        $this->get(route('procurement.requests.show', $pr))->assertSee('Returned by the BAC for revision')->assertSee('id="btn_revise"', false)->assertDontSee('id="btn_cancel"', false);
+        $this->postJson(route('procurement.requests.cancel', $pr), ['reason' => 'x'])->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'was returned for revision'));
         $this->postJson(route('procurement.requests.revise', $pr))->assertOk();
         $this->postJson(route('procurement.requests.cancel', $pr), ['reason' => ''])->assertStatus(422);
     }
@@ -327,7 +342,7 @@ class PurchaseRequestTest extends TestCase
         $b = $this->requests->submit($b->fresh(), $this->staff);
         $this->assertSame(300, $this->requests->remainingQuantity($draft, $this->hdd));
 
-        $this->requests->cancel($b, $this->staff, 'Not needed');
+        $this->requests->cancel($this->returnedFor($b, 'cancellation'), $this->staff, 'Not needed');
         $this->assertSame(500, $this->requests->remainingQuantity($draft, $this->hdd));
 
         // Another draft holds nothing until it is submitted
@@ -336,7 +351,7 @@ class PurchaseRequestTest extends TestCase
         $this->assertSame(500, $this->requests->remainingQuantity($draft, $this->hdd));
 
         // A submitted revision replaces the request before it (superseded: no longer counted)
-        $rev = $this->requests->revise($a, $this->staff);
+        $rev = $this->requests->revise($this->returnedFor($a), $this->staff);
         $this->requests->saveLine($rev, $this->line($this->hdd, 1, '5000'), $rev->items->first());
         $this->requests->submit($rev->fresh(), $this->staff);
         $this->assertSame(RequestStatus::Superseded, $a->fresh()->status);
@@ -363,7 +378,7 @@ class PurchaseRequestTest extends TestCase
         $a = $this->draft();
         $this->requests->saveLine($a, $this->line($this->hdd, 6, '5000'));
         $a = $this->requests->submit($a->fresh(), $this->staff);
-        $rev = $this->requests->revise($a, $this->staff);
+        $rev = $this->requests->revise($this->returnedFor($a), $this->staff);
 
         $this->assertSame(200, $this->requests->remainingQuantity($rev, $this->hdd));
         $this->assertSame(800, $this->requests->remainingQuantity($rev, $this->hdd, $rev->items->first()));
@@ -452,12 +467,12 @@ class PurchaseRequestTest extends TestCase
         $this->assertEquals('5.00', $this->hdd->fresh()->committed_quantity);
 
         // A revision swaps its quantity for the original's; cancelling gives it back
-        $rev = $this->requests->revise($a, $this->staff);
+        $rev = $this->requests->revise($this->returnedFor($a), $this->staff);
         $this->requests->removeLine($rev->items()->first());
         $rev = $this->requests->submit($rev->fresh(), $this->staff);
         $this->assertEquals('2.00', $this->hdd->fresh()->committed_quantity);
 
-        $this->requests->cancel($rev, $this->staff, 'Not needed');
+        $this->requests->cancel($this->returnedFor($rev, 'cancellation'), $this->staff, 'Not needed');
         $this->assertEquals('0.00', $this->hdd->fresh()->committed_quantity);
         $this->assertEquals('0.00', $this->hdd->fresh()->committed_amount);
     }
@@ -537,6 +552,7 @@ class PurchaseRequestTest extends TestCase
         $this->assertOverQuantity(fn () => $this->requests->saveLine($stale, $this->line($this->hdd, 1, '5000')), 'can no longer be changed');
         $this->assertCount(1, $submitted->items()->get());
 
+        $submitted = $this->returnedFor($submitted, 'cancellation');
         $copy = $submitted->fresh();
         $this->requests->cancel($submitted, $this->staff, 'Not needed');
         $this->assertOverQuantity(fn () => $this->requests->cancel($copy, $this->staff, 'Again'), 'is Cancelled');
@@ -579,7 +595,7 @@ class PurchaseRequestTest extends TestCase
         $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $draft, 'id' => $draftLine->id]))
             ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSeeText('6 of 8 piece');
 
-        $rev = $this->requests->revise($a, $this->staff);
+        $rev = $this->requests->revise($this->returnedFor($a), $this->staff);
         $this->get(route('procurement.requests.lines.entry', ['purchaseRequest' => $rev, 'id' => $rev->items->first()->id]))
             ->assertOk()->assertSee('value="' . $newHdd->id . '" selected', false)->assertSeeText('8 of 8 piece');
     }
@@ -589,7 +605,7 @@ class PurchaseRequestTest extends TestCase
         $a = $this->draft();
         $this->requests->saveLine($a, $this->line($this->hdd, 2, '5000'));
         $a = $this->requests->submit($a->fresh(), $this->staff);
-        $rev = $this->requests->revise($a, $this->staff);
+        $rev = $this->requests->revise($this->returnedFor($a), $this->staff);
         $line = $rev->items()->first();
 
         DB::enableQueryLog();

@@ -1,5 +1,7 @@
+{{-- Fixed positioning: the menu floats over the table instead of being cut off by its scroll area (last rows) --}}
 <div class="dropdown">
-    <button class="btn btn-link text-secondary p-0 border-0 lh-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+    <button class="btn btn-link text-secondary p-0 border-0 lh-1" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+            data-bs-popper-config='{"strategy":"fixed"}' aria-label="Actions for {{ $user->fullname }}">
         <i class="fas fa-ellipsis-h"></i>
     </button>
     <ul class="dropdown-menu dropdown-menu-end shadow border border-light custom-menu-item" style="min-width: 160px; font-size: 0.85rem;">

@@ -20,6 +20,7 @@ class PurchaseRequestEvent extends Model
         'revision'          => ['fas fa-code-branch', 'secondary'],
         'superseded'        => ['fas fa-layer-group', 'dark'],
         'cancelled'         => ['fas fa-ban', 'danger'],
+        'returned'          => ['fas fa-undo', 'danger'],
         'rfq_added'         => ['fas fa-file-signature', 'secondary'],
         'rfq_removed'       => ['fas fa-minus-circle', 'secondary'],
         'rfq_issued'        => ['fas fa-file-signature', 'primary'],

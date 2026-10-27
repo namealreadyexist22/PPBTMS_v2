@@ -1,13 +1,16 @@
 {{-- Status trail of the request (and the revisions before it), latest first: through the RFQ, AOQ, TWG and award.
      Expects $events (PurchaseRequestEvent with user, request), $pr; $bare (optional): the list only, without the card (modal). --}}
 @php
-    $user = auth()->user();
-    // A link only to a page the viewer can open
-    $link = fn ($url) => match (true) {
-        ! $url                              => null,
-        str_contains($url, '/aoqs/')        => $user->canAccessPermission(\App\Models\Procurement\Aoq::MANAGE_PERMISSION) ? $url : null,
-        str_contains($url, '/rfqs/')        => $user->canAccessPermission(\App\Models\Procurement\Rfq::MANAGE_PERMISSION) ? $url : null,
-        default                             => null,
+    // The RFQ / AOQ of a step opens read-only in a modal, for anyone who can view the request: [url, modal id]
+    $existing ??= null;   // uuids of the RFQs / AOQs still there (null: not checked)
+    $view = function (?string $url) use ($pr, $existing) {
+        if ($url && preg_match('#/(rfqs|aoqs)/([0-9a-f-]{36})#', $url, $m) && ($existing === null || in_array($m[2], $existing, true))) {
+            return $m[1] === 'rfqs'
+                ? [route('procurement.requests.rfq-view', [$pr, $m[2]]), 'RFQ_DETAILS_MODAL']
+                : [route('procurement.requests.aoq-view', [$pr, $m[2]]), 'AOQ_DETAILS_MODAL'];
+        }
+
+        return null;
     };
     $latest = $events->last();
     $bare ??= false;
@@ -38,7 +41,11 @@
                         <span class="dot bg-{{ $event->color() }}-subtle text-{{ $event->color() }}-emphasis"><i class="{{ $event->icon() }}"></i></span>
                         <div class="small">
                             <div class="fw-semibold">
-                                @if ($url = $link($event->url))<a href="{{ $url }}" class="text-decoration-none">{{ $event->description }}</a>@else{{ $event->description }}@endif
+                                @if ($target = $view($event->url))
+                                    <a href="#" class="text-decoration-none js-trail-view" data-url="{{ $target[0] }}" data-modal="{{ $target[1] }}" title="View">{{ $event->description }} <i class="fas fa-eye ms-1" style="font-size: .7rem;"></i></a>
+                                @else
+                                    {{ $event->description }}
+                                @endif
                             </div>
                             @if ($event->remarks)<div class="fst-italic text-body-secondary">"{{ $event->remarks }}"</div>@endif
                             <div class="text-muted">

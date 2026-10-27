@@ -454,6 +454,30 @@ class AoqTest extends TestCase
         $this->get(route('procurement.requests.rfq', $pr))->assertOk()->assertSee('RFQ_DETAILS_MODAL', false)->assertSee($rfq->title())
             ->assertSee('Quotations due')->assertDontSee('Open RFQ page');   // the office: details only
 
+        // The trail's RFQ and AOQ open read-only for the office, which has no RFQ / AOQ access
+        $this->assertFalse($this->staff->canAccessPermission(Aoq::MANAGE_PERMISSION));
+        $this->get(route('procurement.requests.trail', $pr))->assertOk()
+            ->assertSee(route('procurement.requests.rfq-view', [$pr, $rfq]), false)->assertSee(route('procurement.requests.aoq-view', [$pr, $aoq]), false)
+            ->assertDontSee(route('procurement.aoqs.show', $aoq), false);
+        $this->get(route('procurement.requests.rfq-view', [$pr, $rfq]))->assertOk()->assertSee('RFQ_DETAILS_MODAL', false);
+        $this->get(route('procurement.requests.aoq-view', [$pr, $aoq]))->assertOk()->assertSee('AOQ_DETAILS_MODAL', false)
+            ->assertSee('Alpha Trading')->assertSee('Awarded')->assertSee('this request')->assertSee('Meets specs')->assertDontSee('Open AOQ page');
+
+        // Not on this request's trail: refused
+        $otherPr = $this->submittedPr([[$this->ram, 1]]);
+        $otherRfq = $this->rfqs->issue($this->rfqs->addLines($this->draftRfq(), $this->bac, $otherPr->items->pluck('id')->all()), $this->bac,
+            ['submission_deadline' => '2026-10-20 10:00', 'signatory_name' => 'Ana Santos']);
+        $otherAoq = $this->aoqs->start($otherRfq, $this->bac);
+        $this->get(route('procurement.requests.rfq-view', [$pr, $otherRfq]))->assertNotFound();
+        $this->get(route('procurement.requests.aoq-view', [$pr, $otherAoq]))->assertNotFound();
+
+        // An AOQ not awarded: viewable on the trail only once its quotations are opened (Oct 20, 10:00 here; now is Oct 16)
+        $this->get(route('procurement.requests.trail', $otherPr))->assertOk()->assertDontSee(route('procurement.requests.aoq-view', [$otherPr, $otherAoq]), false);
+        $this->get(route('procurement.requests.aoq-view', [$otherPr, $otherAoq]))->assertForbidden();
+        Carbon::setTestNow('2026-10-20 10:30:00');
+        $this->get(route('procurement.requests.trail', $otherPr))->assertSee(route('procurement.requests.aoq-view', [$otherPr, $otherAoq]), false);
+        $this->get(route('procurement.requests.aoq-view', [$otherPr, $otherAoq]))->assertOk()->assertSee('AOQ_DETAILS_MODAL', false)->assertSee('No quotations recorded yet.');
+
         // From the list: a Trail button opening it in a modal
         $this->get(route('procurement.requests.index'))->assertOk()->assertSee(route('procurement.requests.trail', $pr), false);
         $this->get(route('procurement.requests.trail', $pr))->assertOk()->assertSee('REQUEST_TRAIL_MODAL', false)

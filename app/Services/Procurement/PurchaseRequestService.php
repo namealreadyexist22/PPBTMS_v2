@@ -258,13 +258,15 @@ class PurchaseRequestService
         }
 
         $this->assertNotOnRfq($request, 'revised');
+        $this->assertReturnedFor($request, 'revision', 'revised');
 
         if ($open = $this->openRevision($request)) {
             throw new ProcurementException("{$open->title()} is already being prepared. Open it instead.");
         }
 
         return DB::transaction(function () use ($request, $user) {
-            $copy = $request->replicate(['uuid', 'status', 'submitted_at', 'cancelled_at', 'cancel_reason', 'created_by', 'updated_by']);
+            // The revision starts fresh: not returned (the request it revises keeps that on its record)
+            $copy = $request->replicate(['uuid', 'status', 'submitted_at', 'cancelled_at', 'cancel_reason', 'returned_at', 'return_for', 'return_reason', 'returned_by', 'created_by', 'updated_by']);
             $copy->fill([
                 'revision'        => $request->revision + 1,
                 'revised_from_id' => $request->id,
@@ -298,6 +300,7 @@ class PurchaseRequestService
         }
 
         $this->assertNotOnRfq($request, 'cancelled');
+        $this->assertReturnedFor($request, 'cancellation', 'cancelled');
 
         if ($open = $this->openRevision($request)) {
             throw new ProcurementException("Delete the draft {$open->title()} first.");
@@ -326,6 +329,62 @@ class PurchaseRequestService
 
             return $request;
         });
+    }
+
+    /**
+     * The BAC returns a submitted request to its office, for revision or for cancellation: the only
+     * way the office can then revise or cancel it (a submitted request is locked). A request on an
+     * RFQ has its items taken off it (RfqService::returnRequest).
+     */
+    public function returnToOffice(PurchaseRequest $request, User $user, string $for, string $reason): PurchaseRequest
+    {
+        if ($rfq = app(RfqService::class)->openRfqFor($request)) {
+            return app(RfqService::class)->returnRequest($rfq, $request, $user, $for, $reason);
+        }
+
+        return DB::transaction(function () use ($request, $user, $for, $reason) {
+            $request = PurchaseRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+
+            return $this->markReturned($request, $user, $for, $reason);
+        });
+    }
+
+    /** Record the return (in the caller's transaction): the trail and a notice to whoever prepared it. */
+    public function markReturned(PurchaseRequest $request, User $user, string $for, string $reason, ?string $onRfq = null): PurchaseRequest
+    {
+        if (! array_key_exists($for, PurchaseRequest::RETURN_FOR)) {
+            throw new ProcurementException('Say whether it is returned for revision or for cancellation.');
+        }
+
+        if ($request->status !== RequestStatus::Submitted) {
+            throw new ProcurementException("{$request->title()} is {$request->status->label()}; only a submitted request is returned.");
+        }
+
+        if ($request->isReturned()) {
+            throw new ProcurementException("{$request->title()} was already returned " . PurchaseRequest::RETURN_FOR[$request->return_for] . '.');
+        }
+
+        $request->update(['returned_at' => now(), 'return_for' => $for, 'return_reason' => $reason, 'returned_by' => $user->id, 'updated_by' => $user->id]);
+
+        $label = PurchaseRequest::RETURN_FOR[$for];
+        app(RequestTrail::class)->record($request, 'returned', "Returned to the office by the BAC {$label}" . ($onRfq ? "; its items were taken off {$onRfq}" : ''), $user, $reason);
+        if ($creator = $request->creator) {
+            notify_user($creator, "{$request->kind->short()} returned by the BAC", "{$request->title()} was returned {$label}: {$reason}", route('procurement.requests.show', $request), 'fas fa-undo');
+        }
+
+        return $request;
+    }
+
+    /** A submitted request is locked: the office revises or cancels it only once the BAC returns it for that. */
+    protected function assertReturnedFor(PurchaseRequest $request, string $for, string $action): void
+    {
+        if (! $request->isReturned()) {
+            throw new ProcurementException("{$request->title()} is submitted and locked, so it cannot be {$action}. Ask the BAC to return it " . PurchaseRequest::RETURN_FOR[$for] . '.');
+        }
+
+        if ($request->return_for !== $for) {
+            throw new ProcurementException("{$request->title()} was returned " . PurchaseRequest::RETURN_FOR[$request->return_for] . ", not {$action}.");
+        }
     }
 
     public function deleteDraft(PurchaseRequest $request): void
@@ -444,7 +503,7 @@ class PurchaseRequestService
     protected function assertNotOnRfq(PurchaseRequest $request, string $action): void
     {
         if ($rfq = app(RfqService::class)->openRfqFor($request)) {
-            throw new ProcurementException("{$request->title()} has items on {$rfq->title()}, so it cannot be {$action}. Take them off the RFQ or cancel it first.");
+            throw new ProcurementException("{$request->title()} is in process at the BAC ({$rfq->title()}), so it cannot be {$action}. Ask the BAC to return it to the office for revision or cancellation.");
         }
     }
 

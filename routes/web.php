@@ -17,6 +17,7 @@ use App\Http\Controllers\Procurement\AppController;
 use App\Http\Controllers\Procurement\BudgetAllocationController;
 use App\Http\Controllers\Procurement\StandardItemController;
 use App\Http\Controllers\Procurement\DivisionPpmpController;
+use App\Http\Controllers\Procurement\ItemRequestController;
 use App\Http\Controllers\Procurement\PpmpController;
 use App\Http\Controllers\Procurement\PurchaseRequestController;
 use App\Http\Controllers\Procurement\RfqController;
@@ -159,6 +160,17 @@ use Illuminate\Support\Facades\Route;
             Route::delete('items/destroy', [StandardItemController::class, 'destroy'])->name('items.destroy');
         });
 
+        // Item requests: an office asks the office that procures an item; that office approves into its PPMP distribution
+        Route::middleware('perm:manage ppmp')->group(function () {
+            Route::get('item-requests', [ItemRequestController::class, 'index'])->name('item-requests.index');
+            Route::get('item-requests/entry', [ItemRequestController::class, 'entry'])->name('item-requests.entry');
+            Route::post('item-requests', [ItemRequestController::class, 'store'])->name('item-requests.store');
+            Route::get('item-requests/{itemRequest}', [ItemRequestController::class, 'show'])->name('item-requests.show');
+            Route::post('item-requests/{itemRequest}/cancel', [ItemRequestController::class, 'cancel'])->name('item-requests.cancel');
+            Route::get('item-requests/{itemRequest}/decide', [ItemRequestController::class, 'decideEntry'])->name('item-requests.decide-entry');
+            Route::post('item-requests/{itemRequest}/decide', [ItemRequestController::class, 'decide'])->name('item-requests.decide');
+        });
+
         // Supplier directory (picked on the AOQ)
         Route::middleware('perm:manage suppliers')->group(function () {
             Route::get('suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
@@ -197,6 +209,9 @@ use Illuminate\Support\Facades\Route;
             Route::get('requests/{purchaseRequest}/trail', [PurchaseRequestController::class, 'trailModal'])->name('requests.trail');
             Route::get('requests/{purchaseRequest}/ppmp', [PurchaseRequestController::class, 'ppmpModal'])->name('requests.ppmp');
             Route::get('requests/{purchaseRequest}/rfq', [PurchaseRequestController::class, 'rfqModal'])->name('requests.rfq');
+            // From the status trail: read-only, for anyone who can view the request
+            Route::get('requests/{purchaseRequest}/rfqs/{rfq}', [PurchaseRequestController::class, 'rfqView'])->name('requests.rfq-view');
+            Route::get('requests/{purchaseRequest}/aoqs/{aoq}', [PurchaseRequestController::class, 'aoqView'])->name('requests.aoq-view');
             Route::post('requests/{purchaseRequest}/header', [PurchaseRequestController::class, 'header'])->name('requests.header');
             Route::post('requests/{purchaseRequest}/signatories', [PurchaseRequestController::class, 'signatories'])->name('requests.signatories');
             Route::get('requests/{purchaseRequest}/lines/entry', [PurchaseRequestController::class, 'lineEntry'])->name('requests.lines.entry');
@@ -221,6 +236,8 @@ use Illuminate\Support\Facades\Route;
             Route::get('rfqs/{rfq}', [RfqController::class, 'show'])->name('rfqs.show');
             Route::get('rfqs/{rfq}/print', [RfqController::class, 'print'])->name('rfqs.print');
             Route::get('rfqs/{rfq}/requests/{purchaseRequest}', [RfqController::class, 'request'])->name('rfqs.request');
+            Route::post('rfqs/{rfq}/requests/{purchaseRequest}/return', [RfqController::class, 'returnRequest'])->name('rfqs.return-request');
+            Route::post('rfq-requests/{purchaseRequest}/return', [RfqController::class, 'returnToOffice'])->name('rfqs.return-to-office');
             Route::post('rfqs/{rfq}/header', [RfqController::class, 'header'])->name('rfqs.header');
             Route::get('rfqs/{rfq}/picker', [RfqController::class, 'picker'])->name('rfqs.picker');
             Route::post('rfqs/{rfq}/lines', [RfqController::class, 'addLines'])->name('rfqs.lines.store');

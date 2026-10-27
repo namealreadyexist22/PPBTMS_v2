@@ -51,7 +51,7 @@ trait HasModernDataTable
     {
         $html = '
         <div class="dropdown">
-            <button class="btn btn-sm btn-light border dropdown-toggle no-caret px-2.5 py-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius: 6px; background-color: #ffffff;">
+            <button class="btn btn-sm btn-light border dropdown-toggle no-caret px-2.5 py-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-popper-config=\'{"strategy":"fixed"}\' style="border-radius: 6px; background-color: #ffffff;">
                 <i class="fas fa-ellipsis-h text-muted" style="font-size: 0.85rem;"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 py-2" style="font-size: 0.85rem; min-width: 140px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05)!important;">';

@@ -94,7 +94,13 @@
                                         @endif
                                     </td>
                                     <td class="text-end text-nowrap">{{ number_format((float) $row->total_amount, 2) }}</td>
-                                    <td class="text-center"><span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span></td>
+                                    <td class="text-center">
+                                        @if ($row->isReturned())
+                                            <span class="badge bg-danger" title="Returned by the BAC {{ \App\Models\Procurement\PurchaseRequest::RETURN_FOR[$row->return_for] ?? '' }}: {{ $row->return_reason }}">Returned</span>
+                                        @else
+                                            <span class="badge bg-{{ $row->status->color() }}">{{ $row->status->label() }}</span>
+                                        @endif
+                                    </td>
                                     <td class="text-center">
                                         <button type="button" class="btn btn-sm btn-outline-secondary py-0 js-trail" data-url="{{ route('procurement.requests.trail', $row) }}" title="Status trail of {{ $row->title() }}">
                                             <i class="fas fa-route me-1"></i>Status

@@ -68,8 +68,15 @@
             <div class="col-md-6">
                 <div class="pr-stat">
                     <div class="pr-label">PR / JR</div>
+                    {{-- In process here: the BAC may return one to its office (for revision or cancellation) while the AOQ is still a draft --}}
+                    @php $canReturn = in_array($rfq->status, [\App\Enums\RfqStatus::Draft, \App\Enums\RfqStatus::Issued], true) && (! $rfq->aoq || $rfq->aoq->isEditable()); @endphp
                     @forelse ($requests as $pr)
-                        <a href="#" class="badge rounded-pill bg-light text-dark border text-decoration-none me-1 js-view-request" data-url="{{ route('procurement.rfqs.request', [$rfq, $pr]) }}" data-title="{{ $pr->title() }}" title="View {{ $pr->title() }} ({{ $pr->office->shortName() }})"><i class="far fa-eye me-1"></i>{{ $pr->title() }}</a>
+                        <span class="d-inline-flex align-items-center me-1 mb-1">
+                            <a href="#" class="badge rounded-pill bg-light text-dark border text-decoration-none js-view-request" data-url="{{ route('procurement.rfqs.request', [$rfq, $pr]) }}" data-title="{{ $pr->title() }}" title="View {{ $pr->title() }} ({{ $pr->office->shortName() }})"><i class="far fa-eye me-1"></i>{{ $pr->title() }}</a>
+                            @if ($canReturn)
+                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger js-return-request" data-url="{{ route('procurement.rfqs.return-request', [$rfq, $pr]) }}" data-title="{{ $pr->title() }}" title="Return {{ $pr->title() }} to the office" aria-label="Return {{ $pr->title() }} to the office"><i class="fas fa-undo"></i></button>
+                            @endif
+                        </span>
                     @empty
                         <div class="text-muted small">None yet</div>
                     @endforelse
@@ -336,6 +343,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ---------- PR / JR viewer ----------
     const viewModal = document.getElementById('REQUEST_VIEW_MODAL');
+    // Return a request to its office: for revision or for cancellation, with the reason
+    $(document).on('click', '.js-return-request', function (e) {
+        e.preventDefault();   // inside the picker's label: do not tick the request
+        const url = $(this).data('url');
+        Swal.fire({
+            // From the item picker: inside its modal, so the reason box can take focus
+            target: $(this).closest('.modal')[0] || 'body',
+            title: 'Return ' + $('<div>').text($(this).data('title')).html() + ' to the office?',
+            html: '<div class="text-start small">'
+                + '<p class="text-muted mb-2">A submitted request is locked: returned, the office can revise it (for revision) or cancel it (for cancellation). Items on an RFQ come off it (with any quotations for them on the draft AOQ); an RFQ left without items is cancelled.</p>'
+                + '<label class="form-label fw-semibold mb-1" for="swal_return_for">Returned</label>'
+                + '<select id="swal_return_for" class="form-select form-select-sm mb-2"><option value="revision">For revision</option><option value="cancellation">For cancellation</option></select>'
+                + '<label class="form-label fw-semibold mb-1" for="swal_return_reason">Reason</label>'
+                + '<textarea id="swal_return_reason" class="form-control form-control-sm" rows="3" maxlength="1000" placeholder="e.g. The specifications of item 2 are unclear"></textarea></div>',
+            icon: 'warning', showCancelButton: true, confirmButtonColor: '#dc3545', confirmButtonText: 'Return', reverseButtons: true,
+            preConfirm: () => {
+                const reason = $('#swal_return_reason').val().trim();
+                if (!reason) { Swal.showValidationMessage('State why it is returned.'); return false; }
+                return { return_for: $('#swal_return_for').val(), reason: reason };
+            },
+        }).then((r) => {
+            if (!r.isConfirmed) return;
+            post(url, r.value)
+                .done((res) => { toastr.success(res.message, 'Returned'); setTimeout(() => res.url ? (window.location.href = res.url) : window.location.reload(), 600); })
+                .fail((xhr) => toastr.error(errorText(xhr), 'Error'));
+        });
+    });
+
     $(document).on('click', '.js-view-request', function (e) {
         e.preventDefault();
         $('#request_view_title').text($(this).data('title'));

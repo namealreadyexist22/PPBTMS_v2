@@ -26,10 +26,11 @@ class UserStoreTest extends TestCase
             'fname' => 'Juan', 'lname' => 'Cruz', 'username' => 'jcruz', 'email' => 'jcruz@example.com',
             'password' => 'secret', 'password_confirmation' => 'secret', 'categories' => 2,   // Visayas
             'role' => 'User', 'office_id' => $office->id, 'designation' => 'Senior Agriculturist',
-            'office_ids' => [$office->id, $extra->id],
+            'office_ids' => [$office->id, $extra->id], 'name_title' => 'Engr.', 'name_suffix' => 'Jr.',
         ])->assertOk()->assertJson(['status' => 'success']);
 
         $user = User::where('username', 'jcruz')->sole();
+        $this->assertSame('Engr. Juan Cruz Jr.', $user->fullname);
         $this->assertSame($office->id, $user->office_id);
         $this->assertSame('Senior Agriculturist', $user->designation);
         $this->assertTrue($user->hasRole('User'));
@@ -47,5 +48,11 @@ class UserStoreTest extends TestCase
         $this->assertSame('Juan M. Cruz', $with->fullname);
         $this->assertSame('Maria Santos', $without->fullname);
         $this->assertSame('Jose Rizal', $blank->fullname);
+
+        // Title before, suffix after: as printed on the documents
+        $atty = User::factory()->create(['name_title' => 'Atty.', 'fname' => 'Arvin', 'minitial' => 'C', 'lname' => 'Beñas', 'name_suffix' => null])->fresh();
+        $jr = User::factory()->create(['name_title' => '', 'fname' => 'Juan', 'minitial' => null, 'lname' => 'Cruz', 'name_suffix' => 'Sr.'])->fresh();
+        $this->assertSame('Atty. Arvin C. Beñas', $atty->fullname);
+        $this->assertSame('Juan Cruz Sr.', $jr->fullname);
     }
 }
