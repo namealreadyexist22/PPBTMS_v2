@@ -60,6 +60,12 @@ class ItemRequestService
                 'requesting_office_id' => $office->id,
                 'procuring_office_id'  => $item->category->restricted_office_id,
                 'item_id'              => $item->id,
+                // The item as it is now: the request keeps it when the catalog changes later
+                'item_code'            => $item->code,
+                'item_name'            => $item->name,
+                'unit_name'            => $item->unit?->name,
+                'unit_cost'            => $item->standard_unit_cost,
+                'specifications'       => $item->specifications,
                 'quantity'             => $quantity,
                 'purpose'              => $data['purpose'] ?? null,
                 'status'               => ItemRequestStatus::Pending,

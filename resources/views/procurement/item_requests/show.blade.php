@@ -1,9 +1,10 @@
-{{-- An item request in detail: the request (who, what, why), the item's specs and the decision (approved / declined, by whom, why, into which project).
+{{-- An item request in detail: the request (who, what, why), the item's specs as when requested (folded) and the decision
+     (approved / declined, by whom, why, into which project).
      Expects $ir (with item.unit, offices, requester, decider, ppmpItem.ppmp), $canDecide, $canCancel. --}}
 @php
     use App\Enums\ItemRequestStatus;
     $qty = fn ($q) => $q === null ? '—' : rtrim(rtrim(number_format((float) $q, 2), '0'), '.');
-    $unit = $ir->item?->unit?->name;
+    $unit = $ir->unitName();   // as when requested
     $label = fn ($t) => '<div class="text-uppercase text-muted fw-semibold" style="font-size: .68rem; letter-spacing: .4px;">' . e($t) . '</div>';
     $c = $ir->status->color();
     $decided = $ir->decided_at !== null;
@@ -24,11 +25,13 @@
             <div class="modal-body p-4 small">
                 {{-- The request --}}
                 <div class="row g-3">
-                    <div class="col-12">{!! $label('Item') !!}<div class="fw-semibold">{{ $ir->item?->code }} — {{ $ir->item?->name }}</div></div>
-                    <div class="col-6 col-md-3">{!! $label('Requested') !!}<div class="fw-semibold fs-6">{{ $qty($ir->quantity) }} <span class="small fw-normal">{{ $unit }}</span></div></div>
-                    <div class="col-6 col-md-3">{!! $label('Approved') !!}<div class="fw-semibold fs-6 {{ $ir->status === ItemRequestStatus::Declined ? 'text-danger' : '' }}">{{ $decided ? $qty($ir->approved_quantity) : '—' }} @if ($decided)<span class="small fw-normal">{{ $unit }}</span>@endif</div></div>
-                    <div class="col-6 col-md-3">{!! $label('Requested by') !!}<div class="fw-semibold">{{ $ir->requester?->fullname ?? '—' }}</div><div class="text-muted">{{ $ir->requestingOffice->shortName() }}</div></div>
-                    <div class="col-6 col-md-3">{!! $label('Date') !!}<div class="fw-semibold">{{ $ir->created_at->format('M d, Y g:i A') }}</div></div>
+                    <div class="col-6 col-sm-6">{!! $label('Requested by') !!}<div class="fw-semibold">{{ $ir->requester?->fullname ?? '—' }}</div><div class="text-muted">{{ $ir->requestingOffice->shortName() }}</div></div>
+                    <div class="col-6 col-sm-6">{!! $label('Date') !!}<div class="fw-semibold">{{ $ir->created_at->format('M d, Y g:i A') }}</div></div>
+                    <div class="col-12">{!! $label('Item') !!}<div class="fw-semibold">{{ $ir->itemLabel() }}</div>
+                        @if ($ir->unit_cost)<div class="text-muted">Standard cost when requested: ₱{{ number_format((float) $ir->unit_cost, 2) }} per {{ $unit ?? 'unit' }}</div>@endif
+                    </div>
+                    <div class="col-6 col-sm-6">{!! $label('Requested') !!}<div class="fw-semibold fs-6">{{ $qty($ir->quantity) }} <span class="small fw-normal">{{ $unit }}</span></div></div>
+                    <div class="col-6 col-sm-6">{!! $label('Approved') !!}<div class="fw-semibold fs-6 {{ $ir->status === ItemRequestStatus::Declined ? 'text-danger' : '' }}">{{ $decided ? $qty($ir->approved_quantity) : '—' }} @if ($decided)<span class="small fw-normal">{{ $unit }}</span>@endif</div></div>
                     <div class="col-12">{!! $label('Purpose') !!}<div style="white-space: pre-line;">{{ $ir->purpose ?: '—' }}</div></div>
                 </div>
 
@@ -49,7 +52,11 @@
                             @endif
                         </div>
                         <div class="row g-3">
-                            <div class="col-md-4">{!! $label('Decided by') !!}<div>{{ $ir->decider?->fullname ?? '—' }}</div><div class="text-muted">{{ $ir->decided_at?->format('M d, Y g:i A') }}</div></div>
+                            <div class="col-md-4">
+                                {!! $label('Decided by') !!}
+                                <div>{{ $ir->decider?->fullname ?? '—' }}</div>
+                                <div class="text-muted">{{ $ir->decided_at?->format('M d, Y g:i A') }}</div>
+                            </div>
                             <div class="col-md-8">{!! $label($ir->status === ItemRequestStatus::Declined ? 'Reason' : 'Remarks') !!}<div style="white-space: pre-line;">{{ $ir->decision_remarks ?: '—' }}</div></div>
                             @if ($ir->ppmpItem)
                                 <div class="col-12">{!! $label('Added to the distribution of') !!}
@@ -61,10 +68,17 @@
                     @endif
                 </div>
 
-                @if ($ir->item?->specifications)
-                    <div class="mt-4">
-                        {!! $label('Specifications (TWG)') !!}
-                        <div class="mt-1">@include('procurement.partials.specs', ['text' => $ir->item->specifications])</div>
+                {{-- The specs as when requested (kept with the request); the catalog's current ones too if the TWG changed them since --}}
+                @if ($ir->specifications || $ir->specsChanged())
+                    <div class="mt-4 d-grid gap-2">
+                        @include('procurement.partials.specs_collapsible', [
+                            'text' => $ir->specifications, 'title' => 'Specifications (TWG) when requested',
+                            'note' => 'As set by the TWG on ' . $ir->created_at->format('M d, Y') . ', when the request was made.',
+                        ])
+                        @if ($ir->specsChanged())
+                            <div class="text-warning-emphasis"><i class="fas fa-info-circle me-1"></i>The TWG has changed this item's specifications since the request.</div>
+                            @include('procurement.partials.specs_collapsible', ['text' => $ir->item->specifications, 'title' => 'Current specifications (TWG)'])
+                        @endif
                     </div>
                 @endif
             </div>

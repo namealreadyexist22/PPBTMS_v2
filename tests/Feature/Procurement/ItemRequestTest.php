@@ -150,6 +150,22 @@ class ItemRequestTest extends TestCase
         $this->postJson(route('procurement.item-requests.cancel', $ir))->assertStatus(422);
     }
 
+    public function test_a_request_keeps_the_item_as_when_requested_when_the_twg_changes_it(): void
+    {
+        $ir = app(ItemRequestService::class)->create($this->sredStaff, $this->sred, ['item_id' => $this->desktop->id, 'fiscal_year' => 2027, 'quantity' => 2]);
+        $this->assertSame(['ICTX-0001', 'Desktop Computer', "Memory: 16GB DDR5\nStorage: 512GB SSD"], [$ir->item_code, $ir->item_name, $ir->specifications]);
+        $this->assertEquals('90000.00', $ir->unit_cost);
+
+        // The TWG raises the specs and renames the item; the request still shows what was asked for
+        $this->desktop->update(['name' => 'Desktop Computer (2028 spec)', 'specifications' => "Memory: 32GB DDR5\nStorage: 1TB SSD", 'standard_unit_cost' => '110000']);
+        $ir->refresh();
+        $this->assertTrue($ir->specsChanged());
+        $this->actingAs($this->sredStaff)->get(route('procurement.item-requests.show', $ir))->assertOk()
+            ->assertSee('ICTX-0001 — Desktop Computer')->assertDontSee('2028 spec')->assertSee('₱90,000.00')
+            ->assertSeeInOrder(['Specifications (TWG) when requested', '16GB DDR5', 'changed this item', 'Current specifications (TWG)', '32GB DDR5'])
+            ->assertSee('data-bs-toggle="collapse"', false);   // folded: opened on click
+    }
+
     protected function refused(callable $action, string $message): void
     {
         try {

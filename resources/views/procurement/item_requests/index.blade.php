@@ -84,8 +84,9 @@
                                 <div class="fw-semibold">{{ ($tab === 'incoming' ? $ir->requestingOffice : $ir->procuringOffice)?->shortName() }}</div>
                                 @if ($tab === 'incoming' && $ir->requester)<div class="text-muted">{{ $ir->requester->fullname }}</div>@endif
                             </td>
-                            <td><span class="fw-semibold">{{ $ir->item?->code }}</span> {{ $ir->item?->name }}</td>
-                            <td class="text-end text-nowrap">{{ $qty($ir->quantity) }} {{ $ir->item?->unit?->name }}</td>
+                            {{-- The item as when requested --}}
+                            <td><span class="fw-semibold">{{ $ir->item_code ?? $ir->item?->code }}</span> {{ $ir->item_name ?? $ir->item?->name }}</td>
+                            <td class="text-end text-nowrap">{{ $qty($ir->quantity) }} {{ $ir->unitName() }}</td>
                             <td class="text-end text-nowrap fw-semibold">{{ $ir->isPending() || $ir->status === ItemRequestStatus::Cancelled ? '—' : $qty($ir->approved_quantity) }}</td>
                             <td class="text-center"><span class="badge bg-{{ $ir->status->color() }}">{{ $ir->status->label() }}</span></td>
                             <td class="pe-3 text-end text-nowrap">

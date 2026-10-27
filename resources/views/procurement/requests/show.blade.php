@@ -214,7 +214,7 @@
                             <td style="min-width: 180px;">
                                 <div class="fw-semibold">{{ $line->description }}</div>
                                 @if ($line->ppmpItem)<div class="text-muted small"><i class="fas fa-diagram-project me-1"></i>{{ $line->ppmpItem->description }}</div>@endif
-                                @if ($line->specifications)<div class="mt-2">@include('procurement.partials.specs', ['text' => $line->specifications])</div>@endif
+                                @if ($line->specifications)<div class="mt-2">@include('procurement.partials.specs_collapsible', ['text' => $line->specifications, 'title' => 'Specifications'])</div>@endif
                             </td>
                             <td class="text-end">{{ rtrim(rtrim(number_format((float) $line->quantity, 2), '0'), '.') }}</td>
                             <td class="text-end">{{ number_format((float) $line->unit_cost, 2) }}</td>
@@ -255,7 +255,7 @@
                             </div>
                         @endif
                     </div>
-                    @if ($line->specifications)<div class="mt-2">@include('procurement.partials.specs', ['text' => $line->specifications])</div>@endif
+                    @if ($line->specifications)<div class="mt-2">@include('procurement.partials.specs_collapsible', ['text' => $line->specifications, 'title' => 'Specifications'])</div>@endif
                     @if ($jr && $line->nature_of_work)
                         <div class="mt-2"><div class="pr-label">Nature of Work</div><div style="white-space: pre-line;">{{ $line->nature_of_work }}</div></div>
                     @endif

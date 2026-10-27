@@ -6,7 +6,7 @@
             <div class="modal-header bg-light py-3">
                 <div>
                     <h5 class="modal-title fw-bold"><i class="fas fa-reply me-2"></i>Decide {{ $ir->request_no }}</h5>
-                    <div class="small text-muted">{{ $ir->requestingOffice->shortName() }} requests <b>{{ $qty($ir->quantity) }} {{ $ir->item->unit?->name }}</b> of {{ $ir->item->code }} — {{ $ir->item->name }} for FY {{ $ir->fiscal_year }}</div>
+                    <div class="small text-muted">{{ $ir->requestingOffice->shortName() }} requests <b>{{ $qty($ir->quantity) }} {{ $ir->unitName() }}</b> of {{ $ir->itemLabel() }} for FY {{ $ir->fiscal_year }}</div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -44,10 +44,13 @@
                         <textarea name="decision_remarks" id="ir_remarks" class="form-control form-control-sm" rows="2" maxlength="1000" placeholder="e.g. 1 approved; 2 units issued last year are still serviceable"></textarea>
                         <div class="form-text">Required when declining.</div>
                     </div>
-                    @if ($ir->item->specifications)
-                        <div class="col-12">
-                            <div class="fw-semibold text-muted mb-1">Specifications (TWG)</div>
-                            @include('procurement.partials.specs', ['text' => $ir->item->specifications])
+                    @if ($ir->specifications || $ir->specsChanged())
+                        <div class="col-12 d-grid gap-2">
+                            @include('procurement.partials.specs_collapsible', ['text' => $ir->specifications, 'title' => 'Specifications (TWG) when requested'])
+                            @if ($ir->specsChanged())
+                                <div class="text-warning-emphasis"><i class="fas fa-info-circle me-1"></i>The TWG has changed this item's specifications since the request.</div>
+                                @include('procurement.partials.specs_collapsible', ['text' => $ir->item->specifications, 'title' => 'Current specifications (TWG)'])
+                            @endif
                         </div>
                     @endif
                 </div>

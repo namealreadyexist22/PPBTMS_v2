@@ -18,7 +18,7 @@ class ItemRequest extends Model
 {
     protected $fillable = [
         'uuid', 'request_no', 'fiscal_year', 'series', 'requesting_office_id', 'procuring_office_id', 'item_id',
-        'quantity', 'purpose', 'status', 'approved_quantity', 'decision_remarks', 'ppmp_item_id', 'line_uuid',
+        'item_code', 'item_name', 'unit_name', 'unit_cost', 'specifications', 'quantity', 'purpose', 'status', 'approved_quantity', 'decision_remarks', 'ppmp_item_id', 'line_uuid',
         'requested_by', 'decided_by', 'decided_at', 'cancelled_at',
     ];
 
@@ -28,6 +28,7 @@ class ItemRequest extends Model
             'status'            => ItemRequestStatus::class,
             'quantity'          => 'decimal:2',
             'approved_quantity' => 'decimal:2',
+            'unit_cost'         => 'decimal:2',
             'decided_at'        => 'datetime',
             'cancelled_at'      => 'datetime',
         ];
@@ -41,6 +42,23 @@ class ItemRequest extends Model
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+
+    /** "ICT-0001 — Desktop Computer", as when requested. */
+    public function itemLabel(): string
+    {
+        return ($this->item_code ?? $this->item?->code) . ' — ' . ($this->item_name ?? $this->item?->name);
+    }
+
+    public function unitName(): ?string
+    {
+        return $this->unit_name ?? $this->item?->unit?->name;
+    }
+
+    /** The TWG has changed the item's specifications since it was requested. */
+    public function specsChanged(): bool
+    {
+        return $this->item && trim((string) $this->item->specifications) !== trim((string) $this->specifications);
     }
 
     public function isPending(): bool
