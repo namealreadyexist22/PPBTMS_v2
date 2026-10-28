@@ -30,7 +30,8 @@ class ItemRequestController extends Controller
         $procuring = $this->service->procuringOfficeIds($user);
         $tab = $request->query('tab') === 'incoming' && $procuring->isNotEmpty() ? 'incoming' : 'ours';
         $status = ItemRequestStatus::tryFrom((string) $request->query('status'));
-        $with = ['item.unit', 'requestingOffice', 'procuringOffice', 'requester', 'decider', 'ppmpItem.ppmp'];
+        // Offices with their parents: the list shows each one's department
+        $with = ['item.unit', 'requestingOffice.parent.parent.parent', 'procuringOffice.parent.parent.parent', 'requester', 'decider', 'ppmpItem.ppmp'];
 
         $ours = ItemRequest::with($with)
             ->when(! $user->hasRole('Super Admin'), fn ($q) => $q->where('requesting_office_id', $user->office_id))

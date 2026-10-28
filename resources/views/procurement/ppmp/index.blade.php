@@ -11,6 +11,10 @@
 
                 <h5 class="m-0 fw-bold text-dark d-flex align-items-center" style="font-size: 1.05rem;">
                     <i class="fas fa-clipboard-list text-muted me-2"></i>PPMP List
+                    {{-- How it works: on hover / focus, as on Item Requests --}}
+                    <a tabindex="0" role="button" class="text-muted ms-2 fw-normal js-help" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right" data-bs-html="true"
+                       title="How the PPMP works"
+                       data-bs-content="<ol class='ps-3 mb-0'><li class='mb-1'>Create your office's PPMP for the fiscal year and add its PAPs and projects. A standard item takes the TWG's unit, price and specs.</li><li class='mb-1'>Items only one office procures (e.g. ICT equipment by MIS) are not planned here: ask that office through <b>Item Requests</b>. What it approves goes to your share in its project's distribution.</li><li class='mb-1'>Submit it to your head for approval; the approved PPMP goes into the Division PPMP and the APP.</li><li>To change an approved PPMP, amend it: the amendment is approved again.</li></ol>"><i class="far fa-question-circle"></i></a>
                 </h5>
 
                 <button id="btn_add" class="btn btn-sm px-3 ms-auto text-white fw-medium shadow-sm"
@@ -43,6 +47,7 @@
     document.addEventListener('DOMContentLoaded', function () {
         let isModalOpen = false;
         const modalName = 'PPMP_ENTRY_MODAL';
+        document.querySelectorAll('.js-help').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body' }));
 
         // Open a PPMP's details page
         $(document).on('click', '.btn-open-ppmp', function (e) {

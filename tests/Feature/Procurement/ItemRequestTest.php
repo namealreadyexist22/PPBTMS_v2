@@ -84,7 +84,8 @@ class ItemRequestTest extends TestCase
 
         // MIS: its incoming list and totals; the project has room for 2
         $this->actingAs($this->misStaff)->get(route('procurement.item-requests.index', ['tab' => 'incoming']))->assertOk()
-            ->assertSee('IR 2027-0001')->assertSee('Requested from your office, per item')->assertSee('Decide');
+            ->assertSee('IR 2027-0001')->assertSee('Requested from your office, per item')->assertSee('Decide')
+            ->assertSeeInOrder(['>Requestor<', '>Department<', 'IR 2027-0001', $this->sredStaff->fresh()->fullname, 'PPSPD', 'Desktop Computer'], false);
         // As the page fetches it to redraw the list in place (fixed tabs with the pending count)
         $this->get(route('procurement.item-requests.index', ['tab' => 'incoming']), ['X-Requested-With' => 'XMLHttpRequest'])->assertOk()
             ->assertSee('id="ir_view"', false)->assertSee('id="ir_tabs"', false)->assertSee('data-tab="incoming"', false)->assertSeeInOrder(['js-pending', '1</span>'], false);
@@ -123,8 +124,9 @@ class ItemRequestTest extends TestCase
         $this->assertSame('MIS declined your request for 5 Desktop Computer (IR 2027-0003): No budget', $declined->data['message']);
         $this->assertSame('fas fa-times-circle', $declined->data['icon']);
 
-        // The list: no purpose / decision column; the details are in the modal
+        // The list: no purpose / decision column; the details are in the modal; MIS shown under its department
         $this->actingAs($this->sredStaff)->get(route('procurement.item-requests.index'))->assertOk()->assertSee('Partly approved')
+            ->assertSeeInOrder(['>Date<', '>To<', 'IR 2027-0001', '>MIS<', 'Desktop Computer'], false)->assertDontSee('FY 2027 ·')
             ->assertDontSee('Purpose / decision')->assertSee(route('procurement.item-requests.show', $ir), false);
         $this->get(route('procurement.item-requests.show', $ir))->assertOk()->assertSee('ITEM_DETAILS_MODAL', false)
             ->assertSee('Field staff')->assertSee('1 of 3 approved by MIS')->assertSee('Two still serviceable')->assertSee('Desktop Computers')

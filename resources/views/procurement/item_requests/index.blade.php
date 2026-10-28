@@ -9,8 +9,13 @@
 
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <div>
-        <h5 class="fw-bold mb-0"><i class="fas fa-hand-holding text-muted me-2"></i>Item Requests</h5>
-        <div class="text-muted small">Ask the office that procures an item (e.g. MIS for ICT equipment) for what your office needs. It approves all, part or none of it, and what it approves goes to your share in its PPMP project's distribution.</div>
+        <h5 class="fw-bold mb-0">
+            <i class="fas fa-hand-holding text-muted me-2"></i>Item Requests
+            {{-- How it works: on hover / focus, as on the PPMP's budget --}}
+            <a tabindex="0" role="button" class="text-muted ms-1 fs-6 align-middle js-help" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right" data-bs-html="true"
+               title="How item requests work"
+               data-bs-content="<ol class='ps-3 mb-0'><li class='mb-1'>Ask the office that procures an item (e.g. MIS for ICT equipment) for what your office needs.</li><li class='mb-1'>It approves all, part or none of it, with its reason.</li><li>What it approves goes to your share in its PPMP project's distribution.</li></ol>"><i class="far fa-question-circle"></i></a>
+        </h5>
     </div>
     <button class="btn btn-sm btn-success" id="btn_new_request"><i class="fas fa-plus me-1"></i> New Request</button>
 </div>
@@ -68,7 +73,9 @@
             <table class="table table-sm table-hover align-middle small mb-0">
                 <thead class="table-light">
                     <tr class="text-nowrap">
-                        <th class="ps-3">Request</th><th>{{ $tab === 'incoming' ? 'From' : 'To' }}</th><th>Item</th><th class="text-end">Requested</th><th class="text-end">Approved</th>
+                        <th class="ps-3">Request</th><th>Date</th>
+                        @if ($tab === 'incoming')<th>Requestor</th><th>Department</th>@else<th>To</th>@endif
+                        <th>Item</th><th class="text-end">Requested</th><th class="text-end">Approved</th>
                         <th class="text-center">Status</th><th class="pe-3 text-end">Action</th>
                     </tr>
                 </thead>
@@ -78,11 +85,16 @@
                             <td class="ps-3 text-nowrap">
                                 {{-- The request's details (purpose, specs, the decision) in a modal --}}
                                 <a href="#" class="fw-semibold text-decoration-none js-ir-details" data-url="{{ route('procurement.item-requests.show', $ir) }}" title="View the details">{{ $ir->request_no }} <i class="fas fa-eye ms-1" style="font-size: .7rem;"></i></a>
-                                <div class="text-muted">FY {{ $ir->fiscal_year }} · {{ $ir->created_at->format('M d, Y') }}</div>
                             </td>
+                            <td class="text-nowrap">{{ $ir->created_at->format('M d, Y') }}</td>
+                            @if ($tab === 'incoming')
+                                <td>{{ $ir->requester?->fullname ?? '—' }}</td>
+                            @endif
                             <td>
-                                <div class="fw-semibold">{{ ($tab === 'incoming' ? $ir->requestingOffice : $ir->procuringOffice)?->shortName() }}</div>
-                                @if ($tab === 'incoming' && $ir->requester)<div class="text-muted">{{ $ir->requester->fullname }}</div>@endif
+                                {{-- From: the requesting office's department; To: the procuring office itself (e.g. MIS) --}}
+                                <div class="fw-semibold">{{ $tab === 'incoming'
+                                    ? ($ir->requestingOffice?->department ?? $ir->requestingOffice)?->shortName()
+                                    : $ir->procuringOffice?->shortName() }}</div>
                             </td>
                             {{-- The item as when requested --}}
                             <td><span class="fw-semibold">{{ $ir->item_code ?? $ir->item?->code }}</span> {{ $ir->item_name ?? $ir->item?->name }}</td>
@@ -101,7 +113,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="text-center text-muted py-5">{{ $tab === 'incoming' ? 'No requests to your office.' : 'Your office has not requested any item yet.' }}</td></tr>
+                        <tr><td colspan="{{ $tab === 'incoming' ? 9 : 8 }}" class="text-center text-muted py-5">{{ $tab === 'incoming' ? 'No requests to your office.' : 'Your office has not requested any item yet.' }}</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -117,6 +129,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = '{{ csrf_token() }}';
     let isModalOpen = false;
+    document.querySelectorAll('.js-help').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body' }));
     const errorText = (xhr) => {
         const res = xhr.responseJSON || {};
         return res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Something went wrong.');

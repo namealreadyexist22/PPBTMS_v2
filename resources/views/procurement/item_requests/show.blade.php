@@ -18,19 +18,22 @@
                         {{ $ir->request_no }}
                         <span class="badge rounded-pill bg-{{ $c }}-subtle text-{{ $c }}-emphasis border border-{{ $c }}-subtle align-middle" style="font-size: .7rem;">{{ $ir->status->label() }}</span>
                     </h5>
-                    <div class="small text-muted">Item request · FY {{ $ir->fiscal_year }} · {{ $ir->requestingOffice->shortName() }} → {{ $ir->procuringOffice->shortName() }}</div>
                 </div>
                 <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4 small">
                 {{-- The request --}}
                 <div class="row g-3">
-                    <div class="col-6 col-sm-6">{!! $label('Requested by') !!}<div class="fw-semibold">{{ $ir->requester?->fullname ?? '—' }}</div><div class="text-muted">{{ $ir->requestingOffice->shortName() }}</div></div>
-                    <div class="col-6 col-sm-6">{!! $label('Date') !!}<div class="fw-semibold">{{ $ir->created_at->format('M d, Y g:i A') }}</div></div>
+                    <div class="col-sm-4">{!! $label('Requested by') !!}<div class="fw-semibold">{{ $ir->requester?->fullname ?? '—' }}</div></div>
+                    @php $reqDept = $ir->requestingOffice->department; @endphp
+                    <div class="col-sm-4">{!! $label('Requesting office') !!}
+                        <div class="fw-semibold">{{ ($reqDept ?? $ir->requestingOffice)->shortName() }}</div>
+                    </div>
+                    <div class="col-sm-4">{!! $label('Date of request') !!}<div class="fw-semibold">{{ $ir->created_at->format('M d, Y g:i A') }}</div></div>
                     <div class="col-12">{!! $label('Item') !!}<div class="fw-semibold">{{ $ir->itemLabel() }}</div>
                         @if ($ir->unit_cost)<div class="text-muted">Standard cost when requested: ₱{{ number_format((float) $ir->unit_cost, 2) }} per {{ $unit ?? 'unit' }}</div>@endif
                     </div>
-                    <div class="col-6 col-sm-6">{!! $label('Requested') !!}<div class="fw-semibold fs-6">{{ $qty($ir->quantity) }} <span class="small fw-normal">{{ $unit }}</span></div></div>
+                    <div class="col-6 col-sm-6">{!! $label('Requested') !!}<div class="fw-semibold fs-6">{{ $qty($ir->quantity) }} <span class="small fw-normal">{{ $unit }}</span> <span class="small fw-normal text-muted">for FY {{ $ir->fiscal_year }}</span></div></div>
                     <div class="col-6 col-sm-6">{!! $label('Approved') !!}<div class="fw-semibold fs-6 {{ $ir->status === ItemRequestStatus::Declined ? 'text-danger' : '' }}">{{ $decided ? $qty($ir->approved_quantity) : '—' }} @if ($decided)<span class="small fw-normal">{{ $unit }}</span>@endif</div></div>
                     <div class="col-12">{!! $label('Purpose') !!}<div style="white-space: pre-line;">{{ $ir->purpose ?: '—' }}</div></div>
                 </div>
