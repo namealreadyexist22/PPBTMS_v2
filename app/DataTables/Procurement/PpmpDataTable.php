@@ -27,8 +27,15 @@ class PpmpDataTable extends DataTable
             ->editColumn('type', fn ($row) => $row->type->label())
             ->editColumn('total_budget', fn ($row) => number_format($row->total_budget, 2))
             ->editColumn('status', fn ($row) => view('procurement.ppmp.extras.ppmp_status', ['ppmp' => $row])->render())
-            ->addColumn('action', fn ($row) => view('procurement.ppmp.extras.ppmp_action', ['ppmp' => $row])->render())
-            ->rawColumns(['status', 'action'])
+            ->rawColumns(['status'])
+            // The whole row opens the PPMP (see the list's script)
+            ->setRowAttr([
+                'data-url' => fn ($row) => route('procurement.ppmp.show', $row),
+                'class'    => 'ppmp-row',
+                'role'     => 'link',
+                'tabindex' => '0',
+                'title'    => fn ($row) => "Open PPMP {$row->ppmp_no}",
+            ])
             ->setRowId('id');
     }
 
@@ -57,7 +64,6 @@ class PpmpDataTable extends DataTable
             Column::make('version')->title('Ver.')->addClass('text-center'),
             Column::make('total_budget')->title('Total Budget')->addClass('text-end'),
             Column::make('status')->title('Status')->addClass('text-center'),
-            Column::computed('action')->title('')->addClass('text-center')->width(50),
         ];
     }
 

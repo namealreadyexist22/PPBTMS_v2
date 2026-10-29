@@ -1,6 +1,12 @@
 @extends('BackEnd.layouts.master')
 
 @section('content')
+<style>
+    /* A unit's row opens its PPMP */
+    tr.ppmp-row { cursor: pointer; }
+    tr.ppmp-row:hover > td { background-color: var(--bs-primary-bg-subtle); }
+    tr.ppmp-row:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
+</style>
 @php
     $statusColors = ['draft' => 'secondary', 'submitted' => 'primary', 'returned' => 'warning', 'approved' => 'success', 'superseded' => 'dark'];
 @endphp
@@ -78,12 +84,14 @@
             <div class="table-responsive mt-3">
                 <table class="table table-sm align-middle small mb-0">
                     <thead class="table-light">
-                        <tr><th class="ps-3">Unit</th><th>PPMP</th><th class="text-center">Status</th><th class="text-end">Total</th><th></th></tr>
+                        <tr><th class="ps-3">Unit</th><th>PPMP</th><th class="text-center">Status</th><th class="text-end pe-3">Total</th></tr>
                     </thead>
                     <tbody>
                         @forelse ($d['units'] as $unit)
-                            @php $ppmp = $d['sections']->firstWhere('office_id', $unit->id); @endphp
-                            <tr class="{{ $ppmp ? '' : 'text-muted' }}">
+                            @php $ppmp = $d['sections']->firstWhere('office_id', $unit->id); $opens = $ppmp && $canOpenPpmps; @endphp
+                            {{-- A unit's row opens its PPMP --}}
+                            <tr @class(['text-muted' => ! $ppmp, 'ppmp-row' => $opens])
+                                @if ($opens) data-url="{{ route('procurement.ppmp.show', $ppmp) }}" role="link" tabindex="0" title="Open PPMP {{ $ppmp->ppmp_no }}" @endif>
                                 <td class="ps-3">
                                     <span class="badge bg-light text-dark border me-1" style="min-width: 62px;">{{ $unit->typeLabel() }}</span>
                                     {{ $unit->code }} — {{ $unit->acronym ? $unit->acronym . ' · ' : '' }}{{ $unit->name }}
@@ -91,14 +99,13 @@
                                 @if ($ppmp)
                                     <td>{{ $ppmp->ppmp_no }}</td>
                                     <td class="text-center"><span class="badge bg-{{ $statusColors[$ppmp->status->value] ?? 'secondary' }}">{{ $ppmp->status->label() }}</span></td>
-                                    <td class="text-end">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
-                                    <td class="text-end pe-3">@if ($canOpenPpmps)<a href="{{ route('procurement.ppmp.show', $ppmp) }}">Open</a>@endif</td>
+                                    <td class="text-end pe-3">{{ number_format((float) $ppmp->total_budget, 2) }}</td>
                                 @else
-                                    <td colspan="4" class="fst-italic">No PPMP for FY {{ $fiscalYear }} yet</td>
+                                    <td colspan="3" class="fst-italic">No PPMP for FY {{ $fiscalYear }} yet</td>
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="5" class="text-center text-muted py-3">No units with an office number report to this head.</td></tr>
+                            <tr><td colspan="4" class="text-center text-muted py-3">No units with an office number report to this head.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -176,6 +183,17 @@
 @push('script')
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
+    // A unit's row opens its PPMP (Ctrl / middle click or Ctrl+Enter: in a new tab); Enter opens the focused row
+    function openRow(row, newTab) {
+        newTab ? window.open(row.dataset.url, '_blank') : (window.location.href = row.dataset.url);
+    }
+    $(document).on('click', 'tr.ppmp-row', function (e) {
+        if (window.getSelection().toString()) return;   // selecting text to copy, not opening
+        openRow(this, e.ctrlKey || e.metaKey);
+    });
+    $(document).on('auxclick', 'tr.ppmp-row', function (e) { if (e.button === 1) openRow(this, true); });
+    $(document).on('keydown', 'tr.ppmp-row', function (e) { if (e.key === 'Enter') openRow(this, e.ctrlKey || e.metaKey); });
+
     $(document).on('click', '.btn-approve-division', function () {
         new bootstrap.Modal(document.getElementById('approve-modal-' + $(this).data('target'))).show();
     });

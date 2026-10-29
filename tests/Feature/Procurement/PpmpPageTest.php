@@ -145,6 +145,7 @@ class PpmpPageTest extends TestCase
         $this->actingAs($this->head)->get(route('procurement.division-ppmp.index', ['fy' => 2027]))->assertOk()
             ->assertSee('PLANNING, POLICY AND PROGRAMMING DIVISION')
             ->assertSee('05012-2027-V1')
+            ->assertSee('class="ppmp-row"', false)->assertSee('data-url="' . route('procurement.ppmp.show', $mis) . '"', false)   // the row opens the PPMP
             ->assertSee('Approve 1 submitted')
             ->assertSee('Not yet submitted (will not be included): PLANNING AND POLICY RESEARCH SECTION');
         $this->get(route('procurement.division-ppmp.preview', [$this->division, 'fy' => 2027]))->assertOk()

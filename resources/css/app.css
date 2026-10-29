@@ -45,6 +45,12 @@
     transition: background-color 0.15s ease;
 }
 
+/* A table's row menu floats over the table (fixed positioning): it is shown a moment before Popper
+   places it, at the page's top-left corner. Keep it invisible until placed (Popper sets data-popper-placement). */
+.table-responsive .dropdown-menu.show:not([data-popper-placement]) {
+    visibility: hidden;
+}
+
 .custom-menu-item:hover {
     background-color: #f8fafc !important;
 }

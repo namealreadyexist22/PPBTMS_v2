@@ -37,11 +37,14 @@ class Item extends Model
         return strtoupper($category?->code ?: 'ITEM');
     }
 
-    /** Next code in the prefix's series: ICT-0001, ICT-0002, ... (ignores hand-made codes like ICT-TV-55). */
+    /**
+     * Next code in the prefix's series: ICT-0001, ICT-0002, ... (ignores hand-made codes like ICT-TV-55).
+     * Deleted items count too: they keep their code (and the unique index has it), so it is never reused.
+     */
     public static function nextCode(?ItemCategory $category): string
     {
         $prefix = static::codePrefix($category);
-        $last = static::where('code', 'like', $prefix . '-%')->pluck('code')
+        $last = static::withTrashed()->where('code', 'like', $prefix . '-%')->pluck('code')
             ->map(fn ($code) => preg_match('/^' . preg_quote($prefix, '/') . '-(\d+)$/', $code, $m) ? (int) $m[1] : 0)
             ->max() ?? 0;
 

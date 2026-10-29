@@ -1,6 +1,12 @@
 @extends('BackEnd.layouts.master')
 
 @section('content')
+<style>
+    /* The whole row opens the PPMP */
+    #tblPpmp tbody tr.ppmp-row { cursor: pointer; }
+    #tblPpmp tbody tr.ppmp-row:hover > td { background-color: var(--bs-primary-bg-subtle); }
+    #tblPpmp tbody tr.ppmp-row:focus-visible { outline: 2px solid var(--bs-primary); outline-offset: -2px; }
+</style>
 
 <div class="row">
     <div class="col-12">
@@ -49,11 +55,18 @@
         const modalName = 'PPMP_ENTRY_MODAL';
         document.querySelectorAll('.js-help').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body' }));
 
-        // Open a PPMP's details page
-        $(document).on('click', '.btn-open-ppmp', function (e) {
-            e.preventDefault();
-            window.location.href = '{{ route("procurement.ppmp.show", "__ID__") }}'.replace('__ID__', $(this).data('id'));
+        // A row opens its PPMP (Ctrl / middle click or Ctrl+Enter: in a new tab); Enter opens the focused row
+        function openRow(row, newTab) {
+            const url = row.dataset.url;
+            if (!url) return;
+            newTab ? window.open(url, '_blank') : (window.location.href = url);
+        }
+        $(document).on('click', '#tblPpmp tbody tr.ppmp-row', function (e) {
+            if (window.getSelection().toString()) return;   // selecting text to copy, not opening
+            openRow(this, e.ctrlKey || e.metaKey);
         });
+        $(document).on('auxclick', '#tblPpmp tbody tr.ppmp-row', function (e) { if (e.button === 1) openRow(this, true); });
+        $(document).on('keydown', '#tblPpmp tbody tr.ppmp-row', function (e) { if (e.key === 'Enter') openRow(this, e.ctrlKey || e.metaKey); });
 
         // Open the Create PPMP modal
         $('#btn_add').on('click', function (e) {

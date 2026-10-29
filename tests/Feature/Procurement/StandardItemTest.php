@@ -66,6 +66,15 @@ class StandardItemTest extends TestCase
         $this->assertSame(['ICT-0001', 'ICT-0002', 'ITEM-0001'], Item::orderBy('id')->pluck('code')->all());
         $this->get(route('procurement.items.entry'))->assertOk()->assertSee('ITEM-0002');
 
+        // A deleted item keeps its code: the next one does not reuse it
+        $this->postJson(route('procurement.items.store'), ['name' => 'High Performance Laptop', 'item_category_id' => $ict, 'unit_id' => $unit->id, 'project_type' => 'goods', 'standard_unit_cost' => '150000'])->assertOk();
+        $hp = Item::where('code', 'ICT-0003')->sole();
+        $this->deleteJson(route('procurement.items.destroy'), ['id' => $hp->id])->assertOk();
+        $this->postJson(route('procurement.items.store'), ['name' => 'High Performance Laptop', 'item_category_id' => $ict, 'unit_id' => $unit->id, 'project_type' => 'goods', 'standard_unit_cost' => '150000'])
+            ->assertOk()->assertJsonPath('message', 'Added ICT-0004 "High Performance Laptop".');
+        Item::where('code', 'ICT-0004')->forceDelete();
+        Item::withTrashed()->where('code', 'ICT-0003')->forceDelete();
+
         // Listed by code; search and category narrow the list
         $this->get(route('procurement.items.index'))->assertSeeInOrder(['ICT-0001', 'ICT-0002', 'ITEM-0001']);
         $this->get(route('procurement.items.index', ['q' => 'paper']))->assertSee('Bond paper')->assertDontSee('LED Smart TV');
@@ -120,6 +129,12 @@ class StandardItemTest extends TestCase
         $this->assertTrue($item->fresh()->print_brief_specs);
         $this->assertSame($unit->id, $item->unit_id);
         $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Specs: 55&quot; 4K Smart TV', false)->assertDontSee('55-inch 4K UHD');
+
+        // The PPMP list: no action button, the row itself opens the PPMP
+        $list = $this->getJson(route('procurement.ppmp.index', ['draw' => 1, 'start' => 0, 'length' => 10]), ['X-Requested-With' => 'XMLHttpRequest'])->assertOk();
+        $row = collect($list->json('data'))->firstWhere('ppmp_no', $ppmp->ppmp_no);
+        $this->assertSame(route('procurement.ppmp.show', $ppmp), $row['DT_RowAttr']['data-url']);
+        $this->assertArrayNotHasKey('action', $row);
 
         // On the PPMP page its tag badge opens the TWG specifications
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('btn-standard-specs', false)
