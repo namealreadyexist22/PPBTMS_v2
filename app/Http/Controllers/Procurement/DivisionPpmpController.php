@@ -93,6 +93,20 @@ class DivisionPpmpController extends Controller
         ]);
     }
 
+    /** A numbered Division PPMP, read-only in a modal (from the Division PPMP list). */
+    public function details(Request $request, DivisionPpmp $divisionPpmp)
+    {
+        $this->authorizeView($request, $divisionPpmp);
+        $divisionPpmp->load(['office', 'ppmps.office', 'signatories']);
+
+        return view('procurement.division_ppmp.details_modal', [
+            'divisionPpmp'     => $divisionPpmp,
+            'paps'             => $this->papsOf($divisionPpmp->ppmps),
+            'canOpenPpmps'     => $request->user()->canAccessPermission('manage ppmp'),
+            'printSignatories' => $divisionPpmp->printSignatories(),
+        ]);
+    }
+
     public function approve(Request $request)
     {
         $data = $this->validateJson($request, [

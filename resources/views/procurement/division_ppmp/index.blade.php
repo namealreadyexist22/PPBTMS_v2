@@ -53,7 +53,10 @@
                         Head: <strong>{{ $office->head?->fullname ?? 'Not set' }}</strong>
                         <span class="mx-2 text-muted">|</span>
                         @if ($current)
-                            Current: <a href="{{ route('procurement.division-ppmp.show', $current) }}" class="fw-bold">PPMP No. {{ $current->ppmp_number }}</a>
+                            Current:
+                            <button type="button" class="btn btn-sm btn-outline-primary fw-semibold py-0 px-2 align-baseline btn-division-ppmp" data-url="{{ route('procurement.division-ppmp.details', $current) }}">
+                                <i class="fas fa-eye me-1"></i>PPMP No. {{ $current->ppmp_number }}
+                            </button>
                             ({{ $current->type->label() }}, approved {{ $current->approved_at->format('M d, Y') }}) — ₱ {{ number_format((float) $current->total_budget, 2) }}
                         @else
                             <span class="text-muted">No approved PPMP yet</span>
@@ -62,7 +65,7 @@
                     @if ($d['history']->count() > 1)
                         <div class="small mt-1 text-muted">History:
                             @foreach ($d['history'] as $h)
-                                <a href="{{ route('procurement.division-ppmp.show', $h) }}" class="badge {{ $h->isCurrent() ? 'bg-success' : 'bg-light text-dark border' }} text-decoration-none">No. {{ $h->ppmp_number }}</a>
+                                <button type="button" class="badge border-0 {{ $h->isCurrent() ? 'bg-success' : 'bg-light text-dark border' }} btn-division-ppmp" data-url="{{ route('procurement.division-ppmp.details', $h) }}">No. {{ $h->ppmp_number }}</button>
                             @endforeach
                         </div>
                     @endif
@@ -178,6 +181,7 @@
         Nothing to show for FY {{ $fiscalYear }}. Divisions appear here once a section under them is set up in Offices.
     </div></div>
 @endforelse
+<div id="modal-body"></div>
 @endsection
 
 @push('script')
@@ -193,6 +197,19 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     $(document).on('auxclick', 'tr.ppmp-row', function (e) { if (e.button === 1) openRow(this, true); });
     $(document).on('keydown', 'tr.ppmp-row', function (e) { if (e.key === 'Enter') openRow(this, e.ctrlKey || e.metaKey); });
+
+    // A numbered Division PPMP opens read-only in a modal
+    $(document).on('click', '.btn-division-ppmp', function () {
+        const btn = $(this).prop('disabled', true);
+        $.get(btn.data('url'), function (html) {
+            $('#modal-body').html(html);
+            const el = document.getElementById('DIVISION_PPMP_DETAILS_MODAL');
+            el.addEventListener('hidden.bs.modal', () => $('#modal-body').html(''));
+            new bootstrap.Modal(el).show();
+        }).fail(function (xhr) {
+            toastr.error((xhr.responseJSON || {}).message || 'Could not load the PPMP.', 'Error');
+        }).always(() => btn.prop('disabled', false));
+    });
 
     $(document).on('click', '.btn-approve-division', function () {
         new bootstrap.Modal(document.getElementById('approve-modal-' + $(this).data('target'))).show();

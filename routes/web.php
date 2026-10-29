@@ -323,6 +323,7 @@ use Illuminate\Support\Facades\Route;
         Route::middleware('perm:manage ppmp|menu.division-ppmp')->group(function () {
             Route::get('division-ppmp/{divisionPpmp}', [DivisionPpmpController::class, 'show'])->name('division-ppmp.show');
             Route::get('division-ppmp/{divisionPpmp}/print', [DivisionPpmpController::class, 'print'])->name('division-ppmp.print');
+            Route::get('division-ppmp/{divisionPpmp}/details', [DivisionPpmpController::class, 'details'])->name('division-ppmp.details');
         });
 
     });

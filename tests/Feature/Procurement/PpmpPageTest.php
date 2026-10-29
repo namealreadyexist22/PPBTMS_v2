@@ -203,6 +203,13 @@ class PpmpPageTest extends TestCase
         $this->assertSame(PpmpStatus::Superseded, $mis->fresh()->status);
 
         $this->get(route('procurement.division-ppmp.show', $no2))->assertOk()->assertSee('PPMP No. 2')->assertSee('05011-2027-V1');
+
+        // The list opens each number read-only in a modal
+        $this->get(route('procurement.division-ppmp.index', ['fy' => 2027]))->assertOk()
+            ->assertSee(route('procurement.division-ppmp.details', $no2), false)
+            ->assertSee(route('procurement.division-ppmp.details', $no1), false);
+        $this->get(route('procurement.division-ppmp.details', $no1))->assertOk()
+            ->assertSee('DIVISION_PPMP_DETAILS_MODAL', false)->assertSee('PPMP No. 1')->assertSee('Superseded')->assertSee('64,000.00');
         $this->get(route('procurement.division-ppmp.print', $no1))->assertOk()->assertSee('SUPERSEDED');
         $this->actingAs($this->staff)->get(route('procurement.ppmp.show', $misV2))->assertSee('PPMP No. 2');
     }
@@ -347,6 +354,7 @@ class PpmpPageTest extends TestCase
 
         app(\App\Services\Procurement\DivisionPpmpService::class)->approve($this->division, 2027, \App\Enums\Region::Lm, $this->head, $this->oic);
         $this->get(route('procurement.division-ppmp.show', DivisionPpmp::sole()))->assertForbidden();
+        $this->get(route('procurement.division-ppmp.details', DivisionPpmp::sole()))->assertForbidden();
         $this->get(route('procurement.division-ppmp.index', ['fy' => 2027]))->assertOk()->assertDontSee('05012-2027-V1');
 
         // Head views the section PPMP read-only
