@@ -231,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 @auth
 document.addEventListener('DOMContentLoaded', function () {
+    if (! window.Echo) return;   // live notifications off (no Reverb key in the build)
     window.Echo.private('App.Models.User.{{ auth()->id() }}')
         .notification((notification) => {
             const badge = document.getElementById('notif-badge');

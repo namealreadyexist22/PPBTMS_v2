@@ -32,7 +32,7 @@ class UserAccessTest extends TestCase
 
         // Like the demo users: permissions given directly, no role
         $this->staff = User::factory()->create(['is_activated' => 1]);
-        $this->staff->givePermissionTo(['manage ppmp', 'menu.ppmp', 'menu.procurement', 'menu.division-ppmp', 'manage requests', 'menu.purchase-requests']);
+        $this->staff->givePermissionTo(['manage ppmp', 'menu.ppmp', 'menu.division-ppmp', 'manage requests', 'menu.purchase-requests']);
     }
 
     protected function menu(string $name): Menu
@@ -127,12 +127,32 @@ class UserAccessTest extends TestCase
 
     public function test_a_group_hides_when_every_page_under_it_is_denied(): void
     {
-        $this->assertContains('Procurement', $this->sidebar($this->staff));
+        $this->assertContains('Planning', $this->sidebar($this->staff));
 
-        $this->save($this->staff, ['menu_access' => collect(['PPMP', 'Division PPMP', 'Purchase Requests'])
+        $this->save($this->staff, ['menu_access' => collect(['PPMP', 'Division PPMP'])
             ->mapWithKeys(fn ($name) => [$this->menu($name)->id => 'deny'])->all()]);
 
-        $this->assertNotContains('Procurement', $this->sidebar($this->staff));
+        $this->assertNotContains('Planning', $this->sidebar($this->staff));
+        $this->assertContains('Purchase Requests', $this->sidebar($this->staff));   // its own link, not under a group
+    }
+
+    public function test_procurement_pages_are_grouped_and_moving_them_keeps_their_access(): void
+    {
+        $tree = app(MenuService::class)->getMenuTreeForUser($this->admin->fresh());
+        $children = fn (string $group) => $tree->firstWhere('name', $group)->children->pluck('name')->all();
+
+        $this->assertSame(['Dashboard', 'Purchase Requests'], $tree->take(2)->pluck('name')->all());
+        $this->assertSame(['Budget Allocation', 'PPMP', 'Item Requests', 'Division PPMP', 'APP'], $children('Planning'));
+        $this->assertSame(['Requests for Quotation', 'Abstract of Quotations', 'TWG Evaluation', 'Suppliers', 'Standard Items'], $children('Procurement'));
+        $this->assertSame(['Signatories & BAC', 'Procurement Lookups'], $children('Procurement Setup'));
+        $this->assertNotContains('Procurement Lookups', $children('Settings'));
+        $this->assertSame(1, Menu::where('name', 'Procurement')->count());
+
+        // Seeding again (as on an existing install) moves nothing twice and keeps each page's id
+        $ppmpId = $this->menu('PPMP')->id;
+        $this->seed(MenuSeeder::class);
+        $this->assertSame($ppmpId, $this->menu('PPMP')->id);
+        $this->assertSame(1, Menu::where('name', 'PPMP')->count());
     }
 
     public function test_hidden_action_gates_can_be_denied(): void
