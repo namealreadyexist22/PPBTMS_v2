@@ -302,6 +302,12 @@ class AoqTest extends TestCase
         $this->assertSame($chair->fresh()->fullname, $signatories['bac_chair']);
         $this->assertSame([$m1->fresh()->fullname], $signatories['bac_members']);
         $this->assertSame([$this->bac->fresh()->fullname, 'Head, BAC Secretariat'], $signatories['prepared_by']);
+
+        // Certified by the RFQ's signatory: typed in capitals without a designation, it prints the user's
+        $signer = User::factory()->create(['is_activated' => 1, 'name_title' => null, 'fname' => 'Narciso', 'minitial' => 'R', 'lname' => 'Cabalquinto', 'name_suffix' => null, 'designation' => 'Supply Officer IV']);
+        $rfq->update(['signatory_name' => 'NARCISO R. CABALQUINTO', 'signatory_designation' => null]);
+        $this->assertSame(['NARCISO R. CABALQUINTO', 'Supply Officer IV'], $this->aoqs->signatories($aoq->fresh())['certified_by']);
+        $this->assertNotNull($signer);
         $this->aoqs->updateHeader($aoq, $this->bac, ['bac_chair_name' => 'Juan Cruz', 'prepared_by_name' => '  ']);
         $this->assertSame('Juan Cruz', $this->aoqs->signatories($aoq->fresh())['bac_chair']);
         $this->assertSame($this->bac->fresh()->fullname, $this->aoqs->signatories($aoq->fresh())['prepared_by'][0]);

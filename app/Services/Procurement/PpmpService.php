@@ -416,7 +416,7 @@ class PpmpService
 
     /** With both quantity and unit cost, the estimated budget is quantity x unit cost. */
     /**
-     * A project on a standard item takes the catalog's unit, unit cost, specifications and type
+     * A project on a standard item takes the catalog's unit, unit cost, brief and full specifications and type
      * as they are (set by the TWG); only the quantity is the office's. An inactive item can no
      * longer be picked, but a project that already uses it keeps it.
      */
@@ -425,7 +425,8 @@ class PpmpService
         $itemId = array_key_exists('item_id', $data) ? $data['item_id'] : $item?->item_id;
 
         if (! $itemId) {
-            return $data;
+            // No longer on a standard item: nothing of the TWG's left with it
+            return array_key_exists('item_id', $data) ? $data + ['specifications' => null] : $data;
         }
 
         $standard = Item::find($itemId);
@@ -444,7 +445,8 @@ class PpmpService
         }
 
         if (! $standard->isStandard()) {
-            return $data;
+            // A catalog entry without a fixed price: the office prices it; the TWG's specs still come with it
+            return array_merge($data, ['specifications' => $standard->specifications]);
         }
 
         $quantity = array_key_exists('quantity', $data) ? $data['quantity'] : $item?->quantity;
@@ -452,11 +454,14 @@ class PpmpService
             throw new ProcurementException("Enter the quantity of {$standard->name}; its unit price is the standard cost of ₱" . Money::format($standard->standard_unit_cost) . '.');
         }
 
+        // The brief specs are the project's "Size / brief specs" (printed on the PPMP if the office chooses);
+        // the TWG's full specifications are kept with the project for its PR, RFQ and AOQ
         return array_merge($data, [
-            'unit_id'       => $standard->unit_id,
-            'unit_cost'     => (string) $standard->standard_unit_cost,
-            'quantity_size' => $standard->specifications,
-            'project_type'  => $standard->project_type?->value ?? $data['project_type'] ?? null,
+            'unit_id'        => $standard->unit_id,
+            'unit_cost'      => (string) $standard->standard_unit_cost,
+            'quantity_size'  => $standard->brief_specs,
+            'specifications' => $standard->specifications,
+            'project_type'   => $standard->project_type?->value ?? $data['project_type'] ?? null,
         ]);
     }
 

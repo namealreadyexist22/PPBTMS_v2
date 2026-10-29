@@ -180,7 +180,7 @@ class PpmpController extends Controller
                 'unit_id' => $c->unit_id,
                 'unit'    => $c->unit?->name,
                 'cost'    => $c->standard_unit_cost !== null ? (float) $c->standard_unit_cost : null,
-                'specs'   => $c->specifications,
+                'specs'   => $c->brief_specs,   // the project's "Size / brief specs"; the full TWG specs are kept with it
                 'type'    => $c->project_type?->value,
                 'twg'     => trim(($c->twg_reference ?? '') . ($c->twg_approved_at ? ' (' . $c->twg_approved_at->format('M d, Y') . ')' : '')),
             ]]),

@@ -16,7 +16,7 @@ class Item extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'code', 'name', 'description', 'unit_id', 'item_category_id', 'project_type', 'standard_unit_cost',
+        'code', 'name', 'description', 'brief_specs', 'unit_id', 'item_category_id', 'project_type', 'standard_unit_cost',
         'specifications', 'twg_reference', 'twg_approved_at', 'is_active', 'updated_by',
     ];
 

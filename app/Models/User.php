@@ -64,6 +64,19 @@ class User extends Authenticatable
         );
     }
 
+    /** The designation of the active user with this printed name, in any capitalization (null when none or not one person). */
+    public static function designationOf(?string $name): ?string
+    {
+        if (blank($name)) {
+            return null;
+        }
+
+        $matches = static::where('is_activated', true)->whereRaw('lower(fullname) = ?', [mb_strtolower(trim($name))])
+            ->whereNotNull('designation')->limit(2)->pluck('designation');
+
+        return $matches->count() === 1 ? $matches->first() : null;
+    }
+
     /** Home office. */
     public function office()
     {

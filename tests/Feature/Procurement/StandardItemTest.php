@@ -100,7 +100,7 @@ class StandardItemTest extends TestCase
         $unit = Unit::first();
         $other = Unit::skip(1)->first() ?? $unit;
         $tv = Item::create(['code' => 'ICT-TV-55', 'name' => 'LED Smart TV, 55"', 'unit_id' => $unit->id, 'project_type' => 'goods',
-            'standard_unit_cost' => '50000', 'specifications' => '55-inch 4K UHD, 3 HDMI', 'is_active' => true]);
+            'standard_unit_cost' => '50000', 'brief_specs' => '55" 4K Smart TV', 'specifications' => "Display: 55-inch 4K UHD\nPorts: 3 HDMI", 'is_active' => true]);
 
         $service = app(PpmpService::class);
         $ppmp = $service->create($this->mis, 2027, $this->staff);
@@ -111,16 +111,28 @@ class StandardItemTest extends TestCase
             'unit_id' => $other->id, 'unit_cost' => '30000', 'quantity_size' => 'any 55" TV', 'estimated_budget' => '60000']));
 
         $this->actingAs($this->staff)->get(route('procurement.ppmp.items.entry', $ppmp))->assertOk()
-            ->assertSee('ICT-TV-55 — LED Smart TV, 55&quot; (₱50,000.00', false)->assertSee('"cost":50000', false)->assertSee('"specs":"55-inch 4K UHD, 3 HDMI"', false);
+            ->assertSee('ICT-TV-55 — LED Smart TV, 55&quot; (₱50,000.00', false)->assertSee('"cost":50000', false)->assertSee('4K Smart TV', false)->assertDontSee('"specs":"Display', false);
         $this->assertEquals('50000.00', $item->unit_cost);
         $this->assertEquals('100000.00', $item->estimated_budget);
-        $this->assertSame('55-inch 4K UHD, 3 HDMI', $item->quantity_size);
+        // The brief specs on the PPMP; the full TWG specs kept with the project (for its PR), not printed on the PPMP
+        $this->assertSame('55" 4K Smart TV', $item->quantity_size);
+        $this->assertSame("Display: 55-inch 4K UHD\nPorts: 3 HDMI", $item->specifications);
+        $this->assertTrue($item->fresh()->print_brief_specs);
         $this->assertSame($unit->id, $item->unit_id);
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertOk()->assertSee('Specs: 55&quot; 4K Smart TV', false)->assertDontSee('55-inch 4K UHD');
 
         // On the PPMP page its tag badge opens the TWG specifications
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('btn-standard-specs', false)
-            ->assertSee('data-title="ICT-TV-55 — LED Smart TV, 55&quot;"', false)->assertSee('₱50,000.00 per', false)->assertSee('55-inch 4K UHD, 3 HDMI')
+            ->assertSee('data-title="ICT-TV-55 — LED Smart TV, 55&quot;"', false)->assertSee('₱50,000.00 per', false)->assertSee('55-inch 4K UHD')
             ->assertSee('STANDARD_SPECS_MODAL', false);
+
+        // The office leaves the brief specs off the printed PPMP (still on the project and its page)
+        $this->get(route('procurement.ppmp.items.entry', [$ppmp, 'id' => $item->id]))->assertSee('name="print_brief_specs" value="1" id="print_brief_specs" checked', false);
+        $item = $service->updateItem($item->fresh(), ['quantity' => 2, 'print_brief_specs' => false]);
+        $this->assertFalse($item->print_brief_specs);
+        $this->assertSame('55" 4K Smart TV', $item->quantity_size);
+        $this->get(route('procurement.ppmp.print', $ppmp))->assertDontSee('4K Smart TV');
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertSee('not printed');
 
         // Quantity is required for a standard item
         try {

@@ -255,6 +255,11 @@ class RfqController extends Controller
         $people = User::where('is_activated', true)->with('office')->orderBy('fname')->orderBy('lname')->get()->toBase()
             ->map(fn ($u) => ['name' => $u->fullname, 'designation' => $u->designation, 'office' => $u->office?->acronym ?: $u->office?->name]);
 
+        // A name used before that is a user's (in any capitalization) is that user: listed once, with the designation
+        $users = $people->keyBy(fn ($p) => mb_strtolower(trim($p['name'])));
+        $past = $past->reject(fn ($p) => $users->has(mb_strtolower(trim($p['name']))))
+            ->unique(fn ($p) => mb_strtolower(trim($p['name'])));
+
         return $past->merge($people)->unique('name')->values()->all();
     }
 

@@ -65,6 +65,7 @@ class StandardItemController extends Controller
             'unit_id'            => ['required', 'integer', 'exists:units,id'],
             'project_type'       => ['required', Rule::enum(ProjectType::class)],
             'standard_unit_cost' => ['nullable', 'numeric', 'gt:0', 'max:9999999999999.99'],
+            'brief_specs'        => ['nullable', 'string', 'max:2000'],
             'specifications'     => ['nullable', 'string', 'max:5000'],
             'twg_reference'      => ['nullable', 'string', 'max:255'],
             'twg_approved_at'    => ['nullable', 'date'],

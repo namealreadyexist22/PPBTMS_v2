@@ -3,14 +3,19 @@
     Expects: $name, $value, $designationField (input name filled on pick), $people (each ['name', 'designation', 'office']),
              $placeholder (shown when blank, e.g. the default signatory).
 --}}
-@php $people = collect($people)->filter(fn ($p) => filled($p['name']))->unique('name')->values(); @endphp
+@php
+    $people = collect($people)->filter(fn ($p) => filled($p['name']))->unique('name')->values();
+    // The saved name is that person's when it matches in any capitalization (e.g. typed in capitals)
+    $same = fn ($a, $b) => mb_strtolower(trim((string) $a)) === mb_strtolower(trim((string) $b));
+    $chosen = filled($value) ? $people->first(fn ($p) => $p['name'] === $value) ?? $people->first(fn ($p) => $same($p['name'], $value)) : null;
+@endphp
 <select name="{{ $name }}" class="form-select form-select-sm js-signatory" data-designation="{{ $designationField }}" data-placeholder="{{ $placeholder ?? 'Search or type a name' }}">
     <option value=""></option>
-    @if (filled($value) && ! $people->contains('name', $value))
+    @if (filled($value) && ! $chosen)
         <option value="{{ $value }}" selected>{{ $value }}</option>
     @endif
     @foreach ($people as $person)
-        <option value="{{ $person['name'] }}" data-designation="{{ $person['designation'] }}" data-office="{{ $person['office'] ?? '' }}" @selected($person['name'] === $value)>{{ $person['name'] }}</option>
+        <option value="{{ $person['name'] }}" data-designation="{{ $person['designation'] }}" data-office="{{ $person['office'] ?? '' }}" @selected($chosen && $person['name'] === $chosen['name'])>{{ $person['name'] }}</option>
     @endforeach
 </select>
 @once

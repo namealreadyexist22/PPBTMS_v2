@@ -127,11 +127,13 @@ class AoqService
         $person = fn (string $who) => filled($aoq->{"{$who}_name"})
             ? [$aoq->{"{$who}_name"}, $aoq->{"{$who}_designation"}]
             : [$defaults[$who][0], $aoq->{"{$who}_designation"} ?: $defaults[$who][1]];
+        // Prepared / evaluated / certified: a name without a designation takes the matching user's (any capitalization)
+        $withDesignation = fn (array $p) => [$p[0], filled($p[1]) ? $p[1] : User::designationOf($p[0])];
 
         return [
-            'prepared_by'  => $person('prepared_by'),
-            'evaluated_by' => [$aoq->evaluated_by_name, $aoq->evaluated_by_designation],
-            'certified_by' => $person('certified_by'),
+            'prepared_by'  => $withDesignation($person('prepared_by')),
+            'evaluated_by' => $withDesignation([$aoq->evaluated_by_name, $aoq->evaluated_by_designation]),
+            'certified_by' => $withDesignation($person('certified_by')),
             'bac_chair'    => $aoq->bac_chair_name ?: $defaults['bac_chair'],
             'bac_vice'     => $aoq->bac_vice_chair_name ?: $defaults['bac_vice'],
             'bac_members'  => $aoq->bac_members ?: $defaults['bac_members'],
@@ -147,7 +149,7 @@ class AoqService
 
         return [
             'prepared_by'  => [$creator ? $this->nameOf($creator) : null, $creator?->designation],
-            'certified_by' => [$aoq->rfq->signatory_name, $aoq->rfq->signatory_designation],
+            'certified_by' => [$aoq->rfq->signatory_name, $aoq->rfq->signatoryDesignation()],
             'bac_chair'    => $officials['bac_chair']?->fullname,
             'bac_vice'     => $officials['bac_vice_chair']?->fullname,
             'bac_members'  => $officials['bac_members']->map->fullname->values()->all(),

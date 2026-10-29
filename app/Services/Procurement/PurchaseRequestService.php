@@ -129,10 +129,10 @@ class PurchaseRequestService
             throw new ProcurementException("Choose a procurement project under {$request->pap->label()}.");
         }
 
-        // Catalog (standard) items keep the PPMP unit cost and the TWG specifications
+        // Catalog (standard) items keep the PPMP unit cost and the TWG specifications the project took
         if ($project->item?->isStandard()) {
             $data['unit_cost'] = $project->unit_cost;
-            $data['specifications'] = $data['specifications'] ?? $project->item->specifications;
+            $data['specifications'] = $data['specifications'] ?? ($project->specifications ?: $project->item->specifications);
         }
 
         $quantityHundredths = Quantity::toHundredths($data['quantity']);

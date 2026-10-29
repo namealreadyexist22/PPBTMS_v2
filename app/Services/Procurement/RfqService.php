@@ -66,7 +66,9 @@ class RfqService
             unset($data['award_basis']);   // kept as it is
         }
 
-        $rfq->update(array_intersect_key($data, array_flip($fields)) + ['updated_by' => $user->id]);
+        $rfq->fill(array_intersect_key($data, array_flip($fields)) + ['updated_by' => $user->id]);
+        $this->fillSignatoryDesignation($rfq);
+        $rfq->save();
 
         return $rfq;
     }
@@ -181,6 +183,7 @@ class RfqService
         return DB::transaction(function () use ($rfq, $user, $data) {
             $rfq = $this->lockEditable($rfq);
             $rfq->fill(array_intersect_key($data, array_flip(self::HEADER_FIELDS)));
+            $this->fillSignatoryDesignation($rfq);
 
             if (! $rfq->items()->exists()) {
                 throw new ProcurementException('Add at least one item before issuing.');
@@ -310,6 +313,14 @@ class RfqService
         app(AoqAttachmentService::class)->deleteFiles($files);
 
         return $request;
+    }
+
+    /** A signatory typed (or in other capitals) without a designation takes the matching user's. */
+    protected function fillSignatoryDesignation(Rfq $rfq): void
+    {
+        if (filled($rfq->signatory_name) && blank($rfq->signatory_designation)) {
+            $rfq->signatory_designation = User::designationOf($rfq->signatory_name);
+        }
     }
 
     /** The open RFQ a request's lines are on, if any (blocks revising or cancelling the request). */

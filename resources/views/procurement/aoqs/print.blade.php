@@ -23,7 +23,8 @@
     $endUsers = $requests->pluck('requested_by_name')->filter()->map($upper)->unique()->implode('; ');
     $failed = $rows->filter(fn ($r) => $r['lowest'] === [])->keys()->map(fn ($k) => $k + 1);
     $date = ($aoq->opened_at ?? $aoq->created_at)?->format('F d, Y');
-    $landscape = $suppliers->count() > 3;
+    // Landscape: the suppliers share up to 60% of the width, at most 18% each; the description takes the rest
+    $supplierWidth = $suppliers->isEmpty() ? 18 : min(18, round(60 / $suppliers->count(), 1));
     $members = collect($signatories['bac_members'])->filter(fn ($m) => filled($m));
 @endphp
 <!DOCTYPE html>
@@ -33,12 +34,12 @@
     <title>{{ $aoq->title() }}</title>
     <style>
         @page {
-            size: A4 {{ $landscape ? 'landscape' : 'portrait' }}; margin: 10mm 12mm 12mm;
+            size: A4 landscape; margin: 10mm 12mm 12mm;
             @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8.5pt "Times New Roman", serif; }
         }
         * { box-sizing: border-box; }
         body { font-family: "Times New Roman", Times, serif; font-size: 10pt; color: #000; margin: 0; background: #e5e7eb; }
-        .sheet { background: #fff; width: {{ $landscape ? '297mm' : '210mm' }}; min-height: {{ $landscape ? '210mm' : '297mm' }}; margin: 12px auto; padding: 10mm 12mm; position: relative; }
+        .sheet { background: #fff; width: 297mm; min-height: 210mm; margin: 12px auto; padding: 10mm 12mm; position: relative; }
 
         .toolbar { position: sticky; top: 0; z-index: 10; background: #1f2937; color: #fff; padding: 8px 16px; display: flex; gap: 12px; align-items: center; font: 13px Arial, sans-serif; }
         .toolbar button { font-size: 13px; padding: 5px 12px; border-radius: 5px; border: 0; cursor: pointer; }
@@ -76,6 +77,8 @@
         .signs .s { flex: 1; }
         .signs .n { margin-top: 30px; font-weight: bold; text-decoration: underline; text-transform: uppercase; font-size: 11pt; }
         .bac { margin-top: 34px; font-size: 10pt; page-break-inside: avoid; }
+        /* "Approved by: Bidding & Awards Committee" centred over the signatures (not .head: that is the letterhead's flex row) */
+        .bac .bac-head { display: block; text-align: center; }
         .bac .who { font-weight: bold; margin-top: 4px; }
         .bac .row { display: flex; flex-wrap: wrap; justify-content: space-around; gap: 30px 24px; margin-top: 34px; }
         .bac .m { width: 200px; text-align: center; }
@@ -128,7 +131,7 @@
     <table class="abs">
         <colgroup>
             <col style="width: 6%"><col style="width: 5%"><col style="width: 7%"><col>
-            @foreach ($suppliers as $s)<col style="width: {{ $landscape ? round(60 / $suppliers->count(), 1) : 16 }}%">@endforeach
+            @foreach ($suppliers as $s)<col style="width: {{ $supplierWidth }}%">@endforeach
         </colgroup>
         <thead>
             <tr>
@@ -232,8 +235,10 @@
     </div>
 
     <div class="bac">
-        <div>Approved by:</div>
-        <div class="who">BIDDING &amp; AWARDS COMMITTEE</div>
+        <div class="bac-head">
+            <div>Approved by:</div>
+            <div class="who">BIDDING &amp; AWARDS COMMITTEE</div>
+        </div>
         <div class="row">
             @foreach ($members as $member)
                 <div class="m"><div class="line"></div><div class="n">{{ $member }}</div><div>Member</div></div>

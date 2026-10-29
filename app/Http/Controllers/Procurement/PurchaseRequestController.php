@@ -273,7 +273,7 @@ class PurchaseRequestController extends Controller
                 'unit'          => $p->unit?->name,
                 'unit_cost'     => $p->unit_cost !== null ? (float) $p->unit_cost : null,
                 'standard'      => (bool) $p->item?->isStandard(),
-                'specs'         => $p->item?->specifications,
+                'specs'         => $p->specifications ?: $p->item?->specifications,   // as the project took them
                 'mode'          => $p->effectiveMode()?->name,   // the BAC's in the approved APP, else the PPMP's
                 'remaining'     => $p->remaining_cents / 100,
                 'budget'        => $p->budget_cents / 100,

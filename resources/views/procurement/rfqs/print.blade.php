@@ -49,7 +49,7 @@
         .intro .due { font-weight: bold; text-decoration: underline; text-transform: uppercase; }
         .signatory { text-align: right; margin: 34px 70px 0 0; font-size: 9pt; }
         .signatory > div { display: inline-block; text-align: center; }
-        .signatory .name { font-weight: bold; text-decoration: underline; }
+        .signatory .name { font-weight: bold; text-decoration: underline; text-transform: uppercase; }
 
         .note { display: flex; gap: 10px; margin-top: 26px; font-size: 8.3pt; }
         .note .k { width: 90px; flex-shrink: 0; }
@@ -137,7 +137,7 @@
     <div class="signatory">
         <div>
             <div class="name">{{ $rfq->signatory_name }}</div>
-            <div>{{ $rfq->signatory_designation }}</div>
+            <div>{{ $rfq->signatoryDesignation() }}</div>
         </div>
     </div>
 

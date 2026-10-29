@@ -171,7 +171,8 @@
                         <td class="c">{{ \Illuminate\Support\Str::before($item->project_type->label(), ' Services') }}</td>
                         <td class="qty">
                             @if ($qty($item))QTY: {{ $qty($item) }}@endif
-                            @if ($item->quantity_size)<div class="specs">Specs: {{ $item->quantity_size }}</div>@endif
+                            {{-- The brief specs, unless the office chose not to print them --}}
+                            @if ($item->quantity_size && $item->print_brief_specs)<div class="specs">Specs: {{ $item->quantity_size }}</div>@endif
                         </td>
                         <td class="c">{{ $item->procurementMode->name }}</td>
                         <td class="c">{{ $item->pre_proc_conference ? 'Yes' : 'No' }}</td>

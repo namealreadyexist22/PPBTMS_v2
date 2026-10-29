@@ -130,13 +130,16 @@
                     <div class="row g-3 mb-3">
                         <div class="col-md-12">
                             <label class="form-label small fw-semibold text-muted mb-1">
-                                Size / brief specs <span class="fw-normal">(optional, printed on the PPMP)
-
-                                </span>
-                            
+                                Size / brief specs <span class="fw-normal">(optional)</span>
                             </label>
                             <textarea name="quantity_size" class="form-control form-control-sm" rows="2" style="resize: none;" placeholder="e.g. 3.5&quot; HDD, SATA, 7200 RPM">{{ $item->quantity_size ?? '' }}</textarea>
                             <div class="invalid-feedback"></div>
+                            {{-- Kept with the project either way; only the printed PPMP leaves it out --}}
+                            <div class="form-check mt-2">
+                                <input type="hidden" name="print_brief_specs" value="0">
+                                <input class="form-check-input" type="checkbox" name="print_brief_specs" value="1" id="print_brief_specs" @checked($item->print_brief_specs ?? true)>
+                                <label class="form-check-label small" for="print_brief_specs">Print the brief specs on the PPMP</label>
+                            </div>
                             <div class="form-text">Full specifications, TOR or scope of work: attach the file below.</div>
                         </div>
                     </div>

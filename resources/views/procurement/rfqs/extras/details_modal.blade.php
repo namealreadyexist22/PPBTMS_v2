@@ -13,7 +13,7 @@
         'Price validity'        => $days($rfq->price_validity),
         'Warranty'              => $rfq->warranty,
         'Payment terms'         => $rfq->payment_terms,
-        'Signed by'             => trim($rfq->signatory_name . ($rfq->signatory_designation ? ', ' . $rfq->signatory_designation : '')),
+        'Signed by'             => trim($rfq->signatory_name . ($rfq->signatoryDesignation() ? ', ' . $rfq->signatoryDesignation() : '')),
         'Canvassed by'          => $rfq->canvassed_by_name,
     ];
 @endphp

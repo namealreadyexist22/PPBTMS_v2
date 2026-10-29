@@ -225,7 +225,7 @@
                     </div>
                     <div class="col-sm-6 col-xl-4">
                         <label class="form-label small fw-semibold text-muted mb-1">Designation</label>
-                        <input type="text" name="signatory_designation" class="form-control form-control-sm" value="{{ $rfq->signatory_designation }}" maxlength="255">
+                        <input type="text" name="signatory_designation" class="form-control form-control-sm" value="{{ $rfq->signatory_designation ?: $rfq->signatoryDesignation() }}" maxlength="255">
                     </div>
                     <div class="col-sm-6 col-xl-4">
                         <label class="form-label small fw-semibold text-muted mb-1">Canvassed by</label>

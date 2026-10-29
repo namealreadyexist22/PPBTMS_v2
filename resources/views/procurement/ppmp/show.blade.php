@@ -212,7 +212,7 @@
                                             @endphp
                                             <a href="#" class="badge bg-light text-dark border text-decoration-none btn-standard-specs"
                                                data-title="{{ $std ? $std->code . ' — ' . $std->name : $item->description }}" data-info="{{ $stdInfo }}"
-                                               data-html="{{ filled($item->quantity_size ?: $std?->specifications) ? view('procurement.partials.specs', ['text' => $item->quantity_size ?: $std?->specifications])->render() : '' }}"
+                                               data-html="{{ filled($item->specifications ?: $std?->specifications) ? view('procurement.partials.specs', ['text' => $item->specifications ?: $std?->specifications])->render() : '' }}"
                                                data-bs-toggle="tooltip" title="Standard item: click to view its TWG specifications"><i class="fas fa-tag"></i></a>
                                         @endif
                                         <a href="#" class="badge text-decoration-none btn-market-scoping {{ $msComplete ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' }}"
@@ -246,7 +246,7 @@
                                         <span class="text-nowrap">QTY: {{ rtrim(rtrim(number_format((float) $item->quantity, 2), '0'), '.') }} {{ $item->unit?->name }}</span>
                                         @if ($item->unit_cost !== null)<span class="text-nowrap text-muted">@ ₱{{ number_format((float) $item->unit_cost, 2) }}</span>@endif
                                     @endif
-                                    @if ($item->quantity_size)<div class="text-muted" style="white-space: pre-line;">{{ $item->quantity_size }}</div>@endif
+                                    @if ($item->quantity_size)<div class="text-muted" style="white-space: pre-line;">{{ $item->quantity_size }}@unless ($item->print_brief_specs) <span class="badge bg-light text-muted border fw-normal" title="Left out of the printed PPMP">not printed</span>@endunless</div>@endif
                                 </td>
                                 @php $bacMode = $item->appMode(); @endphp
                                 @if ($bacMode && $bacMode->id !== $item->procurement_mode_id)

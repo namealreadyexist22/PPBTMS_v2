@@ -64,10 +64,16 @@
                         <div class="invalid-feedback"></div>
                     </div>
                     <div class="col-12">
+                        <label class="form-label fw-semibold text-muted mb-1" for="item_brief_specs">Brief specs</label>
+                        <textarea name="brief_specs" id="item_brief_specs" class="form-control form-control-sm" rows="2" maxlength="2000" style="resize: none;" placeholder="e.g. All-in-One Desktop, Intel Core i5 / Ryzen 5, 16GB RAM, 512GB SSD, 23.8&quot; FHD">{{ $item->brief_specs ?? '' }}</textarea>
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">Goes to a PPMP project's "Size / brief specs" when it picks this item; the office chooses whether the PPMP prints it.</div>
+                    </div>
+                    <div class="col-12">
                         <label class="form-label fw-semibold text-muted mb-1">Specifications (set by the TWG)</label>
                         @include('procurement.partials.specs_editor', ['name' => 'specifications', 'value' => $item->specifications ?? ''])
                         <div class="invalid-feedback d-block"></div>
-                        <div class="form-text">Printed under the project on the PPMP. Offices cannot change it.</div>
+                        <div class="form-text">Kept with each project that picks this item and carried to its PR, RFQ and AOQ. Offices cannot change it.</div>
                     </div>
                     <div class="col-12">
                         <div class="form-check form-switch">

@@ -189,6 +189,24 @@ class RfqTest extends TestCase
         $this->assertSame([$revision->id], $this->rfqs->availableRequests($rfq->fresh())->pluck('id')->all());
     }
 
+    public function test_a_signatory_typed_in_capitals_prints_the_users_designation(): void
+    {
+        $narciso = User::factory()->create(['is_activated' => 1, 'name_title' => null, 'fname' => 'Narciso', 'minitial' => 'R', 'lname' => 'Cabalquinto', 'name_suffix' => null, 'designation' => 'Supply Officer IV']);
+        $pr = $this->submittedPr([[$this->hdd, 2]]);
+        $rfq = $this->rfqs->addLines($this->draftRfq(), $this->bac, [$pr->items[0]->id]);
+
+        // An RFQ saved before with the name typed in capitals and no designation: printed with his
+        $rfq->update(['signatory_name' => 'NARCISO R. CABALQUINTO', 'signatory_designation' => null]);
+        $this->assertSame('Supply Officer IV', $rfq->fresh()->signatoryDesignation());
+        $this->actingAs($this->bac)->get(route('procurement.rfqs.print', $rfq))->assertOk()->assertSee('NARCISO R. CABALQUINTO')->assertSee('Supply Officer IV');
+        $this->get(route('procurement.rfqs.show', $rfq))->assertSee('value="Narciso R. Cabalquinto" data-designation="Supply Officer IV" data-office="" selected', false);
+
+        // Issued with a blank designation: it is saved with his
+        $rfq = $this->rfqs->issue($rfq->fresh(), $this->bac, ['submission_deadline' => '2026-10-23 17:00', 'signatory_name' => 'NARCISO R. CABALQUINTO', 'signatory_designation' => '']);
+        $this->assertSame('Supply Officer IV', $rfq->fresh()->signatory_designation);
+        $this->assertNotNull($narciso);
+    }
+
     public function test_the_bac_returns_a_request_in_process_for_revision_or_cancellation(): void
     {
         $a = $this->submittedPr([[$this->hdd, 2]]);

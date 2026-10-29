@@ -47,6 +47,7 @@ class StorePpmpItemRequest extends FormRequest
         $this->merge([
             'pre_proc_conference' => $this->boolean('pre_proc_conference'),
             'is_epa'              => $this->boolean('is_epa'),
+            'print_brief_specs'   => $this->boolean('print_brief_specs', true),   // not sent: printed, as before
             'unit_cost'           => $unitCost === '' ? null : $unitCost,
             'estimated_budget'    => $budget,
         ]);
@@ -63,7 +64,8 @@ class StorePpmpItemRequest extends FormRequest
             'quantity'             => ['nullable', 'numeric', 'min:0'],
             'unit_id'              => ['nullable', 'integer', 'exists:units,id'],
             'unit_cost'            => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
-            'quantity_size'        => ['nullable', 'string', 'max:5000'],   // specifications (as long as a standard item's)
+            'quantity_size'        => ['nullable', 'string', 'max:5000'],   // size / brief specs
+            'print_brief_specs'    => ['boolean'],
             'procurement_mode_id'  => ['required', 'integer', 'exists:procurement_modes,id'],
             'pre_proc_conference'  => ['boolean'],
             'is_epa'               => ['boolean'],

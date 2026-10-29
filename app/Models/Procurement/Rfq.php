@@ -74,6 +74,19 @@ class Rfq extends Model
         };
     }
 
+    /**
+     * The signatory's designation as printed: the one saved on the RFQ, else that of the user with the
+     * signatory's name (any capitalization), e.g. a name typed in capitals rather than picked.
+     */
+    public function signatoryDesignation(): ?string
+    {
+        if (filled($this->signatory_designation) || blank($this->signatory_name)) {
+            return $this->signatory_designation;
+        }
+
+        return User::designationOf($this->signatory_name);
+    }
+
     /** All items awarded as one lot to a single supplier. */
     public function isPerLot(): bool
     {
