@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Procurement;
 
+use App\DataTables\Procurement\ItemRequestsDataTable;
 use App\Enums\ItemRequestStatus;
 use App\Enums\ProjectType;
 use App\Exceptions\ProcurementException;
@@ -23,7 +24,7 @@ use Tests\TestCase;
 
 class ItemRequestTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\ReadsDataTables;
 
     protected Office $mis;
     protected Office $sred;
@@ -84,11 +85,20 @@ class ItemRequestTest extends TestCase
 
         // MIS: its incoming list and totals; the project has room for 2
         $this->actingAs($this->misStaff)->get(route('procurement.item-requests.index', ['tab' => 'incoming']))->assertOk()
-            ->assertSee('IR 2027-0001')->assertSee('Requested from your office, per item')->assertSee('Decide')
-            ->assertSeeInOrder(['>Requestor<', '>Department<', 'IR 2027-0001', $this->sredStaff->fresh()->fullname, 'PPSPD', 'Desktop Computer'], false);
-        // As the page fetches it to redraw the list in place (fixed tabs with the pending count)
-        $this->get(route('procurement.item-requests.index', ['tab' => 'incoming']), ['X-Requested-With' => 'XMLHttpRequest'])->assertOk()
-            ->assertSee('id="ir_view"', false)->assertSee('id="ir_tabs"', false)->assertSee('data-tab="incoming"', false)->assertSeeInOrder(['js-pending', '1</span>'], false);
+            ->assertSee('Requested from your office, per item')->assertSee('data-tab="incoming"', false)->assertSeeInOrder(['js-pending', '1</span>'], false)
+            ->assertSeeInOrder(['Requestor', 'Department', 'Item'])->assertSee('tblItemRequests', false);
+        // The table's rows (one page at a time), with the pending count and the totals for the page around it
+        $incoming = $this->tableResponse('procurement.item-requests.index', ItemRequestsDataTable::class, ['tab' => 'incoming']);
+        $row = $incoming->json('data.0');
+        $this->assertStringContainsString('IR 2027-0001', $row['request_no']);
+        $this->assertSame($this->sredStaff->fresh()->fullname, html_entity_decode($row['requestor']));
+        $this->assertSame('PPSPD', $row['office']);
+        $this->assertStringContainsString('Desktop Computer', $row['item']);
+        $this->assertStringContainsString('js-decide', $row['action']);
+        $this->assertSame(1, $incoming->json('pending'));
+        $this->assertStringContainsString('Requested from your office, per item', $incoming->json('totals'));
+        $this->assertCount(0, $this->tableRows('procurement.item-requests.index', ItemRequestsDataTable::class, ['tab' => 'incoming', 'q' => 'laptop']));
+        $this->assertCount(1, $this->tableRows('procurement.item-requests.index', ItemRequestsDataTable::class, ['tab' => 'incoming', 'q' => 'desktop']));
         $this->get(route('procurement.item-requests.decide-entry', $ir))->assertOk()->assertSee('room for 2')->assertSee('16GB DDR5');
         $this->postJson(route('procurement.item-requests.decide', $ir), ['approved_quantity' => 3, 'ppmp_item_id' => $project->id])
             ->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'has room for 2 more'));
@@ -125,9 +135,16 @@ class ItemRequestTest extends TestCase
         $this->assertSame('fas fa-times-circle', $declined->data['icon']);
 
         // The list: no purpose / decision column; the details are in the modal; MIS shown under its department
-        $this->actingAs($this->sredStaff)->get(route('procurement.item-requests.index'))->assertOk()->assertSee('Partly approved')
-            ->assertSeeInOrder(['>Date<', '>To<', 'IR 2027-0001', '>MIS<', 'Desktop Computer'], false)->assertDontSee('FY 2027 ·')
-            ->assertDontSee('Purpose / decision')->assertSee(route('procurement.item-requests.show', $ir), false);
+        $this->actingAs($this->sredStaff)->get(route('procurement.item-requests.index'))->assertOk()
+            ->assertSeeInOrder(['Date', 'To', 'Item'])->assertDontSee('Purpose / decision')->assertDontSee('data-tab="incoming"', false);
+        $ours = $this->tableRows('procurement.item-requests.index', ItemRequestsDataTable::class);
+        $this->assertCount(3, $ours);
+        $row = $ours->first(fn ($r) => str_contains($r['request_no'], 'IR 2027-0001'));
+        $this->assertSame('MIS', $row['office']);
+        $this->assertStringContainsString('Partly approved', $row['status']);
+        $this->assertStringContainsString(route('procurement.item-requests.show', $ir), $row['request_no']);
+        $this->assertStringNotContainsString('FY 2027 ·', $row['item']);
+        $this->assertCount(1, $this->tableRows('procurement.item-requests.index', ItemRequestsDataTable::class, ['status' => 'declined']));
         $this->get(route('procurement.item-requests.show', $ir))->assertOk()->assertSee('ITEM_DETAILS_MODAL', false)
             ->assertSee('Field staff')->assertSee('1 of 3 approved by MIS')->assertSee('Two still serviceable')->assertSee('Desktop Computers')
             ->assertSee('16GB DDR5')->assertDontSee('data-then="js-decide"', false);

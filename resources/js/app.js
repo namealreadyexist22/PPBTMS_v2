@@ -27,6 +27,10 @@ import 'datatables.net-select-bs5';
 import 'datatables.net-buttons/js/buttons.html5.mjs';
 import 'datatables.net-buttons/js/buttons.print.mjs';
 
+// Server-side list pages (PR / JR, RFQ, AOQ, Item Requests, Standard Items, Suppliers)
+import { serverList } from './server-list';
+window.serverList = serverList;
+
 // 3. Configure Toastr
 toastr.options = {
     "closeButton": true,

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\PurchaseRequestsDataTable;
 use App\Enums\PpmpStatus;
 use App\Enums\RequestKind;
 use App\Enums\RequestStatus;
@@ -29,28 +30,19 @@ class PurchaseRequestController extends Controller
         protected PurchaseRequestService $service
     ) {}
 
-    public function index(Request $request)
+    /** The page, or (for the table's requests) one page of PRs / JRs as JSON. */
+    public function index(Request $request, PurchaseRequestsDataTable $dataTable)
     {
-        $kind = RequestKind::tryFrom((string) $request->query('kind')) ?? RequestKind::Pr;
-        $status = RequestStatus::tryFrom((string) $request->query('status'));
-        $search = trim((string) $request->query('q'));
+        $year = PurchaseRequestsDataTable::selectedYear();
+        $visible = PurchaseRequest::visibleTo($request->user());
 
-        $requests = PurchaseRequest::visibleTo($request->user())
-            ->with(['office', 'pap', 'items'])
-            ->where('kind', $kind)
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->when(! $status, fn ($q) => $q->where('status', '!=', RequestStatus::Superseded))
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->where('request_no', 'like', "%{$search}%")->orWhere('purpose', 'like', "%{$search}%")))
-            ->orderByRaw('request_no is null desc')
-            ->orderByDesc('series_year')->orderByDesc('series')->orderByDesc('revision')->orderByDesc('id')
-            ->paginate(25)->withQueryString();
-
-        return view('procurement.requests.index', [
-            'kind'     => $kind,
-            'status'   => $status,
-            'search'   => $search,
-            'requests' => $requests,
-            'counts'   => PurchaseRequest::visibleTo($request->user())->where('status', '!=', RequestStatus::Superseded)
+        return $dataTable->render('procurement.requests.index', [
+            'kind'   => PurchaseRequestsDataTable::kind(),
+            'status' => RequestStatus::tryFrom((string) $request->query('status')),
+            'year'   => $year,
+            'years'  => PurchaseRequest::yearOptions($visible),
+            // The tab counts (the table's answers keep them up to date)
+            'counts' => (clone $visible)->when($year, fn ($q) => $q->ofYear($year))->where('status', '!=', RequestStatus::Superseded)
                 ->selectRaw('kind, count(*) as total')->groupBy('kind')->pluck('total', 'kind'),
         ]);
     }

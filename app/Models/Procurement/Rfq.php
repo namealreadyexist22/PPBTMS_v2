@@ -20,6 +20,8 @@ use Illuminate\Support\Str;
  */
 class Rfq extends Model
 {
+    use Concerns\HasSeriesYear;
+
     public const MANAGE_PERMISSION = 'manage rfq';
 
     protected $fillable = [

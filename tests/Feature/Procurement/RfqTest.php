@@ -27,7 +27,7 @@ use Tests\TestCase;
 
 class RfqTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\ReadsDataTables;
 
     protected PpmpService $ppmps;
     protected PurchaseRequestService $requests;
@@ -316,7 +316,36 @@ class RfqTest extends TestCase
         $pr = $this->submittedPr([[$this->hdd, 1], [$this->ram, 1]]);
         $this->rfqs->addLines($rfq, $this->bac, $pr->items->pluck('id')->all());
         $this->assertSame('Hard Drive (4 TB) and 1 more', $rfq->fresh()->label());
-        $this->get(route('procurement.rfqs.index'))->assertSee('Hard Drive (4 TB) and 1 more');
+        $this->assertStringContainsString('Hard Drive (4 TB) and 1 more', $this->rfqRows()->first()['label']);
+    }
+
+    /** One page of the RFQ list (search box = q, status, year). */
+    protected function rfqRows(array $params = []): \Illuminate\Support\Collection
+    {
+        return $this->tableRows('procurement.rfqs.index', \App\DataTables\Procurement\RfqsDataTable::class, $params);
+    }
+
+    public function test_the_list_shows_one_year_at_a_time(): void
+    {
+        $this->actingAs($this->bac);
+        $issued = $this->draftRfq();
+        $issued->update(['rfq_no' => '2025-0007', 'series_year' => 2025, 'series' => 7]);
+        $draft = $this->draftRfq();                                     // no number yet: started this year
+        $old = $this->draftRfq();
+        $old->forceFill(['created_at' => now()->subYear()])->save();    // a draft started last year
+
+        // This year by default; another year, or all years, when picked
+        $year = (int) now()->year;
+        $this->assertSame([$draft->id], $this->rfqRows()->pluck('id')->all());
+        $this->assertEqualsCanonicalizing([$issued->id, $old->id], $this->rfqRows(['year' => 2025])->pluck('id')->all());
+        $this->assertCount(3, $this->rfqRows(['year' => 'all']));
+        $this->assertSame(['2025-0007'], $this->rfqRows(['year' => 'all', 'q' => '0007'])->pluck('rfq_no')->all());
+
+        // The year list runs from the first RFQ's year to this year; the row opens its RFQ
+        $this->get(route('procurement.rfqs.index'))->assertOk()
+            ->assertSeeInOrder(['All years', ">{$year}<", '>2025<'], false)->assertSee('tblRfqs', false);
+        $row = $this->rfqRows(['year' => 2025])->firstWhere('id', $issued->id);
+        $this->assertSame(route('procurement.rfqs.show', $issued), $row['DT_RowAttr']['data-url']);
     }
 
     public function test_pages_picker_print_and_access(): void
@@ -325,7 +354,8 @@ class RfqTest extends TestCase
 
         $this->actingAs($this->staff)->get(route('procurement.rfqs.index'))->assertForbidden();
 
-        $this->actingAs($this->bac)->get(route('procurement.rfqs.index'))->assertOk()->assertSee('No RFQs yet');
+        $this->actingAs($this->bac)->get(route('procurement.rfqs.index'))->assertOk()->assertSee('tblRfqs', false);
+        $this->assertCount(0, $this->rfqRows());
         $url = $this->postJson(route('procurement.rfqs.store'), ['title' => 'ICT supplies Q1'])->assertOk()->json('url');
         $rfq = Rfq::sole();
         $this->assertSame(Region::Lm, $rfq->region);
@@ -360,6 +390,6 @@ class RfqTest extends TestCase
         $visBac = User::factory()->create(['is_activated' => 1, 'region' => 'vis']);
         $visBac->givePermissionTo('manage rfq');
         $this->actingAs($visBac)->get(route('procurement.rfqs.show', $rfq))->assertForbidden();
-        $this->get(route('procurement.rfqs.index'))->assertOk()->assertDontSee('2026-0001');
+        $this->assertCount(0, $this->rfqRows(['year' => 'all']));
     }
 }

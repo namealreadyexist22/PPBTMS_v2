@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\ItemRequestsDataTable;
 use App\Enums\ItemRequestStatus;
 use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
@@ -24,38 +25,18 @@ class ItemRequestController extends Controller
         protected ItemRequestService $service
     ) {}
 
-    public function index(Request $request)
+    /** The page (tabs, totals for the offices that procure), or (for the table's requests) one page of requests as JSON. */
+    public function index(Request $request, ItemRequestsDataTable $dataTable)
     {
-        $user = $request->user();
-        $procuring = $this->service->procuringOfficeIds($user);
-        $tab = $request->query('tab') === 'incoming' && $procuring->isNotEmpty() ? 'incoming' : 'ours';
-        $status = ItemRequestStatus::tryFrom((string) $request->query('status'));
-        // Offices with their parents: the list shows each one's department
-        $with = ['item.unit', 'requestingOffice.parent.parent.parent', 'procuringOffice.parent.parent.parent', 'requester', 'decider', 'ppmpItem.ppmp'];
+        $procuring = ItemRequestsDataTable::procuring();
 
-        $ours = ItemRequest::with($with)
-            ->when(! $user->hasRole('Super Admin'), fn ($q) => $q->where('requesting_office_id', $user->office_id))
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->latest('id')->paginate(25, ['*'], 'ours_page')->withQueryString();
-
-        $incoming = ItemRequest::with($with)->whereIn('procuring_office_id', $procuring)
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->orderByRaw("case when status = 'pending' then 0 else 1 end")->latest('id')
-            ->paginate(25, ['*'], 'incoming_page')->withQueryString();
-
-        // To size the projects: per item and fiscal year, what is pending and what was approved
-        $totals = ItemRequest::with('item.unit')->whereIn('procuring_office_id', $procuring)
-            ->whereIn('status', [ItemRequestStatus::Pending, ItemRequestStatus::Approved, ItemRequestStatus::Partial])
-            ->get()->groupBy(fn ($r) => $r->fiscal_year . '|' . $r->item_id)
-            ->map(fn ($group) => [
-                'fiscal_year' => $group->first()->fiscal_year,
-                'item'        => $group->first()->item,
-                'pending'     => $group->filter->isPending()->sum(fn ($r) => (float) $r->quantity),
-                'approved'    => $group->reject->isPending()->sum(fn ($r) => (float) $r->approved_quantity),
-                'offices'     => $group->pluck('requesting_office_id')->unique()->count(),
-            ])->sortBy(fn ($t) => [$t['fiscal_year'], $t['item']->code])->values();
-
-        return view('procurement.item_requests.index', compact('tab', 'ours', 'incoming', 'totals', 'procuring', 'status'));
+        return $dataTable->render('procurement.item_requests.index', [
+            'tab'       => ItemRequestsDataTable::tab(),
+            'procuring' => $procuring,
+            'status'    => ItemRequestStatus::tryFrom((string) $request->query('status')),
+            'totals'    => $procuring->isNotEmpty() ? ItemRequestsDataTable::totals() : collect(),
+            'pending'   => ItemRequest::whereIn('procuring_office_id', $procuring)->where('status', ItemRequestStatus::Pending)->count(),
+        ]);
     }
 
     /** New request: the standard items another office procures for the user's office. */

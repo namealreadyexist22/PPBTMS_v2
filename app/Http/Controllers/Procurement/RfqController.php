@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\RfqsDataTable;
 use App\Enums\Region;
 use App\Enums\RfqStatus;
 use App\Exceptions\ProcurementException;
@@ -23,24 +24,13 @@ class RfqController extends Controller
         protected RfqService $service
     ) {}
 
-    public function index(Request $request)
+    /** The page, or (for the table's requests) one page of RFQs as JSON. */
+    public function index(Request $request, RfqsDataTable $dataTable)
     {
-        $status = RfqStatus::tryFrom((string) $request->query('status'));
-        $search = trim((string) $request->query('q'));
-
-        $rfqs = Rfq::visibleTo($request->user())
-            ->with(['procurementMode', 'items.line.request'])
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->where('rfq_no', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%")
-                ->orWhereHas('items.line.request', fn ($r) => $r->where('request_no', 'like', "%{$search}%"))))
-            ->orderByRaw('rfq_no is null desc')
-            ->orderByDesc('series_year')->orderByDesc('series')->orderByDesc('id')
-            ->paginate(25)->withQueryString();
-
-        return view('procurement.rfqs.index', [
-            'status'  => $status,
-            'search'  => $search,
-            'rfqs'    => $rfqs,
+        return $dataTable->render('procurement.rfqs.index', [
+            'status'  => RfqStatus::tryFrom((string) $request->query('status')),
+            'year'    => RfqsDataTable::selectedYear(),
+            'years'   => Rfq::yearOptions(Rfq::visibleTo($request->user())),
             'regions' => $request->user()->hasRole('Super Admin') ? Region::cases() : [],
         ]);
     }

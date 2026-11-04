@@ -10,7 +10,7 @@ use Tests\TestCase;
 
 class SupplierTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\ReadsDataTables;
 
     protected User $user;
 
@@ -23,9 +23,16 @@ class SupplierTest extends TestCase
         $this->user->givePermissionTo(Supplier::MANAGE_PERMISSION);
     }
 
+    /** One page of the Suppliers table (search box = q, status filter), by name. */
+    protected function rows(array $params = []): \Illuminate\Support\Collection
+    {
+        return $this->tableRows('procurement.suppliers.index', \App\DataTables\Procurement\SuppliersDataTable::class, $params + ['order' => [['column' => 0, 'dir' => 'asc']]]);
+    }
+
     public function test_suppliers_are_added_edited_and_searched(): void
     {
-        $this->actingAs($this->user)->get(route('procurement.suppliers.index'))->assertOk()->assertSee('No suppliers yet.');
+        $this->actingAs($this->user)->get(route('procurement.suppliers.index'))->assertOk()->assertSee('tblSuppliers', false);
+        $this->assertCount(0, $this->rows());
         $this->get(route('procurement.suppliers.entry'))->assertOk()->assertSee('Add Supplier');
 
         $this->postJson(route('procurement.suppliers.store'), ['name' => '  GPL Trading OPC ', 'address' => 'Imus City, Cavite', 'is_active' => 1])->assertOk();
@@ -37,8 +44,15 @@ class SupplierTest extends TestCase
         $this->assertFalse($supplier->fresh()->is_active);
         $this->assertSame('123-456', $supplier->fresh()->tin);
 
-        $this->get(route('procurement.suppliers.index', ['q' => 'imus']))->assertOk()->assertSee('GPL Trading OPC');
-        $this->get(route('procurement.suppliers.index', ['q' => 'nothing']))->assertOk()->assertSee('No suppliers match the search.');
+        // Search (name, address or TIN) and status run in the database, one page at a time
+        Supplier::create(['name' => 'Acme Office Supply', 'address' => 'Bacolod City', 'is_active' => true]);
+        $this->assertSame(['Acme Office Supply', 'GPL Trading OPC'], $this->rows()->pluck('name')->all());
+        $this->assertSame(['GPL Trading OPC'], $this->rows(['q' => 'imus'])->pluck('name')->all());
+        $this->assertSame(['GPL Trading OPC'], $this->rows(['q' => '123-456'])->pluck('name')->all());
+        $this->assertCount(0, $this->rows(['q' => 'nothing']));
+        $this->assertSame(['Acme Office Supply'], $this->rows(['status' => 'active'])->pluck('name')->all());
+        $this->assertSame(['GPL Trading OPC'], $this->rows(['status' => 'inactive'])->pluck('name')->all());
+        $this->assertSame('—', $this->rows(['q' => 'acme'])->first()['tin']);
 
         $this->deleteJson(route('procurement.suppliers.destroy'), ['id' => $supplier->id])->assertOk();
         $this->assertNull($supplier->fresh());

@@ -33,7 +33,7 @@
             <ul
                 class="nav sidebar-menu flex-column"
                 data-lte-toggle="treeview"
-                data-accordion="false"
+                data-accordion="true" {{-- opening a dropdown closes the one already open --}}
                 id="navigation"
                 tabindex="-1"
             >

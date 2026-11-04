@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\AoqsDataTable;
 use App\Enums\AoqStatus;
 use App\Enums\RfqStatus;
 use App\Exceptions\ProcurementException;
@@ -27,26 +28,20 @@ class AoqController extends Controller
     ) {}
 
     /** Issued RFQs still without an abstract, then the abstracts. */
-    public function index(Request $request)
+    /** The page (with the issued RFQs awaiting an abstract), or (for the table's requests) one page of abstracts as JSON. */
+    public function index(Request $request, AoqsDataTable $dataTable)
     {
         $user = $request->user();
-        $status = AoqStatus::tryFrom((string) $request->query('status'));
-        $search = trim((string) $request->query('q'));
 
-        $pending = Rfq::visibleTo($user)->with(['procurementMode', 'items.line'])
-            ->where('status', RfqStatus::Issued)->whereDoesntHave('aoq')
-            ->orderBy('series_year')->orderBy('series')->get();
-
-        $aoqs = Aoq::visibleTo($user)
-            ->with(['rfq.procurementMode', 'rfq.items.line', 'suppliers', 'quotes'])
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w
-                ->whereHas('rfq', fn ($r) => $r->where('rfq_no', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%"))
-                ->orWhereHas('suppliers', fn ($s) => $s->where('name', 'like', "%{$search}%"))))
-            ->latest('id')
-            ->paginate(25)->withQueryString();
-
-        return view('procurement.aoqs.index', compact('pending', 'aoqs', 'status', 'search'));
+        return $dataTable->render('procurement.aoqs.index', [
+            'pending' => Rfq::visibleTo($user)->with(['procurementMode', 'items.line'])
+                ->where('status', RfqStatus::Issued)->whereDoesntHave('aoq')
+                ->orderBy('series_year')->orderBy('series')->get(),
+            'status'  => AoqStatus::tryFrom((string) $request->query('status')),
+            'year'    => AoqsDataTable::selectedYear(),
+            // An abstract goes by its RFQ's year
+            'years'   => Rfq::yearOptions(Rfq::visibleTo($user)->whereHas('aoq')),
+        ]);
     }
 
     public function start(Request $request, Rfq $rfq)

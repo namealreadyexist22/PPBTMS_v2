@@ -3,7 +3,6 @@
 @section('content')
 @php
     use App\Enums\ItemRequestStatus;
-    $qty = fn ($q) => $q === null ? '—' : rtrim(rtrim(number_format((float) $q, 2), '0'), '.');
     $tabUrl = fn ($t) => route('procurement.item-requests.index', array_filter(['tab' => $t === 'ours' ? null : $t, 'status' => $status?->value]));
 @endphp
 
@@ -20,111 +19,48 @@
     <button class="btn btn-sm btn-success" id="btn_new_request"><i class="fas fa-plus me-1"></i> New Request</button>
 </div>
 
-<div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
-    {{-- The tabs stay; only the list below is redrawn (the active tab and the pending count follow) --}}
+<div class="card border-0 shadow-sm" id="ir_card" style="border-radius: 12px; overflow: hidden;">
+    {{-- The tabs switch the table between our requests and the requests to us (the pending count follows) --}}
     <div class="card-header bg-white pt-3 pb-0 px-4" style="border-bottom: 1px solid #f1f5f9;">
         <ul class="nav nav-tabs border-0" id="ir_tabs">
-            <li class="nav-item"><a class="nav-link {{ $tab === 'ours' ? 'active fw-semibold' : 'text-muted' }}" data-tab="ours" href="{{ $tabUrl('ours') }}">Our requests</a></li>
+            <li class="nav-item"><a class="nav-link {{ $tab === 'ours' ? 'active fw-semibold' : 'text-muted' }}" data-tab="ours" data-office-title="To" href="{{ $tabUrl('ours') }}">Our requests</a></li>
             @if ($procuring->isNotEmpty())
-                @php $pending = $incoming->getCollection()->filter->isPending()->count(); @endphp
                 <li class="nav-item">
-                    <a class="nav-link {{ $tab === 'incoming' ? 'active fw-semibold' : 'text-muted' }}" data-tab="incoming" href="{{ $tabUrl('incoming') }}">
+                    <a class="nav-link {{ $tab === 'incoming' ? 'active fw-semibold' : 'text-muted' }}" data-tab="incoming" data-office-title="Department" href="{{ $tabUrl('incoming') }}">
                         Requests to us <span class="badge bg-warning text-dark ms-1 js-pending {{ $pending ? '' : 'd-none' }}">{{ $pending }}</span>
                     </a>
                 </li>
             @endif
         </ul>
     </div>
-    {{-- Redrawn in place on tab, status and page changes and after a request is sent, cancelled or decided --}}
-    <div class="card-body px-4 py-3" id="ir_view">
-        <form method="GET" class="d-flex flex-wrap gap-2 mb-3" id="ir_filter">
-            @if ($tab === 'incoming')<input type="hidden" name="tab" value="incoming">@endif
-            <select name="status" class="form-select form-select-sm" style="width: 200px;">
-                <option value="">All statuses</option>
-                @foreach (ItemRequestStatus::cases() as $s)<option value="{{ $s->value }}" @selected($status === $s)>{{ $s->label() }}</option>@endforeach
-            </select>
+    <div class="card-body px-4 py-3">
+        <form method="GET" class="d-flex flex-wrap align-items-center gap-2 mb-3" id="ir_filter">
+            <input type="hidden" name="tab" value="{{ $tab }}">
+            <input type="search" name="q" value="{{ request('q') }}" class="form-control form-control-sm" placeholder="Search request no. or item" style="width: 260px;">
+            <div class="d-flex align-items-center gap-2 ms-auto">
+                <span class="spinner-border spinner-border-sm text-primary list-spinner" role="status" aria-label="Loading"></span>
+                <select name="status" class="form-select form-select-sm" style="width: 200px;" aria-label="Status">
+                    <option value="">All statuses</option>
+                    @foreach (ItemRequestStatus::cases() as $s)<option value="{{ $s->value }}" @selected($status === $s)>{{ $s->label() }}</option>@endforeach
+                </select>
+            </div>
         </form>
 
-        @if ($tab === 'incoming')
-            {{-- To size the projects: per item, what offices are waiting for and what was approved --}}
-            @if ($totals->isNotEmpty())
-                <div class="small fw-semibold mb-1">Requested from your office, per item</div>
-                <div class="table-responsive border rounded-3 mb-4">
-                    <table class="table table-sm align-middle small mb-0">
-                        <thead class="table-light"><tr class="text-nowrap"><th class="ps-3">FY</th><th>Item</th><th class="text-center">Offices</th><th class="text-end">Pending</th><th class="text-end pe-3">Approved</th></tr></thead>
-                        <tbody>
-                            @foreach ($totals as $t)
-                                <tr>
-                                    <td class="ps-3">{{ $t['fiscal_year'] }}</td>
-                                    <td><span class="fw-semibold">{{ $t['item']->code }}</span> {{ $t['item']->name }}</td>
-                                    <td class="text-center">{{ $t['offices'] }}</td>
-                                    <td class="text-end text-nowrap">{{ $qty($t['pending']) }} {{ $t['item']->unit?->name }}</td>
-                                    <td class="text-end text-nowrap pe-3">{{ $qty($t['approved']) }} {{ $t['item']->unit?->name }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @endif
-        @endif
+        {{-- Requests to us: per item, what offices are waiting for and what was approved (refreshed with the table) --}}
+        <div id="ir_totals" class="{{ $tab === 'incoming' ? '' : 'd-none' }}">@include('procurement.item_requests.extras.totals')</div>
 
-        @php $rows = $tab === 'incoming' ? $incoming : $ours; @endphp
-        <div class="table-responsive">
-            <table class="table table-sm table-hover align-middle small mb-0">
-                <thead class="table-light">
-                    <tr class="text-nowrap">
-                        <th class="ps-3">Request</th><th>Date</th>
-                        @if ($tab === 'incoming')<th>Requestor</th><th>Department</th>@else<th>To</th>@endif
-                        <th>Item</th><th class="text-end">Requested</th><th class="text-end">Approved</th>
-                        <th class="text-center">Status</th><th class="pe-3 text-end">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse ($rows as $ir)
-                        <tr>
-                            <td class="ps-3 text-nowrap">
-                                {{-- The request's details (purpose, specs, the decision) in a modal --}}
-                                <a href="#" class="fw-semibold text-decoration-none js-ir-details" data-url="{{ route('procurement.item-requests.show', $ir) }}" title="View the details">{{ $ir->request_no }} <i class="fas fa-eye ms-1" style="font-size: .7rem;"></i></a>
-                            </td>
-                            <td class="text-nowrap">{{ $ir->created_at->format('M d, Y') }}</td>
-                            @if ($tab === 'incoming')
-                                <td>{{ $ir->requester?->fullname ?? '—' }}</td>
-                            @endif
-                            <td>
-                                {{-- From: the requesting office's department; To: the procuring office itself (e.g. MIS) --}}
-                                <div class="fw-semibold">{{ $tab === 'incoming'
-                                    ? ($ir->requestingOffice?->department ?? $ir->requestingOffice)?->shortName()
-                                    : $ir->procuringOffice?->shortName() }}</div>
-                            </td>
-                            {{-- The item as when requested --}}
-                            <td><span class="fw-semibold">{{ $ir->item_code ?? $ir->item?->code }}</span> {{ $ir->item_name ?? $ir->item?->name }}</td>
-                            <td class="text-end text-nowrap">{{ $qty($ir->quantity) }} {{ $ir->unitName() }}</td>
-                            <td class="text-end text-nowrap fw-semibold">{{ $ir->isPending() || $ir->status === ItemRequestStatus::Cancelled ? '—' : $qty($ir->approved_quantity) }}</td>
-                            <td class="text-center"><span class="badge bg-{{ $ir->status->color() }}">{{ $ir->status->label() }}</span></td>
-                            <td class="pe-3 text-end text-nowrap">
-                                <button class="btn btn-sm btn-outline-secondary py-0 js-ir-details" data-url="{{ route('procurement.item-requests.show', $ir) }}">View</button>
-                                @if ($ir->isPending())
-                                    @if ($tab === 'incoming')
-                                        <button class="btn btn-sm btn-primary py-0 js-decide" data-url="{{ route('procurement.item-requests.decide-entry', $ir) }}">Decide</button>
-                                    @else
-                                        <button class="btn btn-sm btn-outline-danger py-0 js-cancel" data-url="{{ route('procurement.item-requests.cancel', $ir) }}" data-no="{{ $ir->request_no }}">Cancel</button>
-                                    @endif
-                                @endif
-                            </td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="{{ $tab === 'incoming' ? 9 : 8 }}" class="text-center text-muted py-5">{{ $tab === 'incoming' ? 'No requests to your office.' : 'Your office has not requested any item yet.' }}</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+        {{-- Server-side DataTable: one page at a time; search, status and paging run in the database --}}
+        <div class="position-relative">
+            @include('procurement.partials.list_loading')
+            {{ $dataTable->table(['class' => 'table table-sm table-hover align-middle small w-100 mb-0']) }}
         </div>
-        <div class="mt-3">{{ $rows->links() }}</div>
-    </div>{{-- /#ir_view --}}
+    </div>
 </div>
 <div id="modal-body"></div>
 @endsection
 
 @push('script')
+{{-- Before the table's own script, so the spinner shows for its first load too --}}
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
     const csrf = '{{ csrf_token() }}';
@@ -147,44 +83,31 @@ document.addEventListener('DOMContentLoaded', function () {
         }).fail(function (xhr) { isModalOpen = false; toastr.error(errorText(xhr), 'Error'); });
     }
 
-    // Tabs, status and pages: redraw the list without reloading; the URL follows (refresh / Back keep it)
-    let pending = null;
-    function loadView(url, push = true) {
-        pending?.abort();
-        $('#ir_view').css('opacity', .6);
-        if (push) history.replaceState(null, '', url);
-        pending = $.get(url).done(function (html) {
-            const page = $('<div>').append($.parseHTML(html));
-            const fresh = page.find('#ir_view');
-            if (!fresh.length) { window.location.reload(); return; }
-            $('#ir_view').replaceWith(fresh);
-            // The tabs stay: their links (they carry the status) and the pending count follow
-            page.find('#ir_tabs .nav-link').each(function () {
-                const tab = $('#ir_tabs .nav-link[data-tab="' + this.dataset.tab + '"]');
-                tab.attr('href', this.getAttribute('href')).attr('class', this.className);
-                tab.find('.js-pending').replaceWith($(this).find('.js-pending'));
-            });
-        }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.href = url; })
-          .always(() => $('#ir_view').css('opacity', ''));
-        return pending;
-    }
+    // Search, status and pages: the table asks the server; the URL follows (refresh / Back keep it)
+    const list = serverList({ table: '#tblItemRequests', card: '#ir_card', form: '#ir_filter', url: '{{ route("procurement.item-requests.index") }}' });
+    const reload = () => list.reload();
 
-    $(document).on('click', '#ir_tabs .nav-link, #ir_view .pagination a', function (e) {
-        if (e.ctrlKey || e.metaKey || e.shiftKey || !this.href) return;
+    // Each answer carries the pending count for the tab, and (requests to us) the per-item totals
+    $('#tblItemRequests').on('xhr.dt', function (e, settings, json) {
+        if (!json) return;
+        if (json.pending !== undefined) $('#ir_tabs .js-pending').text(json.pending).toggleClass('d-none', !json.pending);
+        if (json.totals !== undefined) $('#ir_totals').html(json.totals);
+    });
+
+    // Tabs: the same table for our requests or the requests to us (Requestor shown and the office column named for it)
+    $(document).on('click', '#ir_tabs .nav-link', function (e) {
+        if (e.ctrlKey || e.metaKey || e.shiftKey) return;
         e.preventDefault();
-        // The tab shows as chosen right away
-        if (this.dataset.tab) {
-            $('#ir_tabs .nav-link').removeClass('active fw-semibold').addClass('text-muted');
-            $(this).addClass('active fw-semibold').removeClass('text-muted');
-        }
-        loadView(this.href);
+        if ($(this).hasClass('active')) return;
+        const incoming = this.dataset.tab === 'incoming';
+        $('#ir_tabs .nav-link').removeClass('active fw-semibold').addClass('text-muted');
+        $(this).addClass('active fw-semibold').removeClass('text-muted');
+        $('#ir_filter [name=tab]').val(this.dataset.tab);
+        $('#ir_totals').toggleClass('d-none', !incoming);
+        list.api().column('requestor:name').visible(incoming, false);
+        $(list.api().column(3).header()).find('.dt-column-title').text(this.dataset.officeTitle);
+        list.apply();
     });
-    $(document).on('change', '#ir_filter select', function () {
-        const params = new URLSearchParams();
-        $('#ir_filter').serializeArray().forEach((f) => { if (f.value) params.set(f.name, f.value); });
-        loadView('{{ route("procurement.item-requests.index") }}' + (params.toString() ? '?' + params : ''));
-    });
-    $(document).on('submit', '#ir_filter', (e) => e.preventDefault());
 
     $('#btn_new_request').on('click', () => openModal('{{ route("procurement.item-requests.entry") }}', 'ITEM_REQUEST_MODAL', '[name=quantity]'));
     $(document).on('click', '.js-decide', function () { openModal($(this).data('url'), 'ITEM_DECIDE_MODAL', '[name=approved_quantity]'); });
@@ -206,7 +129,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .done((res) => {
                 toastr.success(res.message, 'Saved');
                 bootstrap.Modal.getInstance(form.closest('.modal')[0])?.hide();
-                loadView(window.location.href, false);
+                reload();
             })
             .fail((xhr) => toastr.error(errorText(xhr), 'Error'));
     });
@@ -217,10 +140,11 @@ document.addEventListener('DOMContentLoaded', function () {
             .then((r) => {
                 if (!r.isConfirmed) return;
                 $.ajax({ url: url, type: 'POST', data: { _token: csrf }, headers: { Accept: 'application/json' } })
-                    .done((res) => { toastr.success(res.message); loadView(window.location.href, false); })
+                    .done((res) => { toastr.success(res.message); reload(); })
                     .fail((xhr) => toastr.error(errorText(xhr), 'Error'));
             });
     });
 });
 </script>
+{{ $dataTable->scripts() }}
 @endpush

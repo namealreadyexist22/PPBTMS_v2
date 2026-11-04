@@ -25,7 +25,7 @@ use Tests\TestCase;
 
 class PurchaseRequestTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\ReadsDataTables;
 
     protected PpmpService $ppmps;
     protected PurchaseRequestService $requests;
@@ -308,6 +308,21 @@ class PurchaseRequestTest extends TestCase
         $pr->refresh();
         $this->assertSame('2026-06-0001', $pr->request_no);
         $this->assertSame('Admin', $pr->approved_by_name);
+
+        // The list: PRs of this year by default, found by number or purpose; the JR tab and the tab counts follow
+        $list = fn (array $params = []) => $this->tableResponse('procurement.requests.index', \App\DataTables\Procurement\PurchaseRequestsDataTable::class, $params);
+        $row = $list()->json('data.0');
+        $this->assertStringContainsString('2026-06-0001', $row['request_no']);
+        $this->assertStringContainsString('Hard Drive (4 TB)', $row['items_list']);
+        $this->assertSame('20,000.00', $row['total_amount']);
+        $this->assertSame(1, $list()->json('counts.pr'));
+        $this->assertCount(1, $list(['q' => 'defective parts'])->json('data'));   // the purpose as submitted
+        $this->assertCount(1, $list(['q' => '06-0001'])->json('data'));
+        $this->assertCount(0, $list(['q' => 'nothing like it'])->json('data'));
+        $this->assertCount(0, $list(['status' => 'draft'])->json('data'));
+        $this->assertCount(0, $list(['kind' => 'jr'])->json('data'));
+        $this->assertCount(0, $list(['year' => 2025])->json('data'));
+        $this->assertCount(1, $list(['year' => 'all'])->json('data'));
 
         // Signatories can still be set from the print dialog after submit
         $this->postJson(route('procurement.requests.signatories', $pr), $this->signed())->assertOk();

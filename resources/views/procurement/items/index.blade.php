@@ -2,70 +2,37 @@
 
 @section('content')
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <div>
-        <h5 class="fw-bold mb-0"><i class="fas fa-tags text-muted me-2"></i>Standard Items</h5>
-        <div class="text-muted small">Articles the agency regularly buys, with the standard unit cost and the specifications set by the TWG. A PPMP project that picks one takes its unit, price and specs; offices enter only the quantity.</div>
-    </div>
+    <h5 class="fw-bold mb-0">
+        <i class="fas fa-tags text-muted me-2"></i>Standard Items
+        {{-- What standard items are: on hover / focus, as on Item Requests --}}
+        <a tabindex="0" role="button" class="text-muted ms-1 fs-6 align-middle js-help" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="right"
+           title="What standard items are"
+           data-bs-content="Articles the agency regularly buys, with the standard unit cost and the specifications set by the TWG. A PPMP project that picks one takes its unit, price and specs; offices enter only the quantity."><i class="far fa-question-circle"></i></a>
+    </h5>
     <button class="btn btn-sm btn-success btn-item-entry"><i class="fas fa-plus me-1"></i> Add Standard Item</button>
 </div>
 
-<div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
+<div class="card border-0 shadow-sm" id="items_card" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white px-4 py-3" style="border-bottom: 1px solid #f1f5f9;">
-        <form method="GET" class="d-flex flex-wrap gap-2" id="items_filter">
+        <div class="small text-muted mb-2"><i class="fas fa-info-circle me-1"></i>Changing a standard cost or specs does not change PPMP projects already saved; they take the new values when re-saved (e.g. in an amendment). Items used by projects can be deactivated but not deleted.</div>
+        <form method="GET" class="d-flex flex-wrap align-items-center gap-2" id="items_filter">
             <input type="search" name="q" value="{{ request('q') }}" class="form-control form-control-sm" placeholder="Search code or name…" style="width: 240px;">
-            <select name="category" class="form-select form-select-sm" style="width: 220px;">
-                <option value="">All categories</option>
-                @foreach ($categories as $category)
-                    <option value="{{ $category->id }}" @selected(request('category') == $category->id)>{{ $category->name }}</option>
-                @endforeach
-            </select>
+            <div class="d-flex align-items-center gap-2 ms-auto">
+                <span class="spinner-border spinner-border-sm text-primary list-spinner" role="status" aria-label="Loading"></span>
+                <select name="category" class="form-select form-select-sm" style="width: 220px;" aria-label="Category">
+                    <option value="">All categories</option>
+                    @foreach ($categories as $category)
+                        <option value="{{ $category->id }}" @selected(request('category') == $category->id)>{{ $category->name }}</option>
+                    @endforeach
+                </select>
+            </div>
         </form>
     </div>
-    {{-- Redrawn in place on search / filter and after adding, editing or deleting (no full reload) --}}
-    <div id="items_view">
-    <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle small mb-0">
-            <thead class="table-light">
-                <tr class="text-nowrap"><th class="ps-4">Code</th><th>Item</th><th>Category</th><th>Unit</th><th class="text-end">Standard Cost</th><th>Specifications (TWG)</th><th class="text-center">Used by</th><th class="text-center">Status</th><th class="pe-4"></th></tr>
-            </thead>
-            <tbody>
-                @forelse ($items as $item)
-                    <tr class="{{ $item->is_active ? '' : 'text-muted' }}">
-                        <td class="ps-4 fw-semibold text-nowrap">{{ $item->code }}</td>
-                        <td>{{ $item->name }}
-                            {{-- <div class="text-muted">{{ $item->project_type?->label() }}</div> --}}
-                        </td>
-                        <td>{{ $item->category?->name ?? '—' }}</td>
-                        <td>{{ $item->unit?->name }}</td>
-                        <td class="text-end text-nowrap fw-semibold">{{ $item->isStandard() ? '₱' . number_format((float) $item->standard_unit_cost, 2) : '—' }}</td>
-                        <td>
-                            @php $twg = trim($item->twg_reference . ($item->twg_approved_at ? ' · ' . $item->twg_approved_at->format('M d, Y') : ''), ' ·'); @endphp
-                            @if ($item->specifications)
-                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 btn-view-specs"
-                                        data-title="{{ $item->code }} — {{ $item->name }}" data-twg="{{ $twg }}"
-                                        data-html="{{ view('procurement.partials.specs', ['text' => $item->specifications])->render() }}">
-                                    <i class="fas fa-eye me-1"></i>View specs
-                                </button>
-                            @else
-                                <span class="text-muted">—</span>
-                            @endif
-                            @if ($twg)<div class="text-muted mt-1 text-nowrap"><i class="fas fa-stamp me-1"></i>{{ $twg }}</div>@endif
-                        </td>
-                        <td class="text-center">{{ $item->ppmp_items_count }}</td>
-                        <td class="text-center"><span class="badge {{ $item->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $item->is_active ? 'Active' : 'Inactive' }}</span></td>
-                        <td class="pe-4 text-end text-nowrap">
-                            <button class="btn btn-sm btn-link p-0 me-2 btn-item-entry" data-id="{{ $item->id }}" title="Edit"><i class="fas fa-edit"></i></button>
-                            <button class="btn btn-sm btn-link p-0 text-danger btn-item-delete" data-id="{{ $item->id }}" title="Delete"><i class="fas fa-trash-alt"></i></button>
-                        </td>
-                    </tr>
-                @empty
-                    <tr><td colspan="9" class="text-center text-muted py-5"><i class="fas fa-tags fa-2x mb-2 d-block opacity-50"></i>{{ request()->filled('q') || request()->filled('category') ? 'No items match the search.' : 'No standard items yet.' }}</td></tr>
-                @endforelse
-            </tbody>
-        </table>
+    {{-- Server-side DataTable: one page of items at a time; search, sort and paging run in the database --}}
+    <div class="position-relative px-4 pb-3 pt-2">
+        @include('procurement.partials.list_loading')
+        {{ $dataTable->table(['class' => 'table table-sm table-hover align-middle small w-100 mb-0']) }}
     </div>
-    <div class="small text-muted px-4 py-2">Changing a standard cost or specs does not change PPMP projects already saved; they take the new values when re-saved (e.g. in an amendment). Items used by projects can be deactivated but not deleted.</div>
-    </div>{{-- /#items_view --}}
 </div>
 
 {{-- Full specifications of one item --}}
@@ -91,33 +58,14 @@
 @endsection
 
 @push('script')
+{{-- Before the table's own script, so the spinner shows for its first load too --}}
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function () {
-    // Redraw the items table from the server; the search box keeps its focus while typing
-    let pending = null;
-    function refreshView(url = window.location.href) {
-        pending?.abort();
-        $('#items_view').css('opacity', .6);
-        pending = $.get(url).done(function (html) {
-            const fresh = $('<div>').append($.parseHTML(html)).find('#items_view');
-            fresh.length ? $('#items_view').replaceWith(fresh) : window.location.reload();
-        }).fail((xhr) => { if (xhr.statusText !== 'abort') window.location.reload(); })
-          .always(() => $('#items_view').css('opacity', ''));
-        return pending;
-    }
+    document.querySelectorAll('.js-help').forEach((el) => bootstrap.Popover.getOrCreateInstance(el, { container: 'body' }));
 
-    // Search and category filter: redraw without reloading, keep the URL in step (refresh / Back work)
-    function applyFilter() {
-        const params = new URLSearchParams();
-        $('#items_filter').serializeArray().forEach((f) => { if (f.value.trim()) params.set(f.name, f.value.trim()); });
-        const url = '{{ route("procurement.items.index") }}' + (params.toString() ? '?' + params : '');
-        history.replaceState(null, '', url);
-        refreshView(url);
-    }
-    let typing = null;
-    $('#items_filter').on('submit', function (e) { e.preventDefault(); clearTimeout(typing); applyFilter(); });
-    $('#items_filter [name=q]').on('input', function () { clearTimeout(typing); typing = setTimeout(applyFilter, 300); });
-    $('#items_filter [name=category]').on('change', applyFilter);
+    // Search, category, sorting and pages: the table asks the server; the URL follows
+    const list = serverList({ table: '#tblItems', card: '#items_card', form: '#items_filter', url: '{{ route("procurement.items.index") }}' });
+    const refreshView = () => list.reload();   // after saving / deleting: stay on the page
 
     $(document).on('click', '.btn-view-specs', function () {
         const data = $(this).data();
@@ -164,4 +112,5 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+{{ $dataTable->scripts() }}
 @endpush

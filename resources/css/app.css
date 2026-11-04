@@ -113,6 +113,26 @@
     border: 1px solid #f1f5f9 !important;
 }
 
+/* Server-side lists (Standard Items, Suppliers, PR / JR, RFQ, AOQ, Item Requests): while the table loads,
+   its card gets .list-busy (from the table's processing.dt) — the overlay covers the table, the spinner shows by the filters */
+.list-loading {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 48px;
+    background: rgba(255, 255, 255, .55);
+}
+.list-busy .list-loading { display: flex; }
+.list-spinner { display: none; }
+.list-busy .list-spinner { display: inline-block; }
+/* A row that opens its document (data-url) */
+table.dataTable tbody tr.js-open-row { cursor: pointer; }
+table.dataTable tbody tr.js-open-row:hover > td { background-color: var(--bs-primary-bg-subtle); box-shadow: none; }
+table.dataTable tbody tr.js-open-row:hover > td:first-child { box-shadow: inset 3px 0 0 var(--bs-primary); }
+
 .dataTables_wrapper {
     position: relative !important;
     width: 100% !important;

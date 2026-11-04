@@ -18,6 +18,8 @@ use Illuminate\Support\Str;
  */
 class PurchaseRequest extends Model
 {
+    use Concerns\HasSeriesYear;
+
     protected $fillable = [
         'uuid', 'kind', 'request_no', 'series_year', 'series', 'revision', 'revised_from_id', 'fiscal_year', 'office_id',
         'ppmp_id', 'ppmp_pap_id', 'jr_type', 'purpose', 'sai_no', 'sai_date', 'status', 'total_amount',

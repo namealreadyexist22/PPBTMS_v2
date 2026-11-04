@@ -18,7 +18,7 @@ use Tests\TestCase;
 
 class StandardItemTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\ReadsDataTables;
 
     protected User $twg;
     protected User $staff;
@@ -39,6 +39,12 @@ class StandardItemTest extends TestCase
         $this->staff->givePermissionTo('manage ppmp');
     }
 
+    /** One page of the Standard Items table (search box = q, category filter), by code. */
+    protected function rows(array $params = []): \Illuminate\Support\Collection
+    {
+        return $this->tableRows('procurement.items.index', \App\DataTables\Procurement\StandardItemsDataTable::class, $params + ['order' => [['column' => 0, 'dir' => 'asc']]]);
+    }
+
     protected function line(array $overrides = []): array
     {
         return array_merge([
@@ -52,7 +58,8 @@ class StandardItemTest extends TestCase
     public function test_twg_manages_standard_items_on_their_page(): void
     {
         $unit = Unit::first();
-        $this->actingAs($this->twg)->get(route('procurement.items.index'))->assertOk()->assertSee('No standard items yet');
+        $this->actingAs($this->twg)->get(route('procurement.items.index'))->assertOk()->assertSee('tblItems', false);
+        $this->assertCount(0, $this->rows());
 
         $ict = \App\Models\Procurement\ItemCategory::where('code', 'ICT')->value('id');
         $this->postJson(route('procurement.items.store'), [
@@ -75,12 +82,21 @@ class StandardItemTest extends TestCase
         Item::where('code', 'ICT-0004')->forceDelete();
         Item::withTrashed()->where('code', 'ICT-0003')->forceDelete();
 
-        // Listed by code; search and category narrow the list
-        $this->get(route('procurement.items.index'))->assertSeeInOrder(['ICT-0001', 'ICT-0002', 'ITEM-0001']);
-        $this->get(route('procurement.items.index', ['q' => 'paper']))->assertSee('Bond paper')->assertDontSee('LED Smart TV');
-        $this->get(route('procurement.items.index', ['category' => $ict]))->assertSee('Laptop')->assertDontSee('Bond paper');
-        $this->get(route('procurement.items.index', ['q' => 'zzz']))->assertSee('No items match the search.');
-        $this->get(route('procurement.items.index'))->assertOk()->assertSee('ICT-0001')->assertSee('₱50,000.00')->assertSee('TWG-ICT Res. 2026-03');
+        // Listed by code, one page at a time; search (code or name) and category narrow the list in the database
+        $this->assertSame(['ICT-0001', 'ICT-0002', 'ITEM-0001'], $this->rows()->pluck('code')->all());
+        $this->assertSame(['Bond paper'], $this->rows(['q' => 'paper'])->pluck('name')->all());
+        $this->assertSame(['ICT-0002'], $this->rows(['q' => 'ict-0002'])->pluck('code')->all());
+        $this->assertSame(['ICT-0001', 'ICT-0002'], $this->rows(['category' => $ict])->pluck('code')->all());
+        $this->assertCount(0, $this->rows(['q' => 'zzz']));
+        $tvRow = $this->rows()->firstWhere('code', 'ICT-0001');
+        $this->assertSame('₱50,000.00', $tvRow['standard_unit_cost']);
+        $this->assertSame('ICT Equipment and Supplies', html_entity_decode($tvRow['category']));
+        $this->assertStringContainsString('TWG-ICT Res. 2026-03', $tvRow['specs']);
+        $this->assertStringContainsString('btn-item-delete', $tvRow['action']);
+        // Item names are escaped (the TV's has a quote mark)
+        $this->assertSame('LED Smart TV, 55&quot;', $tvRow['name']);
+        // Searched from the address bar (?q=…): the table starts with it
+        $this->get(route('procurement.items.index', ['q' => 'paper']))->assertOk()->assertSee('value="paper"', false);
 
         // Specs as a two-column table: "Label: value" lines, edited row by row and shown as a table
         $laptop = Item::where('name', 'Laptop')->sole();
@@ -88,7 +104,9 @@ class StandardItemTest extends TestCase
             'specifications' => "Memory: 16GB DDR5\nStorage: 512GB SSD M.2 2280 PCIe Gen4"])->assertOk();
         $this->get(route('procurement.items.entry', ['id' => $laptop->id]))->assertOk()->assertSee('js-specs-row', false)
             ->assertSee('value="Memory"', false)->assertSee('value="512GB SSD M.2 2280 PCIe Gen4"', false);
-        $this->get(route('procurement.items.index'))->assertSee('&lt;td', false)->assertSee('16GB DDR5');   // the table, in the View specs button
+        $specs = $this->rows()->firstWhere('name', 'Laptop')['specs'];   // the table, in the View specs button
+        $this->assertStringContainsString('&lt;td', $specs);
+        $this->assertStringContainsString('16GB DDR5', $specs);
 
         // Editing keeps the code; it can be corrected but must stay unique
         $tv = Item::where('code', 'ICT-0001')->sole();

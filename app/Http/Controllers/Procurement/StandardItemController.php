@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\StandardItemsDataTable;
 use App\Enums\ProjectType;
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\Item;
@@ -20,15 +21,10 @@ use Illuminate\Validation\Rule;
  */
 class StandardItemController extends Controller
 {
-    public function index(Request $request)
+    /** The page, or (for the table's requests) one page of items as JSON. */
+    public function index(StandardItemsDataTable $dataTable)
     {
-        $items = Item::with(['unit', 'category'])->withCount('ppmpItems')
-            ->when($request->filled('category'), fn ($q) => $q->where('item_category_id', $request->integer('category')))
-            ->when($request->filled('q'), fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%' . $request->input('q') . '%')->orWhere('code', 'like', '%' . $request->input('q') . '%')))
-            ->orderBy('code')->get();
-
-        return view('procurement.items.index', [
-            'items'      => $items,
+        return $dataTable->render('procurement.items.index', [
             'categories' => ItemCategory::orderBy('name')->get(),
         ]);
     }

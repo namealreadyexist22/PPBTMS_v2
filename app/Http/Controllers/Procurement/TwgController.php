@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\TwgDataTable;
 use App\Enums\AoqStatus;
 use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\Aoq;
+use App\Models\Procurement\Rfq;
 use App\Services\Procurement\AoqService;
 use Closure;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -24,17 +26,14 @@ class TwgController extends Controller
         protected AoqService $service
     ) {}
 
-    /** Waiting for the user's evaluation, then the ones evaluated before. */
-    public function index(Request $request)
+    /** The page, or (for the table's requests) one page of the assigned abstracts as JSON: waiting first, then evaluated. */
+    public function index(TwgDataTable $dataTable)
     {
-        $user = $request->user();
-        $mine = fn ($q) => $user->hasRole('Super Admin') ? $q : $q->whereHas('evaluators', fn ($e) => $e->whereKey($user->id));
-        $with = ['rfq.procurementMode', 'rfq.items.line', 'suppliers', 'evaluators'];
-
-        return view('procurement.twg.index', [
-            'pending' => $mine(Aoq::with($with))->where('status', AoqStatus::ForEvaluation)->orderBy('sent_to_twg_at')->get(),
-            'done'    => $mine(Aoq::with($with))->whereNotNull('evaluated_by')->where('status', '!=', AoqStatus::ForEvaluation)
-                ->latest('evaluated_at')->limit(50)->get(),
+        return $dataTable->render('procurement.twg.index', [
+            'pending' => TwgDataTable::assigned()->where('status', AoqStatus::ForEvaluation)->count(),
+            'year'    => TwgDataTable::selectedYear(),
+            // An abstract goes by its RFQ's year
+            'years'   => Rfq::yearOptions(Rfq::whereHas('aoq', fn ($a) => $a->whereIn('id', TwgDataTable::assigned()->select('id')))),
         ]);
     }
 

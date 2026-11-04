@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Procurement;
 
+use App\DataTables\Procurement\SuppliersDataTable;
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\Supplier;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -16,19 +17,10 @@ use Illuminate\Validation\Rule;
  */
 class SupplierController extends Controller
 {
-    public function index(Request $request)
+    /** The page, or (for the table's requests) one page of suppliers as JSON. */
+    public function index(SuppliersDataTable $dataTable)
     {
-        $search = trim((string) $request->query('q'));
-
-        $suppliers = Supplier::withCount('aoqSuppliers')
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->where('name', 'like', "%{$search}%")
-                ->orWhere('address', 'like', "%{$search}%")->orWhere('tin', 'like', "%{$search}%")))
-            ->when($request->query('status') === 'active', fn ($q) => $q->where('is_active', true))
-            ->when($request->query('status') === 'inactive', fn ($q) => $q->where('is_active', false))
-            ->orderBy('name')
-            ->paginate(50)->withQueryString();
-
-        return view('procurement.suppliers.index', compact('suppliers', 'search'));
+        return $dataTable->render('procurement.suppliers.index');
     }
 
     public function entry(Request $request)

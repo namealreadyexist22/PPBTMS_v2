@@ -34,7 +34,7 @@ use Tests\TestCase;
 
 class AoqTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\ReadsDataTables;
 
     protected PpmpService $ppmps;
     protected PurchaseRequestService $requests;
@@ -327,6 +327,12 @@ class AoqTest extends TestCase
         $this->actingAs($this->bac)->get(route('procurement.aoqs.index'))->assertOk()->assertSee($rfq->rfq_no)->assertSee('Start AOQ');
         $url = $this->postJson(route('procurement.aoqs.start', $rfq))->assertOk()->json('url');
         $aoq = $rfq->aoq()->first();
+        // Listed under its RFQ's number and year; the row opens it; search finds it by RFQ no.
+        $rows = $this->tableRows('procurement.aoqs.index', \App\DataTables\Procurement\AoqsDataTable::class);
+        $this->assertSame([$rfq->rfq_no], $rows->pluck('aoq_no')->all());
+        $this->assertSame($url, $rows->first()['DT_RowAttr']['data-url']);
+        $this->assertCount(1, $this->tableRows('procurement.aoqs.index', \App\DataTables\Procurement\AoqsDataTable::class, ['q' => $rfq->rfq_no]));
+        $this->assertCount(0, $this->tableRows('procurement.aoqs.index', \App\DataTables\Procurement\AoqsDataTable::class, ['year' => (int) $rfq->series_year - 1]));
 
         $this->get(route('procurement.aoqs.suppliers.entry', $aoq))->assertOk()->assertSee('Add Supplier');
         $this->post(route('procurement.aoqs.suppliers.store', $aoq), [
@@ -370,13 +376,23 @@ class AoqTest extends TestCase
         $this->actingAs($stranger)->get(route('procurement.twg.show', $aoq))->assertForbidden();
         $this->get(route('procurement.aoqs.attachment', [$aoq, 'quote', $hddQuote->id]))->assertForbidden();
 
-        $this->actingAs($twg)->get(route('procurement.twg.index'))->assertOk()->assertSee($aoq->title())->assertSee('Evaluate');
+        $this->actingAs($twg)->get(route('procurement.twg.index'))->assertOk()->assertSee('1 for evaluation')->assertSee('tblTwg', false);
+        $twgRows = fn (array $params = []) => $this->tableRows('procurement.twg.index', \App\DataTables\Procurement\TwgDataTable::class, $params);
+        $this->assertSame([$aoq->title()], $twgRows()->pluck('aoq_no')->all());
+        $this->assertStringContainsString('Evaluate', $twgRows()->first()['action']);
+        $this->assertCount(1, $twgRows(['show' => 'pending']));
+        $this->assertCount(0, $twgRows(['show' => 'done']));
+        $this->assertCount(0, $twgRows(['year' => (int) $rfq->series_year - 1]));
+        $this->assertCount(1, $twgRows(['q' => $rfq->rfq_no]));
         $this->get(route('procurement.twg.show', $aoq))->assertOk()->assertSee('Complete Evaluation')->assertSee('Spec sheet')->assertSee('Quotation / proposal')->assertSee('1 · lowest')
             ->assertSee('Who wins an item')->assertSee('js-outcome', false)->assertSee('data-eligible="1"', false);
         $this->get(route('procurement.aoqs.attachment', [$aoq, 'supplier', $alpha->id]))->assertOk();
         $finding = ['findings' => [$hddQuote->id => ['is_compliant' => '1', 'twg_remarks' => 'WD Red 4 TB, NAS grade']], 'technical_comment' => 'Meets the specifications'];
         $this->postJson(route('procurement.twg.complete', $aoq), $finding)->assertOk();
         $this->assertSame(AoqStatus::Evaluated, $aoq->fresh()->status);
+        // Now under Evaluated, opened with View
+        $this->assertCount(0, $twgRows(['show' => 'pending']));
+        $this->assertStringContainsString('View', $twgRows(['show' => 'done'])->first()['action']);
 
         $this->actingAs($this->bac)->get($url)->assertSee('Evaluated by the TWG')->assertSee('WD Red 4 TB, NAS grade');
         $this->postJson(route('procurement.aoqs.award', $aoq))->assertOk();
@@ -485,7 +501,10 @@ class AoqTest extends TestCase
         $this->get(route('procurement.requests.aoq-view', [$otherPr, $otherAoq]))->assertOk()->assertSee('AOQ_DETAILS_MODAL', false)->assertSee('No quotations recorded yet.');
 
         // From the list: a Trail button opening it in a modal
-        $this->get(route('procurement.requests.index'))->assertOk()->assertSee(route('procurement.requests.trail', $pr), false);
+        $this->get(route('procurement.requests.index'))->assertOk()->assertSee('tblRequests', false);
+        $row = $this->tableRows('procurement.requests.index', \App\DataTables\Procurement\PurchaseRequestsDataTable::class)
+            ->first(fn ($r) => str_contains($r['request_no'], $pr->request_no));
+        $this->assertStringContainsString(route('procurement.requests.trail', $pr), $row['action']);
         $this->get(route('procurement.requests.trail', $pr))->assertOk()->assertSee('REQUEST_TRAIL_MODAL', false)
             ->assertSee('Now:')->assertSee('awarded')->assertDontSee('id="pr_trail"', false);
     }
