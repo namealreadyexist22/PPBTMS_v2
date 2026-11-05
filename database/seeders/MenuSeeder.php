@@ -73,13 +73,16 @@ class MenuSeeder extends Seeder
         $page('Division PPMP', $planning, ['icon' => 'fas fa-layer-group', 'route' => 'procurement.division-ppmp.index', 'order' => 4]);
         $app = $page('APP', $planning, ['nav_name' => 'APP', 'icon' => 'fas fa-calendar-check', 'route' => 'procurement.app.index', 'order' => 5]);
 
-        // Procurement: quotations, their evaluation and who quotes
+        // Procurement: quotations, public bidding, their evaluation and who quotes
         $procurement = Menu::updateOrCreate(['name' => 'Procurement', 'parent_id' => null], ['icon' => 'fas fa-shopping-cart', 'order' => 11]);
+        // The BAC receives each submitted PR / JR before it goes on an RFQ or a bidding
+        $page('PR Receiving', $procurement, ['icon' => 'fas fa-inbox', 'route' => 'procurement.receiving.index', 'order' => 0]);
         $page('Requests for Quotation', $procurement, ['nav_name' => 'RFQ', 'icon' => 'fas fa-file-signature', 'route' => 'procurement.rfqs.index', 'order' => 1]);
         $page('Abstract of Quotations', $procurement, ['nav_name' => 'AOQ', 'icon' => 'fas fa-balance-scale', 'route' => 'procurement.aoqs.index', 'order' => 2]);
-        $page('TWG Evaluation', $procurement, ['icon' => 'fas fa-clipboard-check', 'route' => 'procurement.twg.index', 'order' => 3]);
-        $page('Suppliers', $procurement, ['icon' => 'fas fa-store', 'route' => 'procurement.suppliers.index', 'order' => 4]);
-        $page('Standard Items', $procurement, ['icon' => 'fas fa-tags', 'route' => 'procurement.items.index', 'order' => 5]);
+        $page('Competitive Bidding', $procurement, ['icon' => 'fas fa-gavel', 'route' => 'procurement.biddings.index', 'order' => 3]);
+        $page('TWG Evaluation', $procurement, ['icon' => 'fas fa-clipboard-check', 'route' => 'procurement.twg.index', 'order' => 4]);
+        $page('Suppliers', $procurement, ['icon' => 'fas fa-store', 'route' => 'procurement.suppliers.index', 'order' => 5]);
+        $page('Standard Items', $procurement, ['icon' => 'fas fa-tags', 'route' => 'procurement.items.index', 'order' => 6]);
 
         // Procurement Setup: signatories and the lookup lists
         $setup = Menu::updateOrCreate(['name' => 'Procurement Setup', 'parent_id' => null], ['icon' => 'fas fa-tools', 'order' => 12]);

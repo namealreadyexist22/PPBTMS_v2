@@ -17,6 +17,7 @@ class PurchaseRequestEvent extends Model
     public const STYLES = [
         'created'           => ['fas fa-pen', 'secondary'],
         'submitted'         => ['fas fa-paper-plane', 'primary'],
+        'received'          => ['fas fa-inbox', 'primary'],
         'revision'          => ['fas fa-code-branch', 'secondary'],
         'superseded'        => ['fas fa-layer-group', 'dark'],
         'cancelled'         => ['fas fa-ban', 'danger'],
@@ -32,6 +33,16 @@ class PurchaseRequestEvent extends Model
         'twg_evaluated'     => ['fas fa-clipboard-check', 'info'],
         'aoq_awarded'       => ['fas fa-trophy', 'success'],
         'aoq_reopened'      => ['fas fa-undo', 'warning'],
+        // Competitive bidding
+        'bid_added'         => ['fas fa-gavel', 'secondary'],
+        'bid_removed'       => ['fas fa-minus-circle', 'secondary'],
+        'bid_cancelled'     => ['fas fa-ban', 'danger'],
+        'bid_preproc_set'   => ['fas fa-users', 'secondary'],
+        'bid_preproc_held'  => ['fas fa-users', 'info'],
+        'bid_advertised'    => ['fas fa-bullhorn', 'primary'],
+        'bid_prebid_held'   => ['fas fa-comments', 'info'],
+        'bid_supplemental'  => ['fas fa-file-alt', 'warning'],
+        'bid_bidding'       => ['fas fa-gavel', 'primary'],
     ];
 
     protected function casts(): array

@@ -87,7 +87,7 @@ class RfqTest extends TestCase
         ];
     }
 
-    /** A submitted PR with the given [project, quantity] lines. */
+    /** A submitted PR with the given [project, quantity] lines, received by the BAC (it can go on an RFQ). */
     protected function submittedPr(array $lines): PurchaseRequest
     {
         $pr = $this->requests->create(RequestKind::Pr, $this->ppmp->paps()->first(), $this->staff, [
@@ -97,7 +97,12 @@ class RfqTest extends TestCase
             $this->requests->saveLine($pr, ['ppmp_item_id' => $project->id, 'unit' => 'piece', 'description' => $project->description, 'quantity' => $qty, 'unit_cost' => $project->unit_cost]);
         }
 
-        return $this->requests->submit($pr->fresh(), $this->staff);
+        return $this->received($this->requests->submit($pr->fresh(), $this->staff));
+    }
+
+    protected function received(PurchaseRequest $pr): PurchaseRequest
+    {
+        return $this->requests->receive($pr, $this->bac, now());
     }
 
     protected function draftRfq(): Rfq
@@ -127,8 +132,8 @@ class RfqTest extends TestCase
         $this->assertSame('SVP', $rfq->procurementMode->code);
         $this->assertSame([$a->id, $b->id], $rfq->requests()->pluck('id')->all());
 
-        // One mode per RFQ: the desktop (public bidding) stays off
-        $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$a->items[1]->id]), 'another procurement mode');
+        // The desktop (public bidding) stays off: it goes to a bidding
+        $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$a->items[1]->id]), 'it goes to a bidding');
         $this->assertCount(0, $this->rfqs->availableRequests($rfq->fresh()));   // no SVP items left to quote
         $this->refused(fn () => $this->rfqs->issue($rfq->fresh(), $this->bac), 'deadline');
 
@@ -137,10 +142,11 @@ class RfqTest extends TestCase
         $this->assertSame('2026-0001', $rfq->rfq_no);
         $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$a->items[1]->id]), 'can no longer be changed');
 
+        // Competitive Bidding items go to a bidding, not an RFQ
         $second = $this->draftRfq();
-        $this->rfqs->addLines($second, $this->bac, [$a->items[1]->id]);   // the desktop on its own (CB) RFQ
-        $second = $this->rfqs->issue($second->fresh(), $this->bac, ['submission_deadline' => '2026-10-30 17:00']);
-        $this->assertSame('2026-0002', $second->rfq_no);
+        $this->refused(fn () => $this->rfqs->addLines($second, $this->bac, [$a->items[1]->id]), 'it goes to a bidding');
+        $this->assertCount(0, $this->rfqs->availableRequests($second));
+        $this->refused(fn () => $this->rfqs->addLines($second, $this->bac, [$b->items[0]->id]), 'already on another RFQ');
     }
 
     public function test_a_line_is_on_one_open_rfq_and_cancelling_frees_it(): void
@@ -186,6 +192,10 @@ class RfqTest extends TestCase
         // Being revised: it waits off the list
         $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$pr->items[0]->id]), 'was returned to the office');
         $revision = $this->requests->submit($revision->fresh(), $this->staff);
+        // The revision's hard copy is received again before it goes on an RFQ
+        $this->assertCount(0, $this->rfqs->availableRequests($rfq->fresh()));
+        $this->refused(fn () => $this->rfqs->addLines($rfq, $this->bac, [$revision->items[0]->id]), 'not been received by the BAC');
+        $this->received($revision);
         $this->assertSame([$revision->id], $this->rfqs->availableRequests($rfq->fresh())->pluck('id')->all());
     }
 
@@ -235,7 +245,7 @@ class RfqTest extends TestCase
         // Returned: on no RFQ until revised; the office revises it
         $this->refused(fn () => $this->rfqs->addLines($this->draftRfq(), $this->bac, [$a->items[0]->id]), 'returned to the office for revision');
         $this->actingAs($this->staff)->get(route('procurement.requests.show', $a))->assertSee('Returned by the BAC for revision')->assertSee('Specs unclear')->assertSee('id="btn_revise"', false);
-        $revision = $this->requests->submit($this->requests->revise($a, $this->staff), $this->staff);
+        $revision = $this->received($this->requests->submit($this->requests->revise($a, $this->staff), $this->staff));
         $this->assertFalse($revision->fresh()->isReturned());
         $this->assertCount(1, $this->rfqs->availableRequests($this->draftRfq()));
 

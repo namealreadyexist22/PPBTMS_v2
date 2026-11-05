@@ -50,9 +50,11 @@ class ActionPermissionSeeder extends Seeder
             'manage budget'   => 'Budget Allocation',
             'manage items'    => 'Standard Items',
             'manage requests' => 'Purchase Requests',
+            'receive requests' => 'PR Receiving',
             'manage rfq'      => 'Requests for Quotation',
             'manage aoq'      => 'Abstract of Quotations',
             'evaluate aoq'    => 'TWG Evaluation',
+            'manage bidding'  => 'Competitive Bidding',
             'manage suppliers' => 'Suppliers',
             'manage officials' => 'Signatories & BAC',
         ];

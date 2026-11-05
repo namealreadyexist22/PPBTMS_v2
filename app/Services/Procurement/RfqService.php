@@ -19,8 +19,8 @@ use Illuminate\Support\Facades\DB;
  * Requests for Quotation.
  *
  * An RFQ gathers lines of submitted PRs / JRs of one region and one procurement mode (several
- * requests can be canvassed together, or one request split over several RFQs). A line is on at
- * most one RFQ that is not cancelled. Issuing numbers it (YYYY-NNNN, series per year); a
+ * requests can be canvassed together, or one request split over several RFQs). Competitive Bidding
+ * lines go to a bidding instead (BiddingService). A line is on at most one RFQ that is not cancelled. Issuing numbers it (YYYY-NNNN, series per year); a
  * cancelled RFQ frees its lines. While its lines are on an RFQ, a request cannot be revised or cancelled.
  */
 class RfqService
@@ -83,6 +83,7 @@ class RfqService
 
         return PurchaseRequest::with(['office', 'pap', 'items.ppmpItem.procurementMode'])
             ->where('status', RequestStatus::Submitted)
+            ->whereNotNull('received_at')   // its hard copy received by the BAC (PR Receiving)
             ->whereNull('returned_at')   // returned to the office: it revises or cancels it first
             ->whereHas('ppmp', fn ($q) => $q->where('region', $rfq->region))
             // Being revised: wait for the revision
@@ -92,6 +93,7 @@ class RfqService
             ->each(function (PurchaseRequest $pr) use ($taken, $rfq) {
                 $pr->setRelation('available', $pr->items
                     ->reject(fn ($line) => in_array($line->id, $taken, true))
+                    ->reject(fn ($line) => BiddingService::isBiddingLine($line))   // they go to a bidding
                     ->filter(fn ($line) => ! $rfq->procurement_mode_id || $line->ppmpItem?->effectiveModeId() === (int) $rfq->procurement_mode_id)
                     ->values());
             })
@@ -125,12 +127,20 @@ class RfqService
                     throw new ProcurementException("{$pr->title()} was returned to the office " . PurchaseRequest::RETURN_FOR[$pr->return_for] . '; it goes on an RFQ again once revised.');
                 }
 
+                if (! $pr->isReceived()) {
+                    throw new ProcurementException("{$pr->title()} has not been received by the BAC yet (PR Receiving).");
+                }
+
                 if ($pr->ppmp->region !== $rfq->region) {
                     throw new ProcurementException("{$pr->title()} is a {$pr->ppmp->region->label()} request; this RFQ is for {$rfq->region->label()}.");
                 }
 
                 if (in_array($line->id, $taken, true)) {
                     throw new ProcurementException("\"{$line->description}\" of {$pr->title()} is already on another RFQ.");
+                }
+
+                if (BiddingService::isBiddingLine($line)) {
+                    throw new ProcurementException("\"{$line->description}\" is for competitive bidding; it goes to a bidding, not an RFQ.");
                 }
 
                 if (PurchaseRequest::where('revised_from_id', $pr->id)->where('status', RequestStatus::Draft)->exists()) {

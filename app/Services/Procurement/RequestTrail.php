@@ -3,6 +3,7 @@
 namespace App\Services\Procurement;
 
 use App\Models\Procurement\Aoq;
+use App\Models\Procurement\Bidding;
 use App\Models\Procurement\PurchaseRequest;
 use App\Models\Procurement\PurchaseRequestEvent;
 use App\Models\Procurement\Rfq;
@@ -33,6 +34,14 @@ class RequestTrail
     {
         foreach ($rfq->load('items.line.request')->requests() as $request) {
             $this->record($request, $event, $description, $user, $remarks, $link ? route('procurement.rfqs.show', $rfq, false) : null);
+        }
+    }
+
+    /** A step of the bidding, on every request with lines in it ($link false: the bidding is being deleted). */
+    public function recordForBidding(Bidding $bidding, string $event, string $description, ?User $user = null, ?string $remarks = null, bool $link = true): void
+    {
+        foreach ($bidding->load('lots.items.line.request')->requests() as $request) {
+            $this->record($request, $event, $description, $user, $remarks, $link ? route('procurement.biddings.show', $bidding, false) : null);
         }
     }
 

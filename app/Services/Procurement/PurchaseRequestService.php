@@ -266,7 +266,8 @@ class PurchaseRequestService
 
         return DB::transaction(function () use ($request, $user) {
             // The revision starts fresh: not returned (the request it revises keeps that on its record)
-            $copy = $request->replicate(['uuid', 'status', 'submitted_at', 'cancelled_at', 'cancel_reason', 'returned_at', 'return_for', 'return_reason', 'returned_by', 'created_by', 'updated_by']);
+            // Not received: the revision's own hard copy is received when it is submitted
+            $copy = $request->replicate(['uuid', 'status', 'submitted_at', 'received_at', 'received_by', 'cancelled_at', 'cancel_reason', 'returned_at', 'return_for', 'return_reason', 'returned_by', 'created_by', 'updated_by']);
             $copy->fill([
                 'revision'        => $request->revision + 1,
                 'revised_from_id' => $request->id,
@@ -331,6 +332,35 @@ class PurchaseRequestService
         });
     }
 
+    /** The BAC receives the submitted request's hard copy; only then do its items go on an RFQ or a bidding. */
+    public function receive(PurchaseRequest $request, User $user, \DateTimeInterface $at, ?string $remarks = null): PurchaseRequest
+    {
+        return DB::transaction(function () use ($request, $user, $at, $remarks) {
+            $request = PurchaseRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+
+            if ($request->status !== RequestStatus::Submitted) {
+                throw new ProcurementException("{$request->title()} is {$request->status->label()}; only a submitted request is received.");
+            }
+
+            if ($request->isReturned()) {
+                throw new ProcurementException("{$request->title()} was returned to the office " . PurchaseRequest::RETURN_FOR[$request->return_for] . '.');
+            }
+
+            if ($request->isReceived()) {
+                throw new ProcurementException("{$request->title()} was already received on {$request->received_at->format('M d, Y')}.");
+            }
+
+            if ($request->submitted_at && $at < $request->submitted_at->copy()->startOfDay()) {
+                throw new ProcurementException("{$request->title()} was submitted on {$request->submitted_at->format('M d, Y')}; it is received on or after that.");
+            }
+
+            $request->update(['received_at' => $at, 'received_by' => $user->id, 'updated_by' => $user->id]);
+            app(RequestTrail::class)->record($request, 'received', 'Received by the BAC on ' . $request->received_at->format('M d, Y'), $user, $remarks);
+
+            return $request;
+        });
+    }
+
     /**
      * The BAC returns a submitted request to its office, for revision or for cancellation: the only
      * way the office can then revise or cancel it (a submitted request is locked). A request on an
@@ -340,6 +370,10 @@ class PurchaseRequestService
     {
         if ($rfq = app(RfqService::class)->openRfqFor($request)) {
             return app(RfqService::class)->returnRequest($rfq, $request, $user, $for, $reason);
+        }
+
+        if ($bidding = app(BiddingService::class)->openBiddingFor($request)) {
+            throw new ProcurementException("{$request->title()} has items in {$bidding->title()}; take them off the bidding first.");
         }
 
         return DB::transaction(function () use ($request, $user, $for, $reason) {

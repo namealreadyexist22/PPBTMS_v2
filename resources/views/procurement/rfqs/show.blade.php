@@ -110,7 +110,7 @@
         <div class="py-5 px-4 text-center">
             <span class="pr-empty-ico mb-3"><i class="fas fa-box-open"></i></span>
             <div class="fw-semibold">No items yet.</div>
-            <div class="text-muted small">Add items from submitted PRs / JRs of {{ $rfq->region->label() }}. Items of one procurement mode can go on one RFQ.</div>
+            <div class="text-muted small">Add items from received PRs / JRs of {{ $rfq->region->label() }}. Items of one procurement mode can go on one RFQ.</div>
             @if ($canEdit)<button class="btn btn-sm btn-outline-primary js-add-lines mt-3"><i class="fas fa-plus me-1"></i> Add items</button>@endif
         </div>
     @else

@@ -21,6 +21,8 @@ use App\Http\Controllers\Procurement\ItemRequestController;
 use App\Http\Controllers\Procurement\PpmpController;
 use App\Http\Controllers\Procurement\PurchaseRequestController;
 use App\Http\Controllers\Procurement\RfqController;
+use App\Http\Controllers\Procurement\BiddingController;
+use App\Http\Controllers\Procurement\PrReceivingController;
 use App\Http\Controllers\Procurement\SupplierController;
 use App\Http\Controllers\Procurement\TwgController;
 use App\Http\Controllers\Procurement\OfficialsController;
@@ -245,6 +247,31 @@ use Illuminate\Support\Facades\Route;
             Route::post('rfqs/{rfq}/issue', [RfqController::class, 'issue'])->name('rfqs.issue');
             Route::post('rfqs/{rfq}/cancel', [RfqController::class, 'cancel'])->name('rfqs.cancel');
             Route::delete('rfqs/{rfq}', [RfqController::class, 'destroy'])->name('rfqs.destroy');
+        });
+
+        // PR Receiving: the BAC receives each submitted PR / JR's hard copy before it goes on an RFQ or a bidding
+        Route::middleware('perm:receive requests')->group(function () {
+            Route::get('receiving', [PrReceivingController::class, 'index'])->name('receiving.index');
+            Route::get('receiving/{purchaseRequest}', [PrReceivingController::class, 'request'])->name('receiving.request');
+            Route::post('receiving/{purchaseRequest}/receive', [PrReceivingController::class, 'receive'])->name('receiving.receive');
+            Route::post('receiving/{purchaseRequest}/return', [PrReceivingController::class, 'returnToOffice'])->name('receiving.return');
+        });
+
+        // Competitive (public) bidding of Competitive Bidding PR / JR lines, in lots; {bidding} is the uuid
+        Route::middleware('perm:manage bidding')->group(function () {
+            Route::get('biddings', [BiddingController::class, 'index'])->name('biddings.index');
+            Route::post('biddings/store', [BiddingController::class, 'store'])->name('biddings.store');
+            Route::get('biddings/{bidding}', [BiddingController::class, 'show'])->name('biddings.show');
+            Route::post('biddings/{bidding}/title', [BiddingController::class, 'title'])->name('biddings.title');
+            Route::get('biddings/{bidding}/picker', [BiddingController::class, 'picker'])->name('biddings.picker');
+            Route::post('biddings/{bidding}/lines', [BiddingController::class, 'addLines'])->name('biddings.lines.store');
+            Route::post('biddings/{bidding}/lines/move', [BiddingController::class, 'moveLine'])->name('biddings.lines.move');
+            Route::delete('biddings/{bidding}/lines', [BiddingController::class, 'removeLine'])->name('biddings.lines.destroy');
+            Route::post('biddings/{bidding}/lots', [BiddingController::class, 'saveLot'])->name('biddings.lots.store');
+            Route::delete('biddings/{bidding}/lots', [BiddingController::class, 'deleteLot'])->name('biddings.lots.destroy');
+            Route::get('biddings/{bidding}/steps/{step}', [BiddingController::class, 'stepEntry'])->name('biddings.steps.entry');
+            Route::post('biddings/{bidding}/steps/{step}', [BiddingController::class, 'recordStep'])->name('biddings.steps.store');
+            Route::post('biddings/{bidding}/cancel', [BiddingController::class, 'cancel'])->name('biddings.cancel');
         });
 
         // Abstract of Quotations of an issued RFQ; {aoq} is the uuid

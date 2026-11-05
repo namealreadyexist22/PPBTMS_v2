@@ -143,7 +143,7 @@ class UserAccessTest extends TestCase
 
         $this->assertSame(['Dashboard', 'Purchase Requests'], $tree->take(2)->pluck('name')->all());
         $this->assertSame(['Budget Allocation', 'PPMP', 'Item Requests', 'Division PPMP', 'APP'], $children('Planning'));
-        $this->assertSame(['Requests for Quotation', 'Abstract of Quotations', 'TWG Evaluation', 'Suppliers', 'Standard Items'], $children('Procurement'));
+        $this->assertSame(['PR Receiving', 'Requests for Quotation', 'Abstract of Quotations', 'Competitive Bidding', 'TWG Evaluation', 'Suppliers', 'Standard Items'], $children('Procurement'));
         $this->assertSame(['Signatories & BAC', 'Procurement Lookups'], $children('Procurement Setup'));
         $this->assertNotContains('Procurement Lookups', $children('Settings'));
         $this->assertSame(1, Menu::where('name', 'Procurement')->count());

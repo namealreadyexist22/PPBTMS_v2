@@ -1,4 +1,4 @@
-{{-- Add items to an RFQ: submitted PRs / JRs of the region with items not on another RFQ. Expects $rfq, $requests (each with ->available lines). --}}
+{{-- Add items to an RFQ: received PRs / JRs of the region with items not on another RFQ. Expects $rfq, $requests (each with ->available lines). --}}
 @php $qty = fn ($q) => rtrim(rtrim(number_format((float) $q, 2), '0'), '.'); @endphp
 <style>
     .rq-search { width: 300px; max-width: 100%; }
@@ -25,7 +25,7 @@
                 <div class="modal-body p-4">
                     <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
                         <div>
-                            <div class="fw-semibold">Submitted PRs / JRs with items to quote</div>
+                            <div class="fw-semibold">Received PRs / JRs with items to quote</div>
                             <div class="small text-muted">{{ $rfq->procurementMode ? 'Only ' . $rfq->procurementMode->name . ' items are listed.' : 'Items of one procurement mode go on one RFQ: the first item you tick sets it.' }}</div>
                         </div>
                         <div class="input-group input-group-sm rq-search">
@@ -37,7 +37,7 @@
                     @if ($requests->isEmpty())
                         <div class="text-center text-muted py-5">
                             <div class="fw-semibold">Nothing to quote.</div>
-                            <div class="small">Every item of the submitted PRs / JRs of {{ $rfq->region->label() }}{{ $rfq->procurementMode ? ' (' . $rfq->procurementMode->name . ')' : '' }} is already on an RFQ.</div>
+                            <div class="small">Every item of the received PRs / JRs of {{ $rfq->region->label() }}{{ $rfq->procurementMode ? ' (' . $rfq->procurementMode->name . ')' : '' }} is already on an RFQ. A PR / JR shows here once the BAC receives it (PR Receiving).</div>
                         </div>
                     @else
                         <div class="border rounded-3 overflow-hidden small" id="rq_list">

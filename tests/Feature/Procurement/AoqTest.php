@@ -97,7 +97,7 @@ class AoqTest extends TestCase
         ];
     }
 
-    /** A submitted PR with the given [project, quantity] lines. */
+    /** A submitted PR with the given [project, quantity] lines, received by the BAC (it can go on an RFQ). */
     protected function submittedPr(array $lines): PurchaseRequest
     {
         $pr = $this->requests->create(RequestKind::Pr, $this->ppmp->paps()->first(), $this->staff, [
@@ -107,7 +107,7 @@ class AoqTest extends TestCase
             $this->requests->saveLine($pr, ['ppmp_item_id' => $project->id, 'unit' => 'piece', 'description' => $project->description, 'quantity' => $qty, 'unit_cost' => $project->unit_cost]);
         }
 
-        return $this->requests->submit($pr->fresh(), $this->staff);
+        return $this->requests->receive($this->requests->submit($pr->fresh(), $this->staff), $this->staff, now());
     }
 
     protected function draftRfq(): Rfq
@@ -460,7 +460,7 @@ class AoqTest extends TestCase
         $this->aoqs->award($this->evaluated($aoq), $this->bac);
 
         $this->assertSame(
-            ['created', 'submitted', 'rfq_added', 'rfq_issued', 'aoq_started', 'twg_sent', 'twg_evaluated', 'aoq_awarded'],
+            ['created', 'submitted', 'received', 'rfq_added', 'rfq_issued', 'aoq_started', 'twg_sent', 'twg_evaluated', 'aoq_awarded'],
             $pr->events()->pluck('event')->all()
         );
         $this->assertStringContainsString('Hard Drive (4 TB): Alpha Trading (₱9,600.00)', $pr->events()->where('event', 'aoq_awarded')->value('description'));

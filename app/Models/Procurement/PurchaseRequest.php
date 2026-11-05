@@ -24,7 +24,7 @@ class PurchaseRequest extends Model
         'uuid', 'kind', 'request_no', 'series_year', 'series', 'revision', 'revised_from_id', 'fiscal_year', 'office_id',
         'ppmp_id', 'ppmp_pap_id', 'jr_type', 'purpose', 'sai_no', 'sai_date', 'status', 'total_amount',
         'requested_by_name', 'requested_by_designation', 'approved_by_name', 'approved_by_designation',
-        'submitted_at', 'cancelled_at', 'cancel_reason', 'returned_at', 'return_for', 'return_reason', 'returned_by',
+        'submitted_at', 'received_at', 'received_by', 'cancelled_at', 'cancel_reason', 'returned_at', 'return_for', 'return_reason', 'returned_by',
         'created_by', 'updated_by',
     ];
 
@@ -39,6 +39,7 @@ class PurchaseRequest extends Model
             'sai_date'     => 'date',
             'total_amount' => 'decimal:2',
             'submitted_at' => 'datetime',
+            'received_at'  => 'datetime',
             'cancelled_at' => 'datetime',
             'returned_at'  => 'datetime',
         ];
@@ -69,6 +70,12 @@ class PurchaseRequest extends Model
     public function isEditable(): bool
     {
         return $this->status === RequestStatus::Draft;
+    }
+
+    /** The BAC has received its hard copy: its items can go on an RFQ or a bidding. */
+    public function isReceived(): bool
+    {
+        return $this->received_at !== null;
     }
 
     /** "FOR BIDDING" when a line's mode is competitive bidding, else "REGULAR PROCUREMENT". */
@@ -132,6 +139,12 @@ class PurchaseRequest extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** Who at the BAC received its hard copy. */
+    public function receiver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'received_by');
     }
 
     public function recalculateTotal(): void

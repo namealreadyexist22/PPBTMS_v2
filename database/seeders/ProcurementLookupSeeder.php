@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Procurement\BidDocument;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\ItemCategory;
 use App\Models\Procurement\ProcurementMode;
@@ -59,6 +60,20 @@ class ProcurementLookupSeeder extends Seeder
             'FUR'  => 'Furniture and Fixtures',
             'SVC'  => 'Services',
             'INF'  => 'Infrastructure',
+        ]);
+
+        // Each bidder's checklist in a competitive bidding (RA 12009 eligibility, technical and financial documents)
+        $this->seed(BidDocument::class, [
+            'PHILGEPS'   => 'PhilGEPS Certificate of Registration (Platinum)',
+            'ONGOING'    => 'Statement of all ongoing government and private contracts',
+            'SLCC'       => 'Statement of the single largest completed contract (SLCC)',
+            'NFCC'       => 'Net Financial Contracting Capacity (NFCC) or committed line of credit',
+            'JVA'        => 'Joint Venture Agreement (if applicable)',
+            'BIDSEC'     => 'Bid security',
+            'OSS'        => 'Omnibus Sworn Statement',
+            'TECHSPEC'   => 'Technical specifications / Schedule of requirements',
+            'BIDFORM'    => 'Financial bid form',
+            'PRICESCHED' => 'Price schedule',
         ]);
     }
 

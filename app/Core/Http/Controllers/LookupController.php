@@ -3,6 +3,7 @@
 namespace App\Core\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Procurement\BidDocument;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\ItemCategory;
 use App\Models\Procurement\ProcurementMode;
@@ -26,6 +27,8 @@ class LookupController extends Controller
         'procurement-modes' => [ProcurementMode::class, 'Modes of Procurement', ['ppmp_items' => 'procurement_mode_id', 'app_items' => 'procurement_mode_id']],
         'units'             => [Unit::class, 'Units', ['ppmp_items' => 'unit_id', 'items' => 'unit_id']],
         'item-categories'   => [ItemCategory::class, 'Item Categories', ['items' => 'item_category_id']],
+        // The checklist of each bidder's documents in a competitive bidding
+        'bid-documents'     => [BidDocument::class, 'Bid Documents', []],
     ];
 
     public function index(Request $request)

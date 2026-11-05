@@ -50,7 +50,6 @@
                     <i class="fas fa-history me-1"></i> History <span class="badge bg-secondary ms-1">{{ $ppmp->signatories->count() }}</span>
                 </button>
                 @if ($canEdit)
-                    <button class="btn btn-sm btn-success" id="btn_add_pap"><i class="fas fa-folder-plus me-1"></i> Add PAP</button>
                     <button class="btn btn-sm btn-primary" id="btn_submit" @disabled($budgetOver) title="{{ $budgetOver ? 'Over budget allocation' : '' }}"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
                 @endif
                 @if ($canReturn)
@@ -140,8 +139,11 @@
 {{-- Procurement projects, grouped by PAP --}}
 @php $colspan = 11; $n = 0; @endphp
 <div class="border-top">
-    <div class="card-header bg-white pt-3 pb-2 px-4" style="border-bottom: 1px solid #f1f5f9;">
+    <div class="card-header bg-white pt-3 pb-2 px-4 d-flex flex-wrap align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
         <h6 class="m-0 fw-bold"><i class="fas fa-list text-muted me-2"></i>PAPs and Procurement Projects ({{ $ppmp->paps->count() }} PAP, {{ $ppmp->items->count() }} projects)</h6>
+        @if ($canEdit)
+            <button class="btn btn-sm btn-success ms-auto" id="btn_add_pap"><i class="fas fa-folder-plus me-1"></i> Add PAP</button>
+        @endif
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
