@@ -48,7 +48,15 @@
         .footer .ft { font-size: 8pt; color: #333; }
 
         .sheet + .sheet { page-break-before: always; break-before: page; }
-        @media print { body { background: #fff; } .toolbar { display: none; } .sheet { width: auto; min-height: 270mm; margin: 0; padding: 12mm 14mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; } }
+        @media print {
+            body { background: #fff; }
+            .toolbar { display: none; }
+            /* Bottom padding leaves room on every page for the footer */
+            .sheet { width: auto; min-height: 0; margin: 0; padding: 12mm 14mm 30mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+            /* The footer at the bottom of every printed page (a fixed element repeats on each page); one is enough */
+            .footer { position: fixed; left: 14mm; right: 14mm; bottom: 10mm; margin: 0; padding: 0; background: #fff; }
+            .sheet + .sheet .footer { display: none; }
+        }
     </style>
 </head>
 <body>
