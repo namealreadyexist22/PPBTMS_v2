@@ -167,11 +167,10 @@
                     @forelse ($ppmp->paps as $pap)
                         <tr class="table-secondary">
                             <td colspan="{{ $colspan - 2 }}" class="ps-4 fw-bold">
-                                PAP CODE: {{ $pap->code }} - {{ $pap->title }}
+                                PAP CODE: {{ $pap->code ?? '(no code yet)' }} - {{ $pap->title }}
                                 @if ($canEdit)
                                     <button class="btn btn-sm btn-link p-0 ms-2 btn-add-item" data-pap="{{ $pap->id }}" title="Add a project under this PAP"><i class="fas fa-plus-circle"></i> Add Project</button>
-                                    <button class="btn btn-sm btn-link p-0 ms-2 btn-edit-pap" data-id="{{ $pap->id }}" title="Edit PAP"><i class="fas fa-edit"></i></button>
-                                    <button class="btn btn-sm btn-link p-0 ms-1 text-danger btn-delete-pap" data-id="{{ $pap->id }}" title="Remove PAP"><i class="fas fa-trash-alt"></i></button>
+                                    <button class="btn btn-sm btn-link p-0 ms-1 text-danger btn-delete-pap" data-id="{{ $pap->id }}" title="Remove this PAP from the PPMP"><i class="fas fa-trash-alt"></i></button>
                                 @endif
                             </td>
                             <td class="text-end fw-bold text-nowrap">{{ number_format($pap->items->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
@@ -194,7 +193,23 @@
                                 <td class="text-end text-nowrap py-1 fw-semibold text-muted" style="background: #f8fafc;">{{ number_format($classItems->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
                                 <td style="background: #f8fafc;"></td>
                             </tr>
-                            @foreach ($classItems as $item)
+                            {{-- Within it, by expense class (Details of MOOE column order) with subtotals, then location. CO has none. --}}
+                            @php
+                                $expenseGroups = $classItems
+                                    ->sortBy(fn ($i) => [$i->expenseClass?->sort_order ?? PHP_INT_MAX, $i->location?->name ?? 'zzz', $i->sort_order, $i->id])
+                                    ->groupBy(fn ($i) => $i->expense_class_id ?? 0);
+                                // Semi-expendable projects are normally all one class, already named by the row above
+                                $showExpenseRows = $class === \App\Enums\AllotmentClass::Mooe || $expenseGroups->count() > 1;
+                            @endphp
+                            @foreach ($expenseGroups as $expenseItems)
+                            @if ($showExpenseRows)
+                                <tr class="ppmp-class-row">
+                                    <td colspan="{{ $colspan - 2 }}" class="py-1 fw-semibold text-muted" style="padding-left: 2.5rem;">{{ $expenseItems->first()->expenseClass?->name ?? 'No expense class' }}</td>
+                                    <td class="text-end text-nowrap py-1 fw-semibold text-muted">{{ number_format($expenseItems->sum(fn ($i) => (float) $i->estimated_budget), 2) }}</td>
+                                    <td></td>
+                                </tr>
+                            @endif
+                            @foreach ($expenseItems as $item)
                             <tr>
                                 <td class="ps-4 text-muted">{{ ++$n }}</td>
                                 <td>
@@ -301,6 +316,7 @@
                                 </td>
                             </tr>
                             @endforeach
+                            @endforeach
                         @empty
                             <tr><td colspan="{{ $colspan }}" class="ps-5 text-muted fst-italic">No projects under this PAP yet.</td></tr>
                         @endforelse
@@ -309,7 +325,7 @@
                             <td colspan="{{ $colspan }}" class="text-center text-muted py-5">
                                 <i class="fas fa-inbox fa-2x mb-2 d-block opacity-50"></i>
                                 No PAPs yet.
-                                @if ($canEdit) Click <strong>Add PAP</strong> (e.g. 26-05012-01 ICT Infrastructure Management), then add its projects. @endif
+                                @if ($canEdit) Click <strong>Add PAP</strong> and pick one of your office's PAPs from the Budget Proposal, then add its projects. @endif
                             </td>
                         </tr>
                     @endforelse
@@ -460,6 +476,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Redraw the header, budget and projects from the server, keeping the scroll position
     function refreshView() {
         const y = window.scrollY;
+        $('#ppmp_view').css({ opacity: .6, pointerEvents: 'none' });   // reloading just the PPMP, not the page
         return $.get(window.location.href).done(function (html) {
             const fresh = $('<div>').append($.parseHTML(html)).find('#ppmp_view');
             if (!fresh.length) { window.location.reload(); return; }
@@ -467,7 +484,8 @@ document.addEventListener('DOMContentLoaded', function () {
             $('#ppmp_view').replaceWith(fresh);
             initTooltips();
             window.scrollTo(0, y);
-        }).fail(() => window.location.reload());
+        }).fail(() => window.location.reload())
+          .always(() => $('#ppmp_view').css({ opacity: '', pointerEvents: '' }));
     }
     window.refreshPpmpView = refreshView;   // used by the distribution dialog
 
@@ -695,7 +713,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $(document).on('click', '#btn_add_pap', function (e) { e.preventDefault(); loadPapModal(); });
-    $(document).on('click', '.btn-edit-pap', function (e) { e.preventDefault(); loadPapModal($(this).data('id')); });
 
     $(document).off('submit', '#form_ppmp_pap').on('submit', '#form_ppmp_pap', function (e) {
         e.preventDefault();

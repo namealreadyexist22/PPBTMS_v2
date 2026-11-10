@@ -7,7 +7,10 @@ use App\Enums\PpmpStatus;
 use App\Exceptions\ProcurementException;
 use App\Models\Procurement\BudgetAllocation;
 use App\Models\Procurement\Office;
+use App\Models\Procurement\PersonnelService;
 use App\Models\Procurement\Ppmp;
+use App\Models\Procurement\BudgetLine;
+use App\Models\Procurement\BudgetProposal;
 use App\Models\Procurement\PpmpItem;
 use App\Models\User;
 use App\Support\Money;
@@ -32,24 +35,64 @@ class BudgetAllocationService
     }
 
     /** Centavos used by the department's offices, optionally with $candidate replacing its office's version. */
-    public function usedCents(BudgetAllocation $allocation, ?Ppmp $candidate = null): int
+    public function usedCents(BudgetAllocation $allocation, ?Ppmp $candidate = null, bool $proposalCounts = false): int
     {
-        return array_sum($this->usedByOffice($allocation, $candidate));
+        return array_sum($this->usedByOffice($allocation, $candidate, $proposalCounts));
     }
 
-    /** Centavos used per office of the department: [office_id => cents]. */
-    public function usedByOffice(BudgetAllocation $allocation, ?Ppmp $candidate = null): array
+    /**
+     * Centavos used per office of the department: [office_id => cents]. What uses the budget: the procurement
+     * projects of the counted PPMPs, and the budget lines (travel, training, ...) of the department's Budget
+     * Proposal once it is submitted ($proposalCounts: as if it were, to check it before submitting).
+     */
+    public function usedByOffice(BudgetAllocation $allocation, ?Ppmp $candidate = null, bool $proposalCounts = false): array
     {
         $officeIds = $allocation->department->departmentOfficeIds();
         $ppmpIds = $this->countedPpmpIds($allocation->fiscal_year, $officeIds, $candidate);
+        $officeOf = Ppmp::whereKey($ppmpIds)->pluck('office_id', 'id');
+        $used = [];
 
-        return PpmpItem::whereIn('ppmp_id', $ppmpIds)
-            ->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
-            ->with('ppmp:id,office_id')
-            ->get(['id', 'ppmp_id', 'estimated_budget'])
-            ->groupBy(fn ($item) => $item->ppmp->office_id)
-            ->map(fn ($items) => $items->sum(fn ($item) => Money::toCents($item->estimated_budget)))
-            ->all();
+        $items = PpmpItem::whereIn('ppmp_id', $ppmpIds)->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
+            ->get(['ppmp_id', 'estimated_budget']);
+        foreach ($items as $item) {
+            $office = $officeOf[$item->ppmp_id];
+            $used[$office] = ($used[$office] ?? 0) + Money::toCents($item->estimated_budget);
+        }
+
+        $proposal = BudgetProposal::where('department_id', $allocation->department_id)->where('fiscal_year', $allocation->fiscal_year)->first();
+        if ($proposal && ($proposalCounts || $proposal->status->holdsBudget())) {
+            $lines = BudgetLine::whereHas('pap', fn ($q) => $q->where('budget_proposal_id', $proposal->id))
+                ->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
+                ->with('pap:id,office_id')->get(['budget_pap_id', 'amount']);
+            foreach ($lines as $line) {
+                $office = $line->pap->office_id;
+                $used[$office] = ($used[$office] ?? 0) + Money::toCents($line->amount);
+            }
+        }
+
+        return $used;
+    }
+
+    /** Block submitting a Budget Proposal whose budget lines would take the department over its allocations. */
+    public function assertProposalWithinBudget(BudgetProposal $proposal): void
+    {
+        foreach (BudgetAllocation::where('department_id', $proposal->department_id)->where('fiscal_year', $proposal->fiscal_year)->get() as $allocation) {
+            $allocation->setRelation('department', $proposal->department);
+            $used = $this->usedCents($allocation, null, true);
+            $amount = Money::toCents((string) $allocation->amount);
+
+            if ($used > $amount) {
+                throw new ProcurementException(sprintf('This Budget Proposal cannot be submitted. %s budget of %s: ₱%s used of ₱%s (over by ₱%s), with its budget lines and the PPMPs.',
+                    $allocation->fund_group->label(), $proposal->department->shortName(),
+                    Money::format(Money::fromCents($used)), Money::format(Money::fromCents($amount)), Money::format(Money::fromCents($used - $amount))));
+            }
+        }
+    }
+
+    /** Each fund a PPMP charges, with its centavos: [['fund' => FundGroup, 'cents' => int], ...] */
+    protected function ppmpCharges(Ppmp $ppmp): Collection
+    {
+        return $ppmp->items->toBase()->map(fn ($i) => ['fund' => $i->fundSource->fund_group ?? FundGroup::Regular, 'cents' => Money::toCents($i->estimated_budget)]);
     }
 
     /**
@@ -61,20 +104,19 @@ class BudgetAllocationService
     {
         $ppmp->loadMissing('items.fundSource', 'office.parent');
         $department = $ppmp->office->department;
+        $charges = $this->ppmpCharges($ppmp);
 
         $allocations = $department
             ? BudgetAllocation::where('department_id', $department->id)->where('fiscal_year', $ppmp->fiscal_year)->get()
                 ->each(fn ($a) => $a->setRelation('department', $department))->keyBy(fn ($a) => $a->fund_group->value)
             : collect();
 
-        // toBase(): an empty item list stays an Eloquent collection, whose merge() expects models
-        return $ppmp->items->toBase()->map(fn ($item) => $item->fundSource->fund_group ?? FundGroup::Regular)
-            ->merge($allocations->map->fund_group)
+        return $charges->pluck('fund')
+            ->merge($allocations->map->fund_group->values())
             ->unique(fn (FundGroup $fund) => $fund->value)
             ->sortBy(fn (FundGroup $fund) => array_search($fund, FundGroup::cases(), true))
-            ->map(function (FundGroup $fund) use ($ppmp, $department, $allocations) {
-                $mine = $ppmp->items->filter(fn ($i) => ($i->fundSource->fund_group ?? FundGroup::Regular) === $fund)
-                    ->sum(fn ($i) => Money::toCents($i->estimated_budget));
+            ->map(function (FundGroup $fund) use ($ppmp, $department, $allocations, $charges) {
+                $mine = $charges->filter(fn ($c) => $c['fund'] === $fund)->sum('cents');
                 $allocation = $allocations->get($fund->value);
 
                 // Projects charged to a fund the department is not budgeted under
@@ -166,6 +208,37 @@ class BudgetAllocationService
             }
 
             return $allocation->setRelation('department', $department);
+        });
+    }
+
+    /**
+     * Set or change a department's Personnel Services (salaries) for a year and fund. Its own setting:
+     * no CO + MOOE allocation needed, and it does not limit the PPMPs. A change needs a reason.
+     */
+    public function savePersonnelServices(Office $department, int $fiscalYear, FundGroup $fund, string $amount, User $user, ?string $reason = null): PersonnelService
+    {
+        if (! $department->isDepartment()) {
+            throw new ProcurementException("Personnel Services are set per department. {$department->shortName()} is a {$department->typeLabel()}.");
+        }
+
+        if (($department->budget_fund ?? FundGroup::Regular) !== $fund) {
+            throw new ProcurementException("{$department->shortName()} is budgeted under {$department->budget_fund?->label()}, not {$fund->label()}.");
+        }
+
+        $existing = PersonnelService::where('department_id', $department->id)->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->first();
+
+        if ($existing && trim((string) $reason) === '') {
+            throw new ProcurementException('Please give the reason for changing the Personnel Services (e.g. new plantilla positions).');
+        }
+
+        return DB::transaction(function () use ($department, $fiscalYear, $fund, $amount, $user, $reason, $existing) {
+            $ps = $existing ?? new PersonnelService(['fiscal_year' => $fiscalYear, 'department_id' => $department->id, 'fund_group' => $fund, 'created_by' => $user->id]);
+            $old = $existing?->amount;
+
+            $ps->fill(['amount' => Money::fromCents(Money::toCents(str_replace(',', '', $amount))), 'updated_by' => $user->id])->save();
+            $ps->history()->create(['user_id' => $user->id, 'old_amount' => $old, 'new_amount' => $ps->amount, 'reason' => $reason]);
+
+            return $ps->setRelation('department', $department);
         });
     }
 

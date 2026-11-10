@@ -4,8 +4,10 @@ namespace App\Core\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Procurement\BidDocument;
+use App\Models\Procurement\ExpenseClass;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\ItemCategory;
+use App\Models\Procurement\Location;
 use App\Models\Procurement\ProcurementMode;
 use App\Models\Procurement\Unit;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +29,10 @@ class LookupController extends Controller
         'procurement-modes' => [ProcurementMode::class, 'Modes of Procurement', ['ppmp_items' => 'procurement_mode_id', 'app_items' => 'procurement_mode_id']],
         'units'             => [Unit::class, 'Units', ['ppmp_items' => 'unit_id', 'items' => 'unit_id']],
         'item-categories'   => [ItemCategory::class, 'Item Categories', ['items' => 'item_category_id']],
+        // MOOE objects of expenditure: the columns of the COB's Details of MOOE (Form B), in their order
+        'expense-classes'   => [ExpenseClass::class, 'Expense Classes', ['ppmp_items' => 'expense_class_id', 'ppmp_budget_lines' => 'expense_class_id', 'item_categories' => 'expense_class_id']],
+        // Where a PAP's budget is spent, to break it down on the COB
+        'locations'         => [Location::class, 'Locations', ['ppmp_items' => 'location_id', 'ppmp_budget_lines' => 'location_id']],
         // The checklist of each bidder's documents in a competitive bidding
         'bid-documents'     => [BidDocument::class, 'Bid Documents', []],
     ];
@@ -36,7 +42,11 @@ class LookupController extends Controller
         $type = $this->type($request->input('type', 'fund-sources'));
         [$model, $label, $usedIn] = self::TYPES[$type];
 
-        $rows = $model::orderByDesc('is_active')->orderBy('name')->get()->each(function (Model $row) use ($usedIn) {
+        $rows = $model::orderByDesc('is_active')
+            ->when($type === 'expense-classes', fn ($q) => $q->orderBy('sort_order'))
+            ->when($type === 'item-categories', fn ($q) => $q->with('expenseClass'))
+            ->when($type === 'fund-sources', fn ($q) => $q->with('restrictedOffice'))
+            ->orderBy('name')->get()->each(function (Model $row) use ($usedIn) {
             $row->used_count = collect($usedIn)->sum(fn ($column, $table) => DB::table($table)->where($column, $row->id)->count());
         });
 
@@ -47,7 +57,10 @@ class LookupController extends Controller
             'rows'  => $rows,
             'hasFund' => $this->hasFund($type),
             // Item categories: the unit that alone may procure them (e.g. ICT Equipment -> MIS)
-            'offices' => $type === 'item-categories' ? \App\Models\Procurement\Office::active()->whereNotNull('code')->orderBy('code')->get() : collect(),
+            // Item categories and fund sources: the unit that alone may use them (e.g. ICT Equipment -> MIS, Corporate(BRDE) -> BRDE)
+            'offices' => in_array($type, ['item-categories', 'fund-sources'], true) ? \App\Models\Procurement\Office::active()->orderByRaw('code is null')->orderBy('code')->orderBy('acronym')->get() : collect(),
+            // Item categories: the expense class their MOOE projects start with
+            'expenseClasses' => $type === 'item-categories' ? ExpenseClass::active()->ordered()->get() : collect(),
         ]);
     }
 
@@ -67,7 +80,10 @@ class LookupController extends Controller
             // Item categories only: procured by one unit, for every fund or one fund (e.g. COB)
             'restricted_office_id'  => ['nullable', 'integer', 'exists:offices,id'],
             'restricted_fund_group' => ['nullable', Rule::enum(\App\Enums\FundGroup::class)],
-        ], ['code.unique' => 'This code is already used.']);
+            'expense_class_id'      => ['nullable', 'integer', 'exists:expense_classes,id'],
+            // Expense classes only: column order on Form B
+            'sort_order'            => ['nullable', 'integer', 'min:0', 'max:9999'],
+        ], ['code.unique' => 'This code is already used.'], ['sort_order' => 'order', 'expense_class_id' => 'expense class']);
 
         if ($validator->fails()) {
             throw new HttpResponseException(response()->json(['status' => 'error', 'errors' => $validator->errors()], 422));
@@ -75,10 +91,17 @@ class LookupController extends Controller
 
         $row = $id ? $model::findOrFail($id) : new $model;
         $fields = $this->hasFund($type) ? ['code', 'name', 'fund_group'] : ['code', 'name'];
-        $extra = $type === 'item-categories' ? [
-            'restricted_office_id'  => $request->input('restricted_office_id') ?: null,
-            'restricted_fund_group' => $request->input('restricted_office_id') ? ($request->input('restricted_fund_group') ?: null) : null,
-        ] : [];
+        $extra = match ($type) {
+            'item-categories' => [
+                'restricted_office_id'  => $request->input('restricted_office_id') ?: null,
+                'restricted_fund_group' => $request->input('restricted_office_id') ? ($request->input('restricted_fund_group') ?: null) : null,
+                'expense_class_id'      => $request->input('expense_class_id') ?: null,
+            ],
+            // Blank: keeps its place, or goes last when new
+            'fund-sources'    => ['restricted_office_id' => $request->input('restricted_office_id') ?: null],
+            'expense-classes' => ['sort_order' => $request->filled('sort_order') ? (int) $request->input('sort_order') : ($row->exists ? $row->sort_order : (int) ExpenseClass::max('sort_order') + 10)],
+            default           => [],
+        };
         $row->fill($validator->safe()->only($fields) + $extra + ['is_active' => $request->boolean('is_active', true)])->save();
 
         activity()->causedBy($request->user())->performedOn($row)->log(($id ? 'updated' : 'added') . " {$type} \"{$row->name}\"");

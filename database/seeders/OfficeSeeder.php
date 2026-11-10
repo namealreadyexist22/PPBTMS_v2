@@ -34,6 +34,7 @@ class OfficeSeeder extends Seeder
         ['05011', '05011', 'PLANNING AND POLICY RESEARCH SECTION', '05010', 'section', 'PPRS'],
         ['05012', '05012', 'MIS SECTION', '05010', 'section', 'MIS'],
         ['05020', '05020', 'SPECIAL PROJECTS, PROJECT DEVELOPMENT, EVALUATION AND MONITORING DIVISION', 'PPSPD', 'division', 'SPPDEM'],
+        ['05030', '05030', 'BIOETHANOL RESEARCH, DEVELOPMENT & EXTENSION', 'PPSPD', 'division', 'BRDE'],
 
         ['06000', '06000', 'OFC OF THE DEP. ADMIN - ADMINISTRATION AND FINANCE', null, 'department', 'ODA-AF', 'regular'],
         ['AFD-LM', null, 'AFD-LUZON MINDANAO', '06000', 'department', 'AFD-LM', 'regular'],
@@ -92,6 +93,9 @@ class OfficeSeeder extends Seeder
         ['13000', '13000', 'SIDA-FMR', null, 'department', 'SIDA-FMR', 'sida'],
         ['14000', '14000', 'SIDA-R&D', null, 'department', 'SIDA-R&D', 'sida'],
         ['15000', '15000', 'REGIONAL BIDS AND AWARDS COMMITTEE', null, 'department', 'RBAC', 'regular'],
+        // Own lines of the Corporate Operating Budget (office numbers can be changed in Settings > Organization)
+        ['16000', '16000', 'BIDS AND AWARDS COMMITTEE', null, 'department', 'BAC', 'regular'],
+        ['17000', '17000', 'FIXED UTILITIES', null, 'department', 'FU', 'regular'],
     ];
 
     public function run(): void

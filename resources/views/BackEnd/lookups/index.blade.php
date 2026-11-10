@@ -19,29 +19,32 @@
     </div>
     <div class="card-body p-0">
         <table class="table table-sm table-hover align-middle small mb-0">
-            <thead class="table-light"><tr><th class="ps-4">Code</th><th>Name</th>@if ($hasFund)<th>{{ $type === 'departments' ? 'Budget' : 'APP' }}</th>@endif @if ($type === 'item-categories')<th>Procured by</th>@endif<th class="text-center">Status</th><th class="text-center">Used by</th><th class="pe-4"></th></tr></thead>
+            <thead class="table-light"><tr>@if ($type === 'expense-classes')<th class="ps-4 text-center" title="Column order on the Details of MOOE (Form B)">Order</th>@endif<th class="{{ $type === 'expense-classes' ? '' : 'ps-4' }}">Code</th><th>Name</th>@if ($hasFund)<th>{{ $type === 'departments' ? 'Budget' : 'APP' }}</th><th>Used by</th>@endif @if ($type === 'item-categories')<th>Expense class (MOOE)</th><th>Procured by</th>@endif<th class="text-center">Status</th><th class="text-center">Used by</th><th class="pe-4"></th></tr></thead>
             <tbody>
                 @forelse ($rows as $row)
                     <tr class="{{ $row->is_active ? '' : 'text-muted' }}">
-                        <td class="ps-4 fw-semibold">{{ $row->code }}</td>
+                        @if ($type === 'expense-classes')<td class="ps-4 text-center text-muted">{{ $row->sort_order }}</td>@endif
+                        <td class="{{ $type === 'expense-classes' ? '' : 'ps-4' }} fw-semibold">{{ $row->code }}</td>
                         <td>{{ $row->name }}</td>
                         @if ($hasFund)
                             <td><span class="badge {{ $row->fund_group === \App\Enums\FundGroup::Sida ? 'bg-warning text-dark' : 'bg-light text-dark border' }}">{{ $row->fund_group->label() }}</span></td>
+                            <td>@if ($row->restricted_office_id)<span class="badge bg-danger-subtle text-danger border"><i class="fas fa-lock me-1"></i>{{ $row->restrictedOffice?->shortName() }} only</span>@else<span class="text-muted">Any office</span>@endif</td>
                         @endif
                         @if ($type === 'item-categories')
+                            <td>{!! $row->expenseClass ? e($row->expenseClass->name) : '<span class="text-muted">—</span>' !!}</td>
                             <td>@if ($row->restricted_office_id)<span class="badge bg-danger-subtle text-danger border"><i class="fas fa-lock me-1"></i>{{ $row->restrictionLabel() }}</span>@else<span class="text-muted">Any office</span>@endif</td>
                         @endif
                         <td class="text-center"><span class="badge {{ $row->is_active ? 'bg-success' : 'bg-secondary' }}">{{ $row->is_active ? 'Active' : 'Inactive' }}</span></td>
                         <td class="text-center">{{ $row->used_count }}</td>
                         <td class="pe-4 text-end text-nowrap">
-                            <button class="btn btn-sm btn-link p-0 me-2 btn-edit" data-id="{{ $row->id }}" data-code="{{ $row->code }}" data-name="{{ $row->name }}" data-active="{{ $row->is_active ? 1 : 0 }}" @if ($hasFund) data-fund="{{ $row->fund_group->value }}" @endif @if ($type === 'item-categories') data-office="{{ $row->restricted_office_id }}" data-rfund="{{ $row->restricted_fund_group?->value }}" @endif title="Edit"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-sm btn-link p-0 me-2 btn-edit" data-id="{{ $row->id }}" data-code="{{ $row->code }}" data-name="{{ $row->name }}" data-active="{{ $row->is_active ? 1 : 0 }}" @if ($hasFund) data-fund="{{ $row->fund_group->value }}" data-office="{{ $row->restricted_office_id }}" @endif @if ($type === 'item-categories') data-office="{{ $row->restricted_office_id }}" data-rfund="{{ $row->restricted_fund_group?->value }}" data-expense="{{ $row->expense_class_id }}" @endif @if ($type === 'expense-classes') data-order="{{ $row->sort_order }}" @endif title="Edit"><i class="fas fa-edit"></i></button>
                             @if ($row->used_count === 0)
                                 <button class="btn btn-sm btn-link p-0 text-danger btn-delete" data-id="{{ $row->id }}" data-name="{{ $row->name }}" title="Delete"><i class="fas fa-trash-alt"></i></button>
                             @endif
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="text-center text-muted py-4">Nothing yet.</td></tr>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Nothing yet.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -80,8 +83,34 @@
                         <div class="invalid-feedback"></div>
                         <div class="form-text">{{ $type === 'departments' ? 'The department receives its budget allocation in this fund; its offices can only use this fund\'s sources.' : 'PPMP projects with this fund source go to the COB or the SIDA APP.' }}</div>
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted mb-1">Used only by</label>
+                        <select name="restricted_office_id" class="form-select form-select-sm">
+                            <option value="">Any office</option>
+                            @foreach ($offices as $office)<option value="{{ $office->id }}">{{ $office->label() }}</option>@endforeach
+                        </select>
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">E.g. Corporate(BRDE): only the BRDE section (and units under it) can pick it in their PPMP. Projects already on it keep it.</div>
+                    </div>
+                @endif
+                @if ($type === 'expense-classes')
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted mb-1">Order</label>
+                        <input type="number" name="sort_order" min="0" max="9999" class="form-control form-control-sm" style="max-width: 120px;" placeholder="last">
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">Column order on the Details of MOOE (Form B), smallest first. Leave blank to put a new class last.</div>
+                    </div>
                 @endif
                 @if ($type === 'item-categories')
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold text-muted mb-1">Expense class (MOOE)</label>
+                        <select name="expense_class_id" class="form-select form-select-sm">
+                            <option value="">None</option>
+                            @foreach ($expenseClasses as $class)<option value="{{ $class->id }}">{{ $class->name }}</option>@endforeach
+                        </select>
+                        <div class="invalid-feedback"></div>
+                        <div class="form-text">A MOOE project on a standard item of this category starts with this expense class (e.g. Office Supplies → Office Supplies Expenses). The office can change it.</div>
+                    </div>
                     <div class="row g-2 mb-3">
                         <div class="col-7">
                             <label class="form-label fw-semibold text-muted mb-1">Procured only by</label>
@@ -132,6 +161,8 @@ document.addEventListener('DOMContentLoaded', function () {
         form.find('[name=fund_group]').val(data.fund || 'regular');
         form.find('[name=restricted_office_id]').val(data.office || '');
         form.find('[name=restricted_fund_group]').val(data.rfund || '');
+        form.find('[name=expense_class_id]').val(data.expense || '');
+        form.find('[name=sort_order]').val(data.order ?? '');
         $('#lookup_title').text(data.id ? 'Edit {{ \Illuminate\Support\Str::singular($label) }}' : 'Add {{ \Illuminate\Support\Str::singular($label) }}');
         modal().show();
     }

@@ -202,6 +202,21 @@ class Office extends Model
         });
     }
 
+    /** Whose Budget Proposal this unit's PAPs are in: its department, or its topmost office when it has none. */
+    public function budgetOwner(): Office
+    {
+        if ($department = $this->department) {
+            return $department;
+        }
+
+        $office = $this;
+        while ($office->parent) {
+            $office = $office->parent;
+        }
+
+        return $office;
+    }
+
     /**
      * Units that share this department's budget: itself and everything below it,
      * except units under another department further down (e.g. AFD-LM under ODA-AF).

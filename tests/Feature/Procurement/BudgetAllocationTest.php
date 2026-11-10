@@ -211,7 +211,7 @@ class BudgetAllocationTest extends TestCase
         Office::create(['code' => '12000', 'acronym' => 'SIDA-HRD', 'name' => 'SIDA-HRD', 'type' => 'department', 'budget_fund' => 'sida']);
 
         $this->actingAs($this->officer)->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
-            ->assertSee('PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT')->assertSee('5 offices')->assertSee('Not set')->assertDontSee('SIDA-HRD');
+            ->assertSee('PLANNING, POLICY AND SPECIAL PROJECTS DEPARTMENT')->assertDontSee('5 offices')->assertDontSee('Show offices')->assertSee('Not set')->assertDontSee('SIDA-HRD');
         $this->get(route('procurement.budget.index', ['fy' => 2027, 'fund' => 'sida']))->assertOk()
             ->assertSee('SIDA-HRD')->assertDontSee('PLANNING, POLICY');
 
@@ -222,7 +222,7 @@ class BudgetAllocationTest extends TestCase
             ->assertStatus(422)->assertJson(['message' => 'Budgets are allocated per department. PPPD is a Division.']);
 
         $this->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()
-            ->assertSee('3,000,000.00')->assertSee('05012 MIS SECTION')->assertSee('Initial allocation');
+            ->assertSee('3,000,000.00')->assertDontSee('05012 MIS SECTION')->assertSee('Initial allocation');   // departments only, no office rows
 
         // PPMP page: department budget at the top, warning and disabled submit while over budget
         $staffPpmp = $this->ppmp($this->mis, [['co', '3500000', 'COB']], false);

@@ -52,9 +52,9 @@ class OfficeManagementTest extends TestCase
         // A division must sit under a department; a department may be top level
         $this->postJson(route('core.offices.store'), ['code' => '05030', 'name' => 'New Division', 'type' => 'division'])
             ->assertStatus(422)->assertJsonValidationErrors('parent_id');
-        $this->postJson(route('core.offices.store'), ['code' => '16000', 'name' => 'New Department', 'type' => 'department', 'budget_fund' => 'sida', 'is_active' => 1])
+        $this->postJson(route('core.offices.store'), ['code' => '19000', 'name' => 'New Department', 'type' => 'department', 'budget_fund' => 'sida', 'is_active' => 1])
             ->assertOk();
-        $this->assertSame('sida', Office::where('code', '16000')->first()->budget_fund->value);
+        $this->assertSame('sida', Office::where('code', '19000')->first()->budget_fund->value);
 
         // The add form comes prefilled for a unit under PPPD
         $pppd = Office::where('code', '05010')->first();

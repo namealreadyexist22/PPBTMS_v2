@@ -1,40 +1,46 @@
-<div class="modal fade" id="{{ $modalName }}" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+{{-- Add PAP: pick one of the office's PAPs from its department's Budget Proposal --}}
+<div class="modal fade" id="{{ $modalName }}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-light py-3 border-bottom border-light">
-                <h5 class="modal-title fw-bold text-dark d-flex align-items-center">
-                    <i class="fas fa-folder-plus text-primary me-2"></i> {{ $pap ? 'Edit PAP' : 'Add PAP' }}
-                </h5>
-                <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-light py-3">
+                <h5 class="modal-title fw-bold"><i class="fas fa-folder-plus text-muted me-2"></i>Add PAP</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-
             <form id="form_ppmp_pap" autocomplete="off" novalidate>
                 @csrf
-                @if ($pap)
-                    <input type="hidden" name="id" value="{{ $pap->id }}">
-                @endif
-
-                <div class="modal-body p-4">
-                    <div id="pap_error_summary" class="alert alert-danger d-none py-2 px-3 small rounded mb-3">
-                        <i class="fas fa-exclamation-triangle me-1"></i> <span>Please correct the highlighted errors below.</span>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label small fw-semibold text-muted mb-1">PAP Code</label>
-                        <input type="text" name="code" class="form-control form-control-sm" value="{{ $suggestedCode }}" placeholder="e.g. 26-05012-01" required>
+                <div class="modal-body p-4 small">
+                    <div id="pap_error_summary" class="alert alert-danger d-none py-2 px-3 mb-3"><i class="fas fa-exclamation-triangle me-1"></i> <span>Please choose a PAP.</span></div>
+                    @if ($available->isNotEmpty())
+                        <label class="form-label fw-semibold text-muted mb-1">PAP from the FY {{ $ppmp->fiscal_year }} Budget Proposal</label>
+                        <select name="budget_pap_id" class="form-select form-select-sm" required>
+                            @foreach ($available as $pap)
+                                <option value="{{ $pap->id }}">{{ $pap->label() }}</option>
+                            @endforeach
+                        </select>
                         <div class="invalid-feedback"></div>
-                        <div class="form-text">Suggested: year - office no. - next number. You can change it (e.g. a PAP carried over from last year).</div>
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label small fw-semibold text-muted mb-1">PAP Title</label>
-                        <input type="text" name="title" class="form-control form-control-sm" value="{{ $pap->title ?? '' }}" placeholder="e.g. ICT Infrastructure Management" required>
-                        <div class="invalid-feedback"></div>
-                    </div>
+                        <div class="form-text">Your office's PAPs not yet in this PPMP. The code shows once the evaluator gives it.</div>
+                    @else
+                        <div class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            @if ($proposal)
+                                Every PAP of {{ $ppmp->office->shortName() }} in the FY {{ $ppmp->fiscal_year }} Budget Proposal is already in this PPMP.
+                            @else
+                                {{ $ppmp->office->department?->shortName() ?? $ppmp->office->shortName() }} has no FY {{ $ppmp->fiscal_year }} Budget Proposal yet.
+                            @endif
+                            Write the PAP title on the Budget Proposal first, then pick it here.
+                        </div>
+                    @endif
+                    @if ($proposal)
+                        <a href="{{ route('procurement.budget-proposals.show', $proposal) }}" target="_blank" class="d-inline-block mt-3"><i class="fas fa-external-link-alt me-1"></i> Open the Budget Proposal</a>
+                    @else
+                        <a href="{{ route('procurement.budget-proposals.index', ['fy' => $ppmp->fiscal_year]) }}" target="_blank" class="d-inline-block mt-3"><i class="fas fa-external-link-alt me-1"></i> Go to Budget Proposals</a>
+                    @endif
                 </div>
-
-                <div class="modal-footer bg-light border-top border-light py-2">
+                <div class="modal-footer bg-light py-2">
                     <button type="button" class="btn btn-sm btn-light border" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" id="btn_save_pap" class="btn btn-sm btn-primary px-3"><i class="fas fa-save me-1"></i> Save</button>
+                    @if ($available->isNotEmpty())
+                        <button type="submit" id="btn_save_pap" class="btn btn-sm btn-primary px-3"><i class="fas fa-plus me-1"></i> Add</button>
+                    @endif
                 </div>
             </form>
         </div>

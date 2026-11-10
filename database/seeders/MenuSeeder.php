@@ -67,11 +67,13 @@ class MenuSeeder extends Seeder
         // Planning: budget, PPMPs and the APP
         $planning = Menu::updateOrCreate(['name' => 'Planning', 'parent_id' => null], ['icon' => 'fas fa-clipboard-list', 'order' => 10]);
         $page('Budget Allocation', $planning, ['icon' => 'fas fa-coins', 'route' => 'procurement.budget.index', 'order' => 1]);
-        $ppmp = $page('PPMP', $planning, ['icon' => 'fas fa-clipboard-list', 'route' => 'procurement.ppmp.index', 'order' => 2]);
+        // Each department's PAPs (the PPMPs pick theirs from it), budget lines and performance targets
+        $page('Budget Proposal', $planning, ['icon' => 'fas fa-file-invoice-dollar', 'route' => 'procurement.budget-proposals.index', 'order' => 2]);
+        $ppmp = $page('PPMP', $planning, ['icon' => 'fas fa-clipboard-list', 'route' => 'procurement.ppmp.index', 'order' => 3]);
         // Offices ask the procuring office (e.g. MIS for ICT) for items; it approves into its PPMP distribution
-        $page('Item Requests', $planning, ['icon' => 'fas fa-hand-holding', 'route' => 'procurement.item-requests.index', 'order' => 3]);
-        $page('Division PPMP', $planning, ['icon' => 'fas fa-layer-group', 'route' => 'procurement.division-ppmp.index', 'order' => 4]);
-        $app = $page('APP', $planning, ['nav_name' => 'APP', 'icon' => 'fas fa-calendar-check', 'route' => 'procurement.app.index', 'order' => 5]);
+        $page('Item Requests', $planning, ['icon' => 'fas fa-hand-holding', 'route' => 'procurement.item-requests.index', 'order' => 4]);
+        $page('Division PPMP', $planning, ['icon' => 'fas fa-layer-group', 'route' => 'procurement.division-ppmp.index', 'order' => 5]);
+        $app = $page('APP', $planning, ['nav_name' => 'APP', 'icon' => 'fas fa-calendar-check', 'route' => 'procurement.app.index', 'order' => 6]);
 
         // Procurement: quotations, public bidding, their evaluation and who quotes
         $procurement = Menu::updateOrCreate(['name' => 'Procurement', 'parent_id' => null], ['icon' => 'fas fa-shopping-cart', 'order' => 11]);

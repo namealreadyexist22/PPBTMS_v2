@@ -300,9 +300,53 @@ class StandardItemTest extends TestCase
         preg_match('/<select name="fund_source_id".*?<\/select>/s', $form, $fundSelect);
         $this->assertStringNotContainsString('Choose...', $fundSelect[0]);
 
+        // With several COB fund sources: still no "Choose...", the Corporate Operating Budget first and picked
+        FundSource::create(['code' => 'ABC', 'name' => 'Accounts (A first by name)', 'fund_group' => 'regular', 'is_active' => true]);
+        $form = $this->get(route('procurement.ppmp.items.entry', $ppmp))->assertOk()->getContent();
+        preg_match('/<select name="fund_source_id".*?<\/select>/s', $form, $fundSelect);
+        $this->assertStringNotContainsString('Choose...', $fundSelect[0]);
+        $this->assertMatchesRegularExpression('/^<select[^>]*>\s*<option value="' . $cob . '" data-group="regular" selected/', $fundSelect[0]);
+        $this->assertStringContainsString('Accounts (A first by name)', $fundSelect[0]);
+        // Budget lines, on the Budget Proposal: the same
+        $lawyer->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('manage budget proposals'));
+        $form = $this->get(route('procurement.budget-proposals.lines.entry', [$pap->budgetPap->proposal, 'pap_id' => $pap->budget_pap_id]))->assertOk()->getContent();
+        preg_match('/<select name="fund_source_id".*?<\/select>/s', $form, $fundSelect);
+        $this->assertMatchesRegularExpression('/^<select[^>]*>\s*<option value="' . $cob . '" selected/', $fundSelect[0]);
+
         $this->postJson(route('procurement.ppmp.items.store', $ppmp), array_merge($this->line(['ppmp_pap_id' => $pap->id, 'fund_source_id' => $cob, 'allotment_class' => 'semi', 'estimated_budget' => '30,000']), ['proc_start' => '2027-01', 'proc_end' => '2027-02']))->assertOk();
         $this->assertSame(\App\Enums\AllotmentClass::Semi, $ppmp->items()->sole()->allotment_class);
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Semi-Exp.');
+    }
+
+    public function test_a_fund_source_can_be_kept_for_one_office(): void
+    {
+        $this->seed(\Database\Seeders\RolePermissionSeeder::class);
+        $dept = Office::create(['code' => '07000', 'acronym' => 'RDE', 'name' => 'RDE', 'type' => 'department', 'budget_fund' => 'regular']);
+        $brde = Office::create(['code' => '07010', 'acronym' => 'BRDE', 'name' => 'BRDE SECTION', 'type' => 'section', 'parent_id' => $dept->id]);
+        $other = Office::create(['code' => '07020', 'acronym' => 'OTH', 'name' => 'OTHER SECTION', 'type' => 'section', 'parent_id' => $dept->id]);
+        $fund = FundSource::create(['code' => 'BRDE', 'name' => 'Corporate(BRDE)', 'fund_group' => 'regular', 'is_active' => true]);
+
+        // Set in Lookups
+        $admin = User::factory()->create(['is_activated' => 1]);
+        $admin->assignRole(\Spatie\Permission\Models\Role::findOrCreate('Super Admin'));
+        $this->actingAs($admin)->postJson(route('core.lookups.store'), ['type' => 'fund-sources', 'id' => $fund->id, 'code' => 'BRDE', 'name' => 'Corporate(BRDE)', 'fund_group' => 'regular', 'restricted_office_id' => $brde->id])->assertOk();
+        $this->assertSame($brde->id, $fund->fresh()->restricted_office_id);
+        $this->get(route('core.lookups.index', ['type' => 'fund-sources']))->assertOk()->assertSee('BRDE only');
+
+        $service = app(PpmpService::class);
+        foreach ([[$brde, true], [$other, false]] as [$office, $allowed]) {
+            $staff = User::factory()->create(['is_activated' => 1, 'office_id' => $office->id]);
+            $staff->givePermissionTo('manage ppmp');
+            $ppmp = $service->create($office, 2027, $staff);
+            $pap = $service->addPap($ppmp, $service->suggestPapCode($ppmp), 'Research');
+
+            $form = $this->actingAs($staff)->get(route('procurement.ppmp.items.entry', $ppmp))->assertOk()->getContent();
+            preg_match('/<select name="fund_source_id".*?<\/select>/s', $form, $select);
+            $this->assertSame($allowed, str_contains($select[0], 'Corporate(BRDE)'));
+
+            $response = $this->postJson(route('procurement.ppmp.items.store', $ppmp), array_merge($this->line(['ppmp_pap_id' => $pap->id, 'fund_source_id' => $fund->id, 'estimated_budget' => '10,000']), ['proc_start' => '2027-01', 'proc_end' => '2027-02']));
+            $allowed ? $response->assertOk() : $response->assertStatus(422)->assertJson(['message' => 'Corporate(BRDE) is for BRDE only. Choose another source of funds.']);
+        }
     }
 
     public function test_distribution_lists_offices_of_the_ppmp_region_by_department(): void

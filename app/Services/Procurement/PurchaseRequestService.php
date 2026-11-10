@@ -53,7 +53,7 @@ class PurchaseRequestService
             'created_by'  => $user->id,
             'updated_by'  => $user->id,
         ]);
-        app(RequestTrail::class)->record($request, 'created', "Prepared as a draft, charged to {$pap->code}", $user);
+        app(RequestTrail::class)->record($request, 'created', "Prepared as a draft, charged to " . ($pap->code ?? $pap->title), $user);
 
         return $request;
     }
@@ -476,7 +476,8 @@ class PurchaseRequestService
         $ppmp = Ppmp::where('office_id', $request->office_id)->where('fiscal_year', $request->fiscal_year)
             ->where('region', $request->ppmp->region)
             ->where('status', PpmpStatus::Approved)->first();
-        $pap = $ppmp?->paps()->where('code', $request->pap->code)->first();
+        // The same Budget Proposal PAP in that version (codes may be given only later)
+        $pap = $ppmp?->paps()->where('budget_pap_id', $request->pap->budget_pap_id)->first();
 
         if (! $pap) {
             throw new ProcurementException("{$request->pap->label()} is no longer in the approved PPMP of {$request->office->shortName()}.");

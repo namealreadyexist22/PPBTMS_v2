@@ -9,7 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ItemCategory extends Model
 {
-    protected $fillable = ['code', 'name', 'restricted_office_id', 'restricted_fund_group', 'is_active'];
+    protected $fillable = ['code', 'name', 'expense_class_id', 'restricted_office_id', 'restricted_fund_group', 'is_active'];
+
+    /** Expense class a MOOE project on this category's items starts with (e.g. Office Supplies Expenses) */
+    public function expenseClass(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseClass::class);
+    }
 
     protected function casts(): array
     {

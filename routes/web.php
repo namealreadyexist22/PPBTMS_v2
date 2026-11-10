@@ -152,7 +152,34 @@ use Illuminate\Support\Facades\Route;
         Route::middleware('perm:manage budget')->group(function () {
             Route::get('budget', [BudgetAllocationController::class, 'index'])->name('budget.index');
             Route::post('budget/store', [BudgetAllocationController::class, 'store'])->name('budget.store');
+            Route::post('budget/personnel-services', [BudgetAllocationController::class, 'storePersonnelServices'])->name('budget.personnel-services');
+            // Corporate Operating Budget printouts
+            Route::get('budget/cob/breakdown', [\App\Http\Controllers\Procurement\CobReportController::class, 'breakdown'])->name('budget.cob.breakdown');
+            Route::get('budget/cob/organization', [\App\Http\Controllers\Procurement\CobReportController::class, 'organization'])->name('budget.cob.organization');
+            Route::get('budget/cob/{department}', [\App\Http\Controllers\Procurement\CobReportController::class, 'proposal'])->name('budget.cob.proposal');
         });
+
+        // Budget Proposal of a department (PAPs, budget lines, performance targets); the evaluator gives the PAP codes.
+        // Who may see / change each one is checked in the controller.
+        Route::middleware('perm:manage budget proposals|evaluate budget proposals|manage budget')
+            ->controller(\App\Http\Controllers\Procurement\BudgetProposalController::class)->group(function () {
+                Route::get('budget-proposals', 'index')->name('budget-proposals.index');
+                Route::post('budget-proposals', 'open')->name('budget-proposals.open');
+                Route::get('budget-proposals/{proposal}', 'show')->name('budget-proposals.show');
+                Route::get('budget-proposals/{proposal}/print', 'print')->name('budget-proposals.print');
+                Route::post('budget-proposals/{proposal}/paps', 'papStore')->name('budget-proposals.paps.store');
+                Route::delete('budget-proposals/{proposal}/paps', 'papDestroy')->name('budget-proposals.paps.destroy');
+                Route::get('budget-proposals/{proposal}/paps/{pap}/performance', 'performance')->whereNumber('pap')->name('budget-proposals.performance');
+                Route::post('budget-proposals/{proposal}/paps/{pap}/performance', 'performanceStore')->whereNumber('pap')->name('budget-proposals.performance.store');
+                Route::get('budget-proposals/{proposal}/lines/entry', 'lineEntry')->name('budget-proposals.lines.entry');
+                Route::post('budget-proposals/{proposal}/lines', 'lineStore')->name('budget-proposals.lines.store');
+                Route::delete('budget-proposals/{proposal}/lines', 'lineDestroy')->name('budget-proposals.lines.destroy');
+                Route::post('budget-proposals/{proposal}/submit', 'submit')->name('budget-proposals.submit');
+                Route::post('budget-proposals/{proposal}/codes', 'codes')->name('budget-proposals.codes');
+                Route::post('budget-proposals/{proposal}/evaluate', 'evaluate')->name('budget-proposals.evaluate');
+                Route::post('budget-proposals/{proposal}/return', 'returnToDepartment')->name('budget-proposals.return');
+                Route::post('budget-proposals/{proposal}/submitters', 'submitters')->name('budget-proposals.submitters');
+            });
 
         // Standard items (articles with standard cost and TWG specifications)
         Route::middleware('perm:manage items')->group(function () {
@@ -226,9 +253,11 @@ use Illuminate\Support\Facades\Route;
         });
 
         // Signatories & BAC of each region (HOPE, BAC, Secretariat); also open to the BAC Secretariat (APP)
-        Route::middleware('perm:manage officials|menu.app-manage')->group(function () {
+        // The budget office too, for the Corporate Operating Budget signatories (regions view only)
+        Route::middleware('perm:manage officials|menu.app-manage|manage budget')->group(function () {
             Route::get('officials', [OfficialsController::class, 'index'])->name('officials.index');
             Route::post('officials', [OfficialsController::class, 'update'])->name('officials.update');
+            Route::post('officials/cob', [OfficialsController::class, 'updateCob'])->name('officials.cob');
         });
 
         // Requests for Quotation from submitted PRs / JRs; {rfq} is the uuid

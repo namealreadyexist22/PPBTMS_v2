@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Procurement;
 use App\Enums\Region;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Procurement\CobSignatoryService;
 use App\Services\Procurement\OfficialsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -29,7 +30,34 @@ class OfficialsController extends Controller
                 'canManage' => $this->officials->canManage($user, $region),
             ]),
             'users'   => User::where('is_activated', true)->with('office')->orderBy('fname')->orderBy('lname')->get(),
+            // Corporate Operating Budget printouts (agency-wide)
+            'cobRoles'     => CobSignatoryService::ROLES,
+            'cobOfficials' => app(CobSignatoryService::class)->all(),
+            'canManageCob' => $this->canManageCob($user),
         ]);
+    }
+
+    public function updateCob(Request $request)
+    {
+        if (! $this->canManageCob($request->user())) {
+            return response()->json(['status' => 'error', 'message' => 'You cannot change the budget signatories.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), collect(CobSignatoryService::ROLES)->map(fn () => ['nullable', 'integer', 'exists:users,id'])->all());
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        app(CobSignatoryService::class)->set($validator->validated());
+        activity()->causedBy($request->user())->log('updated the Corporate Operating Budget signatories');
+
+        return response()->json(['status' => 'success', 'message' => 'Budget signatories saved.']);
+    }
+
+    /** The budget office (manage budget) or whoever manages the officials */
+    protected function canManageCob(User $user): bool
+    {
+        return $user->hasRole('Super Admin') || $user->canAccessPermission('manage budget') || $user->canAccessPermission(OfficialsService::MANAGE_PERMISSION);
     }
 
     public function update(Request $request)

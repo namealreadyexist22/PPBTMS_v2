@@ -191,7 +191,6 @@
                         <div class="col-md-4">
                             <label class="form-label small fw-semibold text-muted mb-1">Source of Funds</label>
                             <select name="fund_source_id" class="form-select form-select-sm" required>
-                                @if ($fundSources->count() !== 1)<option value="">Choose...</option>@endif
                                 @foreach ($fundSources as $fund)
                                     <option value="{{ $fund->id }}" data-group="{{ $fund->fund_group?->value }}" @selected($defaultFundId == $fund->id)>{{ $fund->name }}</option>
                                 @endforeach
@@ -199,16 +198,55 @@
                             <div class="invalid-feedback"></div>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small fw-semibold text-muted mb-1">Allotment Class</label>
+                            <label class="form-label small fw-semibold text-muted mb-1">
+                                Allotment Class
+                                {{-- Shown when the class was suggested from the unit price: why, on hover / focus --}}
+                                <a tabindex="0" role="button" class="text-warning ms-1 d-none" id="allotment_hint" data-bs-toggle="popover" data-bs-trigger="hover focus" data-bs-placement="top"
+                                   title="Suggested allotment class" data-bs-content="." aria-label="Why this allotment class"><i class="fas fa-lightbulb"></i></a>
+                            </label>
                             <select name="allotment_class" class="form-select form-select-sm" required>
                                 @foreach ($allotments as $allotment)
                                     <option value="{{ $allotment->value }}" @selected(($item?->allotment_class ?? \App\Enums\AllotmentClass::Mooe) === $allotment)>{{ $allotment->label() }}</option>
                                 @endforeach
                             </select>
                             <div class="invalid-feedback"></div>
-                            <div class="form-text" id="allotment_hint"></div>
                         </div>
 
+                    </div>
+
+                    {{-- 4. Corporate Operating Budget: Form B column (MOOE) or Form C details (CO), and where the budget is spent --}}
+                    <small class="text-uppercase fw-bold text-secondary d-block mb-2" style="font-size: 0.72rem;">Budget Proposal (COB)</small>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-7" id="expense_class_group">
+                            <label class="form-label small fw-semibold text-muted mb-1">Expense Class <span class="fw-normal">(Details of MOOE column)</span></label>
+                            <select name="expense_class_id" class="form-select form-select-sm">
+                                <option value="">— Not set —</option>
+                                @foreach ($expenseClasses as $class)
+                                    <option value="{{ $class->id }}" data-code="{{ $class->code }}" @selected(($item->expense_class_id ?? null) == $class->id)>{{ $class->name }}{{ $class->is_active ? '' : ' [inactive]' }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small fw-semibold text-muted mb-1">Location <span class="fw-normal">(optional)</span></label>
+                            <select name="location_id" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                @foreach ($locations as $location)
+                                    <option value="{{ $location->id }}" @selected(($item->location_id ?? null) == $location->id)>{{ $location->name }}</option>
+                                @endforeach
+                            </select>
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-5 co-only">
+                            <label class="form-label small fw-semibold text-muted mb-1">Deployment <span class="fw-normal">(Details of CO)</span></label>
+                            <input type="text" name="deployment" class="form-control form-control-sm" maxlength="500" value="{{ $item->deployment ?? '' }}" placeholder="e.g. Bacolod: AFD, RD, RDE">
+                            <div class="invalid-feedback"></div>
+                        </div>
+                        <div class="col-md-7 co-only">
+                            <label class="form-label small fw-semibold text-muted mb-1">Justification <span class="fw-normal">(Details of CO)</span></label>
+                            <textarea name="justification" class="form-control form-control-sm" rows="1" style="resize: vertical;" placeholder="e.g. Replacement of units more than 5 years old">{{ $item->justification ?? '' }}</textarea>
+                            <div class="invalid-feedback"></div>
+                        </div>
                     </div>
 
                     {{-- <div class="small text-muted mb-3"><i class="fas fa-clipboard-check me-1"></i>The Market Scoping Checklist is filled in from the project's <i class="fas fa-ellipsis-h"></i> menu in the table, after saving.</div> --}}
@@ -293,6 +331,16 @@
             });
         });
 
+        // Computed budget: read-only, skipped by Tab, and not focusable or selectable by clicking
+        function lockBudget(locked) {
+            budget.readOnly = locked;
+            budget.tabIndex = locked ? -1 : 0;
+            budget.classList.toggle('bg-light', locked);
+            budget.style.userSelect = locked ? 'none' : '';
+            budget.style.pointerEvents = locked ? 'none' : '';
+            if (locked && document.activeElement === budget) budget.blur();
+        }
+
         // Estimated budget = quantity x unit price (locked while both are filled; type it for lot budgets)
         function recalc() {
             const q = parseFloat(qty.value);
@@ -301,12 +349,10 @@
             if (!isNaN(q) && !isNaN(p) && price.value !== '') {
                 const total = Math.round(q * Math.round(p * 100)) / 100;
                 budget.value = peso(total);
-                budget.readOnly = true;
-                budget.classList.add('bg-light');
+                lockBudget(true);
                 formula.textContent = '= ' + q.toLocaleString('en-PH') + ' × ₱' + peso(p) + ' = ₱' + peso(total);
             } else {
-                budget.readOnly = false;
-                budget.classList.remove('bg-light');
+                lockBudget(false);
                 formula.textContent = 'Enter quantity and unit price to compute, or type the budget (e.g. for a lot).';
             }
         }
@@ -316,21 +362,50 @@
         const threshold = {{ (float) config('procurement.capitalization_threshold') }};
         const allotment = form.querySelector('[name="allotment_class"]');
         const typeSelect = form.querySelector('[name="project_type"]');
+        // The why, as a popover on the lightbulb by the label (kept in the modal; hidden when nothing was suggested)
         const allotmentHint = document.getElementById('allotment_hint');
+        const hintPopover = bootstrap.Popover.getOrCreateInstance(allotmentHint, { container: form.closest('.modal') || 'body' });
+        let suggested = null;   // the class suggested, while it stands
+        function showHint(cls, text) {
+            hintPopover.hide();
+            suggested = cls;
+            allotmentHint.classList.toggle('d-none', !cls);
+            if (cls) hintPopover.setContent({ '.popover-header': 'Suggested allotment class', '.popover-body': text });   // both: setContent replaces the title too
+        }
         function suggestAllotment() {
             const p = toNumber(price.value);
-            allotmentHint.textContent = '';
-            if (typeSelect.value !== 'goods' || isNaN(p) || p <= 0) return;
+            if (typeSelect.value !== 'goods' || isNaN(p) || p <= 0) { showHint(null); return; }
             if (p >= threshold && allotment.value !== 'co') {
                 allotment.value = 'co';
-                allotmentHint.textContent = 'Suggested: Capital Outlay (unit price ₱' + peso(threshold) + ' or more). Change it if this does not apply.';
+                showHint('co', 'Suggested: Capital Outlay (unit price ₱' + peso(threshold) + ' or more). Change it if this does not apply.');
             } else if (p < threshold && allotment.value === 'co') {
                 allotment.value = 'semi';
-                allotmentHint.textContent = 'Suggested: Semi-Expendable (unit price below ₱' + peso(threshold) + '); choose MOOE for consumables.';
+                showHint('semi', 'Suggested: Semi-Expendable (unit price below ₱' + peso(threshold) + '); choose MOOE for consumables.');
+            } else if ((suggested === 'co') !== (p >= threshold)) {
+                showHint(null);   // the price crossed back: the earlier suggestion no longer applies
             }
         }
         price.addEventListener('input', suggestAllotment);
         typeSelect.addEventListener('change', suggestAllotment);
+        allotment.addEventListener('change', () => showHint(null));   // chosen by the user
+
+        // COB fields follow the allotment class: MOOE / semi-expendable have an expense class (Form B column),
+        // CO has deployment and justification (Form C). Semi-expendable starts on Semi-Expendable Expenses.
+        const expenseSelect = form.querySelector('[name="expense_class_id"]');
+        const semiOption = expenseSelect.querySelector('option[data-code="{{ \App\Models\Procurement\ExpenseClass::SEMI_EXPENDABLE }}"]');
+        let lastClass = allotment.value;
+        function syncCobFields() {
+            const co = allotment.value === 'co';
+            document.getElementById('expense_class_group').classList.toggle('d-none', co);
+            form.querySelectorAll('.co-only').forEach((el) => el.classList.toggle('d-none', !co));
+            if (allotment.value === 'semi' && lastClass !== 'semi' && semiOption) expenseSelect.value = semiOption.value;
+            if (allotment.value === 'mooe' && lastClass === 'semi' && semiOption && expenseSelect.value === semiOption.value) expenseSelect.value = '';
+            lastClass = allotment.value;
+        }
+        // set by suggestAllotment too (no change event then), so also re-check after price / type input
+        allotment.addEventListener('change', syncCobFields);
+        price.addEventListener('input', syncCobFields);
+        typeSelect.addEventListener('change', syncCobFields);
 
         // Budget left for this PPMP per fund (COB / SIDA), from the tightest allocation above the office
         const budgetBase = @json($budgetBase);
@@ -384,6 +459,9 @@
             const desc = form.querySelector('[name="description"]');
             if (fromUser && !desc.value.trim()) desc.value = 'Procurement of ' + s.name;
             if (fromUser && locked) suggestAllotment();
+            // The category's expense class, for a project not yet classed
+            if (fromUser && s.expense && !expenseSelect.value && allotment.value === 'mooe') expenseSelect.value = s.expense;
+            syncCobFields();
             info.classList.remove('d-none');
             info.innerHTML = locked
                 ? '<i class="fas fa-lock me-1"></i> Standard item: <strong>₱' + peso(s.cost) + ' per ' + (s.unit || 'unit') + '</strong>; unit, price and specifications are set by the TWG' + (s.twg ? ' (' + s.twg + ')' : '') + '. Enter the quantity.'
@@ -413,5 +491,6 @@
         recalc();
         showBudgetLeft();
         applyStandardItem(false);
+        syncCobFields();
     })();
 </script>

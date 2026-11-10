@@ -15,6 +15,24 @@ class ActionPermissionSeeder extends Seeder
         $this->createDestroySubmenus();
         $this->grantAdminPageLinks();
         $this->grantItemRequestsToPpmpRoles();
+        $this->grantBudgetProposals();
+    }
+
+    /**
+     * The offices that prepare PPMPs write their PAPs on the Budget Proposal; the budget office
+     * (manage budget) evaluates them and gives the PAP codes. Both get its sidebar link.
+     */
+    protected function grantBudgetProposals(): void
+    {
+        $menu = Menu::where('name', 'Budget Proposal')->first();
+        if (! $menu) {
+            return;
+        }
+
+        foreach (['manage ppmp' => 'manage budget proposals', 'manage budget' => 'evaluate budget proposals'] as $has => $gets) {
+            Role::whereHas('permissions', fn ($q) => $q->where('name', $has))->get()
+                ->each(fn (Role $role) => $role->givePermissionTo([$gets, $menu->permission_name]));
+        }
     }
 
     /** Item Requests is part of PPMP planning: every role that prepares PPMPs gets its sidebar link. */
@@ -57,6 +75,8 @@ class ActionPermissionSeeder extends Seeder
             'manage bidding'  => 'Competitive Bidding',
             'manage suppliers' => 'Suppliers',
             'manage officials' => 'Signatories & BAC',
+            'manage budget proposals'   => 'Budget Proposal',
+            'evaluate budget proposals' => 'Budget Proposal',
         ];
 
         foreach ($links as $permissionName => $menuName) {

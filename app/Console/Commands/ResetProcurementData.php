@@ -30,6 +30,7 @@ class ResetProcurementData extends Command
         'app_item_ppmp_item', 'app_items', 'annual_procurement_plans',
         'division_ppmp_ppmp', 'division_ppmps',
         'ppmp_item_attachments', 'ppmp_item_distributions', 'ppmp_items', 'ppmp_paps', 'ppmps',
+        'budget_lines', 'budget_pap_indicators', 'budget_paps', 'budget_proposals',
         'document_signatories',
         'budget_allocation_changes', 'budget_allocations',
         'notifications', 'activity_log',

@@ -135,7 +135,13 @@ class Ppmp extends Model
 
     public function paps(): HasMany
     {
-        return $this->hasMany(PpmpPap::class)->orderBy('sort_order')->orderBy('code');
+        return $this->hasMany(PpmpPap::class)->orderBy('sort_order')->orderBy('id');
+    }
+
+    /** The Budget Proposal its PAPs come from: its office's department's, for its fiscal year */
+    public function budgetProposal(): ?BudgetProposal
+    {
+        return BudgetProposal::where('department_id', $this->office->budgetOwner()->id)->where('fiscal_year', $this->fiscal_year)->first();
     }
 
     public function divisionPpmps(): \Illuminate\Database\Eloquent\Relations\BelongsToMany

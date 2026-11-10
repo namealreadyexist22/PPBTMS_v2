@@ -80,6 +80,42 @@
             </form>
         </div>
     @endforeach
+
+    {{-- Corporate Operating Budget printouts: agency-wide --}}
+    <div class="col-12">
+        <form class="card border-0 shadow-sm" style="border-radius: 12px;" id="form_cob_officials" autocomplete="off">
+            @csrf
+            <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #f1f5f9;">
+                <div>
+                    <div class="small text-muted">Corporate Operating Budget (COB) printouts</div>
+                    <h6 class="fw-bold mb-0">Budget Signatories</h6>
+                </div>
+                @unless ($canManageCob)<span class="badge bg-light text-muted border">View only</span>@endunless
+            </div>
+            <fieldset class="card-body px-4" @disabled(! $canManageCob)>
+                <div class="row g-3">
+                    @foreach ($cobRoles as $role => [$label, $help])
+                        <div class="col-md-6 col-xl-4">
+                            <label class="form-label small fw-semibold text-muted mb-1">{{ $label }}</label>
+                            <select name="{{ $role }}" class="form-select form-select-sm js-official" data-placeholder="Not set">
+                                <option value=""></option>
+                                @foreach ($users as $u)
+                                    <option value="{{ $u->id }}" @selected($cobOfficials[$role]?->id === $u->id)>{{ $userOption($u) }}</option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">{{ $help }}</div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="small text-muted mt-3"><i class="fas fa-info-circle me-1"></i>Who <strong>submits</strong> each department's Budget Proposal is set per department on the Budget Allocation page (the department head when not set).</div>
+                @if ($canManageCob)
+                    <div class="d-flex justify-content-end border-top pt-3 mt-3">
+                        <button type="submit" class="btn btn-sm btn-success px-3"><i class="fas fa-save me-1"></i> Save budget signatories</button>
+                    </div>
+                @endif
+            </fieldset>
+        </form>
+    </div>
 </div>
 @endsection
 
@@ -91,6 +127,13 @@ document.addEventListener('DOMContentLoaded', function () {
             theme: 'bootstrap-5', width: '100%', allowClear: !this.multiple, placeholder: $(this).data('placeholder'),
             selectionCssClass: 'select2--small', dropdownCssClass: 'select2--small',
         });
+    });
+
+    $('#form_cob_officials').on('submit', function (e) {
+        e.preventDefault();
+        $.ajax({ url: '{{ route("procurement.officials.cob") }}', type: 'POST', data: $(this).serialize(), headers: { Accept: 'application/json' } })
+            .done((res) => toastr.success(res.message, 'Saved'))
+            .fail((xhr) => { const res = xhr.responseJSON || {}; toastr.error(res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Could not save.'), 'Error'); });
     });
 
     $('.form-officials').on('submit', function (e) {

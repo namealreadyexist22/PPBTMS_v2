@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class BudgetAllocation extends Model
 {
+    /** amount = CO and MOOE (the PPMP budget); Personnel Services is its own setting (PersonnelService) */
     protected $fillable = ['fiscal_year', 'department_id', 'fund_group', 'amount', 'created_by', 'updated_by'];
 
     protected function casts(): array

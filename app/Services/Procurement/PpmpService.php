@@ -2,11 +2,14 @@
 
 namespace App\Services\Procurement;
 
+use App\Enums\AllotmentClass;
 use App\Enums\PpmpStatus;
 use App\Enums\PpmpType;
 use App\Enums\Region;
 use App\Exceptions\ProcurementException;
+use App\Models\Procurement\ExpenseClass;
 use App\Models\Procurement\Item;
+use App\Models\Procurement\BudgetPap;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpItem;
@@ -61,48 +64,61 @@ class PpmpService
         });
     }
 
-    /** Next PAP code for this section and year: YY-office number-NN, e.g. 26-05012-03. */
+    /** Next PAP code for this office and year in its Budget Proposal: YY-office number-NN, e.g. 26-05012-03. */
     public function suggestPapCode(Ppmp $ppmp): string
     {
-        $prefix = sprintf('%02d-%s-', $ppmp->fiscal_year % 100, $ppmp->office->code);
-
-        $highest = PpmpPap::whereIn('ppmp_id', Ppmp::withTrashed()->where('office_id', $ppmp->office_id)->where('fiscal_year', $ppmp->fiscal_year)->select('id'))
-            ->where('code', 'like', $prefix . '%')
-            ->pluck('code')
-            ->map(fn ($code) => (int) substr($code, strlen($prefix)))
-            ->max();
-
-        return $prefix . str_pad((string) (($highest ?? 0) + 1), 2, '0', STR_PAD_LEFT);
+        return app(BudgetProposalService::class)->nextCode($ppmp->office, $ppmp->fiscal_year);
     }
 
-    public function addPap(Ppmp $ppmp, string $code, string $title): PpmpPap
+    /** PAPs of the office's Budget Proposal this PPMP does not use yet (to pick one for its projects). */
+    public function availablePaps(Ppmp $ppmp): \Illuminate\Support\Collection
+    {
+        $proposal = $ppmp->budgetProposal();
+
+        return $proposal
+            ? $proposal->paps()->where('office_id', $ppmp->office_id)->whereNotIn('id', $ppmp->paps()->select('budget_pap_id'))->get()
+            : collect();
+    }
+
+    /** Use a PAP of the office's Budget Proposal in this PPMP, to put projects under it. */
+    public function usePap(Ppmp $ppmp, BudgetPap $budgetPap): PpmpPap
     {
         $this->assertEditable($ppmp);
-        $this->assertPapCodeFree($ppmp, $code);
+        $proposal = $budgetPap->proposal;
 
-        return $ppmp->paps()->create([
-            'code'       => trim($code),
-            'title'      => trim($title),
-            'sort_order' => (int) $ppmp->paps()->max('sort_order') + 1,
-        ]);
+        if ((int) $budgetPap->office_id !== (int) $ppmp->office_id || (int) $proposal->fiscal_year !== (int) $ppmp->fiscal_year) {
+            throw new ProcurementException("{$budgetPap->label()} is not a FY {$ppmp->fiscal_year} PAP of {$ppmp->office->shortName()}.");
+        }
+
+        if ($ppmp->paps()->where('budget_pap_id', $budgetPap->id)->exists()) {
+            throw new ProcurementException("{$budgetPap->label()} is already in this PPMP.");
+        }
+
+        return $ppmp->paps()->create(['budget_pap_id' => $budgetPap->id, 'sort_order' => (int) $ppmp->paps()->max('sort_order') + 1]);
     }
 
-    public function updatePap(PpmpPap $pap, string $code, string $title): PpmpPap
+    /**
+     * Setup shortcut (seeding, tests): the office's PAP with this code (or title) in its department's Budget
+     * Proposal, written there when missing, then used in this PPMP. The page picks from the Budget Proposal.
+     */
+    public function addPap(Ppmp $ppmp, ?string $code, string $title): PpmpPap
     {
-        $this->assertEditable($pap->ppmp);
-        $this->assertPapCodeFree($pap->ppmp, $code, $pap->id);
+        $proposals = app(BudgetProposalService::class);
+        $proposal = $proposals->forDepartment($ppmp->office->budgetOwner(), $ppmp->fiscal_year);
+        $budgetPap = $proposal->paps()->where('office_id', $ppmp->office_id)
+            ->where(fn ($q) => $q->where('title', trim($title))->when($code, fn ($q) => $q->orWhere('code', trim($code))))->first()
+            ?? $proposals->addPap($proposal, $ppmp->office, $title, $code);
 
-        $pap->update(['code' => trim($code), 'title' => trim($title)]);
-
-        return $pap;
+        return $this->usePap($ppmp, $budgetPap);
     }
 
+    /** Stop using a PAP in this PPMP (only when none of its projects are under it). */
     public function removePap(PpmpPap $pap): void
     {
         $this->assertEditable($pap->ppmp);
 
         if ($pap->items()->exists()) {
-            throw new ProcurementException("PAP {$pap->code} still has projects. Remove or move them first.");
+            throw new ProcurementException("{$pap->label()} still has projects in this PPMP. Remove or move them first.");
         }
 
         $pap->delete();
@@ -111,7 +127,8 @@ class PpmpService
     public function addItem(Ppmp $ppmp, array $data): PpmpItem
     {
         $this->assertEditable($ppmp);
-        $data = $this->applyUnitCost($this->applyStandardItem($data, $ppmp));
+        $this->assertFundAllowed($ppmp, $data['fund_source_id'] ?? null);
+        $data = $this->applyExpenseClass($this->applyUnitCost($this->applyStandardItem($data, $ppmp)));
         $this->assertItemData($data);
         $this->assertPapBelongs($ppmp, $data['ppmp_pap_id'] ?? null);
 
@@ -131,7 +148,10 @@ class PpmpService
         $ppmp = $item->ppmp;
         $this->assertEditable($ppmp);
         unset($data['line_uuid'], $data['committed_amount'], $data['committed_quantity'], $data['ppmp_id']);
-        $data = $this->applyUnitCost($this->applyStandardItem($data, $ppmp, $item), $item);
+        if (array_key_exists('fund_source_id', $data) && (int) $data['fund_source_id'] !== (int) $item->fund_source_id) {
+            $this->assertFundAllowed($ppmp, $data['fund_source_id']);   // a fund the project already has may stay
+        }
+        $data = $this->applyExpenseClass($this->applyUnitCost($this->applyStandardItem($data, $ppmp, $item), $item), $item);
         $this->assertItemData(array_merge($item->only(['proc_start', 'proc_end', 'estimated_budget']), $data));
 
         if (array_key_exists('ppmp_pap_id', $data)) {
@@ -305,9 +325,10 @@ class PpmpService
                 'updated_by'      => $user->id,
             ]);
 
+            // The same Budget Proposal PAPs, so PR charges stay on them across versions
             $papIds = [];
             foreach ($ppmp->paps as $pap) {
-                $papIds[$pap->id] = $copy->paps()->create($pap->only(['code', 'title', 'sort_order']))->id;
+                $papIds[$pap->id] = $copy->paps()->create($pap->only(['budget_pap_id', 'sort_order']))->id;
             }
 
             foreach ($ppmp->items as $item) {
@@ -394,16 +415,13 @@ class PpmpService
             : sprintf('%s-%d-V%d', $office->code, $fiscalYear, $version);
     }
 
-    protected function assertPapCodeFree(Ppmp $ppmp, string $code, ?int $ignoreId = null): void
+    /** A fund source kept for one office (e.g. Corporate(BRDE) for BRDE) only for that office and the units under it. */
+    protected function assertFundAllowed(Ppmp $ppmp, $fundSourceId): void
     {
-        if (trim($code) === '') {
-            throw new ProcurementException('The PAP code is required.');
-        }
+        $fund = $fundSourceId ? \App\Models\Procurement\FundSource::find($fundSourceId) : null;
 
-        $taken = $ppmp->paps()->where('code', trim($code))->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))->exists();
-
-        if ($taken) {
-            throw new ProcurementException("PAP {$code} is already in this PPMP.");
+        if ($fund && ! $fund->allows($ppmp->office)) {
+            throw new ProcurementException("{$fund->name} is for " . ($fund->restrictedOffice?->shortName() ?? 'another office') . " only. Choose another source of funds.");
         }
     }
 
@@ -463,6 +481,32 @@ class PpmpService
             'specifications' => $standard->specifications,
             'project_type'   => $standard->project_type?->value ?? $data['project_type'] ?? null,
         ]);
+    }
+
+    /**
+     * Expense class (Form B column) goes with MOOE and semi-expendable projects only. Not picked:
+     * semi-expendable takes Semi-Expendable Expenses; MOOE on a standard item takes its category's.
+     */
+    protected function applyExpenseClass(array $data, ?PpmpItem $item = null): array
+    {
+        $class = $data['allotment_class'] ?? $item?->allotment_class;
+        $class = $class instanceof AllotmentClass ? $class : AllotmentClass::tryFrom((string) $class);
+
+        if ($class === AllotmentClass::Co) {
+            return ['expense_class_id' => null] + $data;
+        }
+
+        $expenseClassId = array_key_exists('expense_class_id', $data) ? $data['expense_class_id'] : $item?->expense_class_id;
+
+        if (! $expenseClassId && $class === AllotmentClass::Semi) {
+            $expenseClassId = ExpenseClass::where('code', ExpenseClass::SEMI_EXPENDABLE)->value('id');
+        }
+
+        if (! $expenseClassId && ($itemId = array_key_exists('item_id', $data) ? $data['item_id'] : $item?->item_id)) {
+            $expenseClassId = Item::find($itemId)?->category?->expense_class_id;
+        }
+
+        return ['expense_class_id' => $expenseClassId ?: null] + $data;
     }
 
     protected function applyUnitCost(array $data, ?PpmpItem $item = null): array

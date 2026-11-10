@@ -15,7 +15,7 @@ class PpmpItem extends Model
     protected $fillable = [
         'ppmp_id', 'ppmp_pap_id', 'line_uuid', 'item_id', 'description', 'project_type', 'quantity', 'unit_id', 'unit_cost',
         'quantity_size', 'print_brief_specs', 'specifications', 'procurement_mode_id', 'pre_proc_conference', 'is_epa', 'proc_start', 'proc_end',
-        'delivery_period', 'fund_source_id', 'allotment_class', 'estimated_budget', 'committed_amount',
+        'delivery_period', 'fund_source_id', 'allotment_class', 'expense_class_id', 'location_id', 'deployment', 'justification', 'estimated_budget', 'committed_amount',
         'committed_quantity', 'supporting_documents', 'market_scoping', 'remarks', 'sort_order',
     ];
 
@@ -136,6 +136,17 @@ class PpmpItem extends Model
     public function fundSource(): BelongsTo
     {
         return $this->belongsTo(FundSource::class);
+    }
+
+    /** MOOE object of expenditure (Form B column); none for Capital Outlay */
+    public function expenseClass(): BelongsTo
+    {
+        return $this->belongsTo(ExpenseClass::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(Location::class);
     }
 
     public function attachments(): \Illuminate\Database\Eloquent\Relations\HasMany

@@ -27,6 +27,7 @@ class BudgetAllocationController extends Controller
         $fund = FundGroup::tryFrom((string) $request->input('fund')) ?? FundGroup::Regular;
 
         $allocations = BudgetAllocation::with('history.user')->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->get()->keyBy('department_id');
+        $personnel = \App\Models\Procurement\PersonnelService::with('history.user')->where('fiscal_year', $fiscalYear)->where('fund_group', $fund)->get()->keyBy('department_id');
 
         // One row per department of this fund (in office-number order), with what each of its offices uses
         $offices = Office::active()->get()->keyBy('id');
@@ -35,7 +36,7 @@ class BudgetAllocationController extends Controller
             ->get()
             // In office-number order; a department without a number sorts by its first unit's
             ->sortBy(fn (Office $d) => $d->code ?? collect($d->departmentOfficeIds())->map(fn ($id) => $offices->get($id)?->code)->filter()->min() ?? 'zzzzz')->values()
-            ->map(function (Office $department) use ($allocations, $offices) {
+            ->map(function (Office $department) use ($allocations, $offices, $personnel) {
                 $allocation = $allocations->get($department->id)?->setRelation('department', $department);
                 $usedBy = $allocation ? $this->budget->usedByOffice($allocation) : [];
                 $amount = $allocation ? Money::toCents((string) $allocation->amount) : null;
@@ -44,11 +45,10 @@ class BudgetAllocationController extends Controller
                 return [
                     'department' => $department,
                     'allocation' => $allocation,
+                    'personnel'  => $personnel->get($department->id),   // Personnel Services, its own setting
                     'amount'     => $amount,
                     'used'       => $used,
                     'remaining'  => $amount === null ? null : $amount - $used,
-                    'offices'    => collect($department->departmentOfficeIds())->map(fn ($id) => $offices->get($id))->filter()->sortBy('code')
-                                    ->map(fn (Office $o) => ['office' => $o, 'used' => $usedBy[$o->id] ?? 0])->values(),
                 ];
             });
 
@@ -57,27 +57,17 @@ class BudgetAllocationController extends Controller
             'fiscalYear' => $fiscalYear,
             'fund'       => $fund,
             'years'      => range(now()->year - 1, now()->year + 2),
-            'totals'     => ['amount' => $rows->sum('amount'), 'used' => $rows->whereNotNull('allocation')->sum('used')],
+            'totals'     => [
+                'amount' => $rows->sum('amount'),
+                'used'   => $rows->whereNotNull('allocation')->sum('used'),
+                'ps'     => $rows->sum(fn ($r) => $r['personnel'] ? Money::toCents((string) $r['personnel']->amount) : 0),
+            ],
         ]);
     }
 
     public function store(Request $request)
     {
-        $request->merge(['amount' => str_replace(',', '', (string) $request->input('amount'))]);
-
-        $validator = Validator::make($request->all(), [
-            'department_id' => ['required', 'integer', 'exists:offices,id'],
-            'fiscal_year'   => ['required', 'integer', 'between:2000,2100'],
-            'fund_group'    => ['required', Rule::enum(FundGroup::class)],
-            'amount'        => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
-            'reason'        => ['nullable', 'string', 'max:1000'],
-        ], [], ['amount' => 'budget', 'department_id' => 'department']);
-
-        if ($validator->fails()) {
-            throw new HttpResponseException(response()->json(['status' => 'error', 'errors' => $validator->errors()], 422));
-        }
-
-        $data = $validator->validated();
+        $data = $this->validated($request, 'budget');
 
         try {
             $allocation = $this->budget->save(
@@ -92,5 +82,45 @@ class BudgetAllocationController extends Controller
         } catch (ProcurementException $e) {
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
         }
+    }
+
+    /** Personnel Services (salaries) of a department: its own setting, printed on the COB breakdown. */
+    public function storePersonnelServices(Request $request)
+    {
+        $data = $this->validated($request, 'Personnel Services');
+
+        try {
+            $ps = $this->budget->savePersonnelServices(
+                Office::findOrFail($data['department_id']), (int) $data['fiscal_year'], FundGroup::from($data['fund_group']),
+                $data['amount'], $request->user(), $data['reason'] ?? null,
+            );
+
+            activity()->causedBy($request->user())->performedOn($ps)
+                ->log("set the Personnel Services of {$ps->department->shortName()} for FY {$ps->fiscal_year}");
+
+            return response()->json(['status' => 'success', 'message' => "Personnel Services of {$ps->department->shortName()} saved."]);
+        } catch (ProcurementException $e) {
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    /** Department, year, fund, amount (commas allowed) and reason; 422 JSON on failure. */
+    protected function validated(Request $request, string $amountLabel): array
+    {
+        $request->merge(['amount' => str_replace(',', '', (string) $request->input('amount'))]);
+
+        $validator = Validator::make($request->all(), [
+            'department_id' => ['required', 'integer', 'exists:offices,id'],
+            'fiscal_year'   => ['required', 'integer', 'between:2000,2100'],
+            'fund_group'    => ['required', Rule::enum(FundGroup::class)],
+            'amount'        => ['required', 'numeric', 'min:0', 'max:9999999999999.99'],
+            'reason'        => ['nullable', 'string', 'max:1000'],
+        ], [], ['amount' => $amountLabel, 'department_id' => 'department']);
+
+        if ($validator->fails()) {
+            throw new HttpResponseException(response()->json(['status' => 'error', 'errors' => $validator->errors()], 422));
+        }
+
+        return $validator->validated();
     }
 }

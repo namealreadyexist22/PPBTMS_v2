@@ -10,8 +10,10 @@ use App\Exceptions\ProcurementException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Procurement\StorePpmpItemRequest;
 use App\Http\Requests\Procurement\StorePpmpRequest;
+use App\Models\Procurement\ExpenseClass;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\Item;
+use App\Models\Procurement\Location;
 use App\Models\Procurement\Office;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\ProcurementMode;
@@ -79,7 +81,8 @@ class PpmpController extends Controller
         $this->authorizeView($request, $ppmp);
 
         $user = $request->user();
-        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'paps.items.distributions', 'paps.items.item.unit', 'items', 'signatories', 'divisionPpmps']);
+        $ppmp->load(['office.parent', 'paps.items.procurementMode', 'paps.items.fundSource', 'paps.items.unit', 'paps.items.attachments', 'paps.items.distributions', 'paps.items.item.unit',
+            'paps.items.expenseClass', 'paps.items.location', 'items', 'signatories', 'divisionPpmps']);
 
         $hasOpenAmendment = Ppmp::where('amended_from_id', $ppmp->id)
             ->whereIn('status', [PpmpStatus::Draft, PpmpStatus::Submitted, PpmpStatus::Returned])
@@ -151,14 +154,11 @@ class PpmpController extends Controller
             ->filter(fn (Item $c) => ! $c->category || $c->category->allows($ppmp->office, $budgetFund) || $c->id === $item?->item_id)
             ->values();
 
-        // Source of funds picked for a new project: the only one allowed, else the one last used in this PPMP
-        $fundSources = $activeOr(FundSource::class, $item?->fund_source_id)
-            ->filter(fn ($fund) => ! ($budgetFund = $ppmp->office->department?->budget_fund)
-                || $fund->fund_group === $budgetFund || $fund->id === $item?->fund_source_id)
-            ->values();
-        $lastFund = $ppmp->items()->latest('id')->value('fund_source_id');
-        $defaultFundId = $item?->fund_source_id
-            ?? ($fundSources->count() === 1 ? $fundSources->first()->id : ($fundSources->contains('id', $lastFund) ? $lastFund : null));
+        // Source of funds: the Corporate Operating Budget first and picked for a new project
+        $fundSources = $this->orderedFunds($activeOr(FundSource::class, $item?->fund_source_id)
+            ->filter(fn ($fund) => $fund->id === $item?->fund_source_id || ($fund->allows($ppmp->office)
+                && (! ($budgetFund = $ppmp->office->department?->budget_fund) || $fund->fund_group === $budgetFund))));
+        $defaultFundId = $item?->fund_source_id ?? $fundSources->first()?->id;
 
         return view('procurement.ppmp.extras.ppmp_item_entry', [
             'modalName'    => 'PPMP_ITEM_MODAL',
@@ -173,6 +173,9 @@ class PpmpController extends Controller
             'fundSources'  => $fundSources,
             'defaultFundId' => $defaultFundId,
             'units'        => $activeOr(Unit::class, $item?->unit_id),
+            // For the COB: Form B column of MOOE / semi-expendable projects, and where the budget is spent
+            'expenseClasses' => ExpenseClass::where(fn ($q) => $q->where('is_active', true)->when($item?->expense_class_id, fn ($q) => $q->orWhereKey($item->expense_class_id)))->ordered()->get(),
+            'locations'    => $activeOr(Location::class, $item?->location_id),
             'catalog'      => $catalog,
             // For the form script: what a standard item fills in (and locks)
             'standardItems' => $catalog->mapWithKeys(fn (Item $c) => [$c->id => [
@@ -182,6 +185,7 @@ class PpmpController extends Controller
                 'cost'    => $c->standard_unit_cost !== null ? (float) $c->standard_unit_cost : null,
                 'specs'   => $c->brief_specs,   // the project's "Size / brief specs"; the full TWG specs are kept with it
                 'type'    => $c->project_type?->value,
+                'expense' => $c->category?->expense_class_id,   // expense class a MOOE project on it starts with
                 'twg'     => trim(($c->twg_reference ?? '') . ($c->twg_approved_at ? ' (' . $c->twg_approved_at->format('M d, Y') . ')' : '')),
             ]]),
             'budgetBase'   => $this->budgetBase($ppmp, $item),
@@ -373,39 +377,28 @@ class PpmpController extends Controller
         return response()->json(['status' => 'success', 'message' => 'Signatories saved.']);
     }
 
-    /** Add / edit PAP modal (code + title). */
+    /** Add PAP modal: pick one of the office's PAPs in its department's Budget Proposal. */
     public function papEntry(Request $request, Ppmp $ppmp)
     {
         $this->authorizeEdit($request, $ppmp);
-        $pap = $request->filled('id') ? $ppmp->paps()->findOrFail($request->id) : null;
 
         return view('procurement.ppmp.extras.ppmp_pap_entry', [
-            'modalName'     => 'PPMP_PAP_MODAL',
-            'ppmp'          => $ppmp,
-            'pap'           => $pap,
-            'suggestedCode' => $pap ? $pap->code : $this->ppmpService->suggestPapCode($ppmp),
+            'modalName' => 'PPMP_PAP_MODAL',
+            'ppmp'      => $ppmp,
+            'proposal'  => $ppmp->budgetProposal(),
+            'available' => $this->ppmpService->availablePaps($ppmp),
         ]);
     }
 
     public function papStore(Request $request, Ppmp $ppmp)
     {
         $this->authorizeEdit($request, $ppmp);
-        $data = $this->validateJson($request, [
-            'id'    => ['nullable', 'integer'],
-            'code'  => ['required', 'string', 'max:50'],
-            'title' => ['required', 'string', 'max:255'],
-        ], [], ['code' => 'PAP code', 'title' => 'PAP title']);
+        $data = $this->validateJson($request, ['budget_pap_id' => ['required', 'integer', 'exists:budget_paps,id']], [], ['budget_pap_id' => 'PAP']);
 
-        return $this->attempt(function () use ($request, $ppmp, $data) {
-            if ($request->filled('id')) {
-                $this->ppmpService->updatePap($ppmp->paps()->findOrFail($request->id), $data['code'], $data['title']);
+        return $this->attempt(function () use ($ppmp, $data) {
+            $pap = $this->ppmpService->usePap($ppmp, \App\Models\Procurement\BudgetPap::findOrFail($data['budget_pap_id']));
 
-                return 'PAP updated.';
-            }
-
-            $this->ppmpService->addPap($ppmp, $data['code'], $data['title']);
-
-            return 'PAP added.';
+            return "{$pap->label()} added to the PPMP.";
         });
     }
 
@@ -503,6 +496,12 @@ class PpmpController extends Controller
                 'left'   => $limit['available'] - $limit['mine'] + ($fund === $itemFund ? \App\Support\Money::toCents($item->estimated_budget) : 0),
                 'office' => $limit['department']->shortName(),
             ])->all();
+    }
+
+    /** Fund sources with the Corporate Operating Budget (code COB) first, the rest by name. */
+    protected function orderedFunds(\Illuminate\Support\Collection $funds): \Illuminate\Support\Collection
+    {
+        return $funds->sortBy(fn ($fund) => [$fund->code === 'COB' ? 0 : 1, $fund->name])->values();
     }
 
     protected function attempt(Closure $action): JsonResponse

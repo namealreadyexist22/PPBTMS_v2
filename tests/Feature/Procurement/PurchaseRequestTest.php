@@ -629,7 +629,7 @@ class PurchaseRequestTest extends TestCase
         DB::disableQueryLog();
 
         $this->assertCount(2, $lines);
-        $this->assertLessThanOrEqual(10, $queries);   // 9 now; 7 more per project before (20 here)
+        $this->assertLessThanOrEqual(11, $queries);   // 10 now (the PAP's code and title from its Budget Proposal PAP); 7 more per project before (20 here)
         $this->assertSame(800, $lines->firstWhere('id', $this->hdd->id)->remaining_hundredths);
         $this->assertSame(4000000, $lines->firstWhere('id', $this->hdd->id)->remaining_cents);
     }

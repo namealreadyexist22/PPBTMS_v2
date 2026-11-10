@@ -3,8 +3,10 @@
 namespace Database\Seeders;
 
 use App\Models\Procurement\BidDocument;
+use App\Models\Procurement\ExpenseClass;
 use App\Models\Procurement\FundSource;
 use App\Models\Procurement\ItemCategory;
+use App\Models\Procurement\Location;
 use App\Models\Procurement\ProcurementMode;
 use App\Models\Procurement\Unit;
 use Illuminate\Database\Seeder;
@@ -61,6 +63,43 @@ class ProcurementLookupSeeder extends Seeder
             'SVC'  => 'Services',
             'INF'  => 'Infrastructure',
         ]);
+
+        // MOOE objects of expenditure: the columns of the COB's Details of MOOE (Form B), in this order
+        $order = 0;
+        foreach ([
+            'TRV'  => 'Traveling Expenses',
+            'TRN'  => 'Training Expenses',
+            'OFS'  => 'Office Supplies Expenses',
+            'FUEL' => 'Fuel, Oil and Lubricants Expenses',
+            'AGR'  => 'Agricultural Supplies Expense',
+            ExpenseClass::SEMI_EXPENDABLE => 'Semi-Expendable Expenses',
+            'OSE'  => 'Other Supplies Expenses',
+            'GSV'  => 'General Services Expenses',
+            'RPM'  => 'Repairs and Maintenance Expenses',
+            'ASB'  => 'Assistance and Subsidies',
+            'REP'  => 'Representation Expenses',
+            'TDE'  => 'Transportation and Delivery Expenses',
+            'MEC'  => 'Major Events and Conventions Expenses',
+            'OTH'  => 'Other MOOE',
+        ] as $code => $name) {
+            ExpenseClass::firstOrCreate(['code' => $code], ['name' => $name, 'sort_order' => ($order += 10)]);
+        }
+        // Fixed Utilities' columns (before Other MOOE)
+        foreach (['WAT' => ['Water Expenses', 132], 'ELEC' => ['Electricity Expenses', 134], 'COMM' => ['Communication Expenses', 136]] as $code => [$name, $sort]) {
+            ExpenseClass::firstOrCreate(['code' => $code], ['name' => $name, 'sort_order' => $sort]);
+        }
+
+        $this->seed(Location::class, [
+            'QC'  => 'Quezon City',
+            'BCD' => 'Bacolod City',
+            'LGJ' => 'La Granja',
+        ]);
+
+        // Expense class a category's MOOE projects start with (only where none is set yet)
+        foreach (['OFS' => 'OFS', 'AGR' => 'AGR', 'SVC' => 'GSV'] as $category => $class) {
+            ItemCategory::where('code', $category)->whereNull('expense_class_id')
+                ->update(['expense_class_id' => ExpenseClass::where('code', $class)->value('id')]);
+        }
 
         // Each bidder's checklist in a competitive bidding (RA 12009 eligibility, technical and financial documents)
         $this->seed(BidDocument::class, [

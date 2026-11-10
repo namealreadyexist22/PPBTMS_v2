@@ -98,28 +98,44 @@ class PpmpPageTest extends TestCase
 
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('Add PAP')->assertSee('No PAPs yet');
 
-        // PAP: code suggested as YY-office-NN, editable, unique per PPMP
-        $this->get(route('procurement.ppmp.paps.entry', $ppmp))->assertOk()->assertSee('value="27-05012-01"', false);
-        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['code' => '27-05012-01', 'title' => 'ICT Infrastructure Management'])->assertOk();
-        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['code' => '27-05012-01', 'title' => 'Duplicate'])->assertStatus(422);
-        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['code' => '', 'title' => ''])->assertStatus(422)->assertJsonValidationErrors(['code', 'title']);
-        $this->get(route('procurement.ppmp.paps.entry', $ppmp))->assertSee('value="27-05012-02"', false);
-        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['code' => '25-05012-04', 'title' => 'Carried over PAP'])->assertOk();
-        $pap = $ppmp->paps()->where('code', '27-05012-01')->first();
-        $carried = $ppmp->paps()->where('code', '25-05012-04')->first();
+        // PAPs come from the Budget Proposal: none yet
+        $this->get(route('procurement.ppmp.paps.entry', $ppmp))->assertOk()->assertSee('has no FY 2027 Budget Proposal yet');
+
+        // The office writes its PAP titles on the Budget Proposal (codes come later, from the evaluator)
+        $proposals = app(\App\Services\Procurement\BudgetProposalService::class);
+        $proposal = $proposals->forDepartment($this->section->budgetOwner(), 2027);
+        $ict = $proposals->addPap($proposal, $this->section, 'ICT Infrastructure Management');
+        $carriedOver = $proposals->addPap($proposal, $this->section, 'Carried over PAP');
+        $other = $proposals->addPap($proposal, $this->section2, 'Research Agenda');   // another office's
+
+        // The PPMP picks them: its office's only, once each
+        $this->get(route('procurement.ppmp.paps.entry', $ppmp))->assertOk()
+            ->assertSee('ICT Infrastructure Management')->assertSee('Carried over PAP')->assertDontSee('Research Agenda');
+        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['budget_pap_id' => $ict->id])->assertOk();
+        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['budget_pap_id' => $ict->id])->assertStatus(422);
+        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['budget_pap_id' => $other->id])->assertStatus(422);
+        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), [])->assertStatus(422)->assertJsonValidationErrors(['budget_pap_id']);
+        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['budget_pap_id' => $carriedOver->id])->assertOk();
+        $this->get(route('procurement.ppmp.paps.entry', $ppmp))->assertSee('is already in this PPMP');
+        $pap = $ppmp->paps()->where('budget_pap_id', $ict->id)->first();
+        $carried = $ppmp->paps()->where('budget_pap_id', $carriedOver->id)->first();
 
         // Projects go under a PAP
-        $this->get(route('procurement.ppmp.items.entry', [$ppmp, 'pap_id' => $pap->id]))->assertOk()->assertSee('27-05012-01 - ICT Infrastructure Management');
+        $this->get(route('procurement.ppmp.items.entry', [$ppmp, 'pap_id' => $pap->id]))->assertOk()->assertSee('ICT Infrastructure Management');
         $this->postJson(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id))->assertOk();
         $this->postJson(route('procurement.ppmp.items.store', $ppmp), array_diff_key($this->project($pap->id), ['ppmp_pap_id' => 1]))
             ->assertStatus(422)->assertJsonValidationErrors('ppmp_pap_id');
         $this->postJson(route('procurement.ppmp.items.store', $ppmp), $this->project($pap->id, ['description' => 'Supply and Delivery of RAM', 'estimated_budget' => '30000']))->assertOk();
         $this->assertEquals('94000.00', $ppmp->fresh()->total_budget);
 
-        // A PAP with projects cannot be removed; an empty one can
+        // A PAP with projects cannot be removed; an empty one can (it stays on the Budget Proposal)
         $this->deleteJson(route('procurement.ppmp.paps.destroy', $ppmp), ['id' => $pap->id])->assertStatus(422);
         $this->deleteJson(route('procurement.ppmp.paps.destroy', $ppmp), ['id' => $carried->id])->assertOk();
+        $this->assertNotNull($carriedOver->fresh());
 
+        // Before the evaluator gives the code; then with it
+        $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()->assertSee('PAP CODE: (no code yet) - ICT Infrastructure Management');
+        $ict->update(['code' => '27-05012-01']);
         $this->get(route('procurement.ppmp.show', $ppmp))->assertOk()
             ->assertSee('PAP CODE: 27-05012-01 - ICT Infrastructure Management')
             ->assertSee('QTY: 8')
@@ -127,7 +143,7 @@ class PpmpPageTest extends TestCase
 
         $this->postJson(route('procurement.ppmp.submit', $ppmp))->assertOk();
         $this->assertSame(PpmpStatus::Submitted, $ppmp->fresh()->status);
-        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['code' => '27-05012-09', 'title' => 'Late'])->assertStatus(422);
+        $this->postJson(route('procurement.ppmp.paps.store', $ppmp), ['budget_pap_id' => $carriedOver->id])->assertStatus(422);
     }
 
     public function test_division_head_returns_then_approves_as_ppmp_no_1_and_amendment_as_no_2(): void
@@ -188,7 +204,7 @@ class PpmpPageTest extends TestCase
         $this->actingAs($this->staff)->postJson(route('procurement.ppmp.amend', $mis))->assertOk();
         $misV2 = Ppmp::where('amended_from_id', $mis->id)->sole();
         $this->assertSame('05012-2027-V2', $misV2->ppmp_no);
-        $this->assertSame(['27-05012-01'], $misV2->paps()->pluck('code')->all());
+        $this->assertSame(['27-05012-01'], $misV2->paps->pluck('code')->all());
         $service->updateItem($misV2->items()->first(), ['estimated_budget' => '80000']);
         $service->submit($misV2->fresh(), $this->staff);
 
