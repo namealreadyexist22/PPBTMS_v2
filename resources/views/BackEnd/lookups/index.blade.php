@@ -1,6 +1,8 @@
 @extends('BackEnd.layouts.master')
 
 @section('content')
+{{-- Swapped in place after an add, edit or delete (no full reload) --}}
+<div id="lookup_view">
 <div class="card dt-modern-card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
     <div class="card-header bg-white pt-4 pb-0 px-4" style="border-bottom: 1px solid #f1f5f9;">
         <div class="d-flex align-items-center justify-content-between mb-3">
@@ -51,6 +53,7 @@
         <div class="small text-muted px-4 py-2">Inactive entries are hidden from new PPMP and APP entries but stay on records that already use them.</div>
     </div>
 </div>
+</div>{{-- #lookup_view --}}
 
 <div class="modal fade" id="LOOKUP_MODAL" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -167,14 +170,27 @@ document.addEventListener('DOMContentLoaded', function () {
         modal().show();
     }
 
-    $('#btn_add').on('click', () => open({}));
+    // Reload just the table (and its counts), keeping the scroll position
+    function reloadTable() {
+        const view = $('#lookup_view').css({ opacity: .6, pointerEvents: 'none' });
+        $.get(window.location.href)
+            .done(function (html) {
+                const fresh = $('<div>').append($.parseHTML(html)).find('#lookup_view');
+                if (!fresh.length) { window.location.reload(); return; }
+                view.replaceWith(fresh);
+            })
+            .fail(() => window.location.reload())
+            .always(() => $('#lookup_view').css({ opacity: '', pointerEvents: '' }));
+    }
+
+    $(document).on('click', '#btn_add', () => open({}));
     $(document).on('click', '.btn-edit', function () { open($(this).data()); });
 
     form.on('submit', function (e) {
         e.preventDefault();
         form.find('.is-invalid').removeClass('is-invalid');
         $.post('{{ route("core.lookups.store") }}', form.serialize() + '&_token=' + csrf + (form.find('[name=is_active]').is(':checked') ? '' : '&is_active=0'))
-            .done(function (res) { toastr.success(res.message, 'Saved'); setTimeout(() => window.location.reload(), 500); })
+            .done(function (res) { toastr.success(res.message, 'Saved'); modal().hide(); reloadTable(); })
             .fail(function (xhr) {
                 const res = xhr.responseJSON || {};
                 $.each(res.errors || {}, (key, messages) => form.find('[name="' + key + '"]').addClass('is-invalid').siblings('.invalid-feedback').text(messages[0]));
@@ -188,7 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then((r) => {
                 if (!r.isConfirmed) return;
                 $.ajax({ url: '{{ route("core.lookups.destroy") }}', type: 'POST', data: { _token: csrf, _method: 'DELETE', type: '{{ $type }}', id: id } })
-                    .done((res) => { toastr.success(res.message, 'Deleted'); setTimeout(() => window.location.reload(), 500); })
+                    .done((res) => { toastr.success(res.message, 'Deleted'); reloadTable(); })
                     .fail((xhr) => toastr.error(xhr.responseJSON?.message ?? 'Could not delete.', 'Error'));
             });
     });

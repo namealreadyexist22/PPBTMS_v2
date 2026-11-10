@@ -8,7 +8,9 @@
     <meta charset="utf-8">
     <title>Market Scoping Checklist{{ $items->count() > 1 ? 's' : '' }} — {{ $ppmp->ppmp_no }}</title>
     <style>
-        @page { size: A4 portrait; margin: 12mm 14mm 12mm; }
+        /* No page margin: the browser then has no room for its own header and footer (date, title, URL, page number).
+           The margin is the sheet's padding instead, repeated on every printed page (box-decoration-break). */
+        @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; }
         body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #000; margin: 0; background: #e5e7eb; }
         .sheet { background: #fff; width: 210mm; min-height: 297mm; margin: 12px auto; padding: 12mm 14mm; display: flex; flex-direction: column; }
@@ -46,7 +48,7 @@
         .footer .ft { font-size: 8pt; color: #333; }
 
         .sheet + .sheet { page-break-before: always; break-before: page; }
-        @media print { body { background: #fff; } .toolbar { display: none; } .sheet { width: auto; min-height: 270mm; margin: 0; padding: 0; } }
+        @media print { body { background: #fff; } .toolbar { display: none; } .sheet { width: auto; min-height: 270mm; margin: 0; padding: 12mm 14mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; } }
     </style>
 </head>
 <body>
