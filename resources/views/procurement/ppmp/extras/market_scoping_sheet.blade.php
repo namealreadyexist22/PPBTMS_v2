@@ -14,7 +14,9 @@
     $signedOn = ! empty($ms['signed_on']) ? \Carbon\Carbon::parse($ms['signed_on'])->format('F d, Y') : null;
     $checked = fn ($on) => $on ? '🗹' : '☐';
 @endphp
+{{-- Two A4 pages, each with the footer at its bottom (no fixed positioning: every browser prints it the same) --}}
 <div class="sheet">
+<div class="page">
     <div class="letterhead">
         <img src="{{ asset('assets/img/sra-da.png') }}" alt="">
         <div class="lh-text">
@@ -75,7 +77,10 @@
         </ul>
     </div>
 
-    <h3>MARKET SCOPING RESULTS</h3>
+    @include('procurement.ppmp.extras.market_scoping_footer')
+</div>
+<div class="page">
+    <h3 style="margin-top: 0;">MARKET SCOPING RESULTS</h3>
     <p class="note">Indicate recommendations in the column provided based on the results of the market scoping activities undertaken. These recommendations shall be considered in the development of a comprehensive and realistic PPMP, taking into account the parameters outlined under Section 10.4 of the IRR of RA 12009, as may be applicable.</p>
     <table>
         <thead><tr><th style="width: 36%;">Parameters</th><th style="width: 16%;">Considered?<br><span class="normal">(Yes/No/ Not Applicable)</span></th><th>Recommendations<br><span class="normal">based on the Market Scoping<br>(Attach additional documents if necessary)</span></th></tr></thead>
@@ -111,9 +116,6 @@
         </tr>
     </table>
 
-    <div class="footer">
-        <img src="{{ asset('assets/img/bagong-pilipinas.jpg') }}" alt="Bagong Pilipinas" class="bp">
-        <span class="ft">Market Scoping Checklist</span>
-        <img src="{{ asset('assets/img/tuv-iso-9001.jpg') }}" alt="ISO 9001:2015 certified" class="iso">
-    </div>
+    @include('procurement.ppmp.extras.market_scoping_footer')
+</div>
 </div>

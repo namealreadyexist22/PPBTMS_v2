@@ -9,11 +9,12 @@
     <title>Market Scoping Checklist{{ $items->count() > 1 ? 's' : '' }} — {{ $ppmp->ppmp_no }}</title>
     <style>
         /* No page margin: the browser then has no room for its own header and footer (date, title, URL, page number).
-           The margin is the sheet's padding instead, repeated on every printed page (box-decoration-break). */
+           The margin is each page's padding instead. */
         @page { size: A4 portrait; margin: 0; }
         * { box-sizing: border-box; }
         body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #000; margin: 0; background: #e5e7eb; }
-        .sheet { background: #fff; width: 210mm; min-height: 297mm; margin: 12px auto; padding: 12mm 14mm; display: flex; flex-direction: column; }
+        /* One A4 page: content, then the footer pushed to its bottom */
+        .page { background: #fff; width: 210mm; min-height: 297mm; margin: 12px auto; padding: 12mm 14mm 10mm; display: flex; flex-direction: column; }
         .toolbar { position: sticky; top: 0; background: #1f2937; color: #fff; padding: 8px 16px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
         .toolbar button { font-size: 13px; padding: 5px 12px; border-radius: 5px; border: 0; cursor: pointer; background: #2563eb; color: #fff; }
 
@@ -47,15 +48,12 @@
         .footer .iso { height: 36px; }
         .footer .ft { font-size: 8pt; color: #333; }
 
-        .sheet + .sheet { page-break-before: always; break-before: page; }
         @media print {
             body { background: #fff; }
             .toolbar { display: none; }
-            /* Bottom padding leaves room on every page for the footer */
-            .sheet { width: auto; min-height: 0; margin: 0; padding: 12mm 14mm 30mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-            /* The footer at the bottom of every printed page (a fixed element repeats on each page); one is enough */
-            .footer { position: fixed; left: 14mm; right: 14mm; bottom: 10mm; margin: 0; padding: 0; background: #fff; }
-            .sheet + .sheet .footer { display: none; }
+            /* Each page fills one printed page (a hair under A4 so rounding never adds a blank one) and starts a new one */
+            .page { width: auto; min-height: 296mm; margin: 0; break-after: page; page-break-after: always; }
+            .sheet:last-child .page:last-child { break-after: auto; page-break-after: auto; }
         }
     </style>
 </head>
@@ -64,7 +62,7 @@
 @forelse ($items as $item)
     @include('procurement.ppmp.extras.market_scoping_sheet', ['item' => $item])
 @empty
-    <div class="sheet">No procurement projects yet.</div>
+    <div class="sheet"><div class="page">No procurement projects yet.</div></div>
 @endforelse
 </body>
 </html>

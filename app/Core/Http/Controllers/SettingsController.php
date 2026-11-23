@@ -30,12 +30,16 @@ class SettingsController extends Controller
         Setting::set('app_version', $request->app_version);
 
         if ($request->hasFile('app_logo')) {
+            // store() returns false when storage/ is not writable: keep the old logo then
+            $path = $request->file('app_logo')->store('branding', 'public');
+            if (! $path) {
+                return back()->with('error', 'The logo could not be saved on the server (the storage folder is not writable).');
+            }
+
             $old = Setting::get('app_logo');
             if ($old) {
                 Storage::disk('public')->delete($old);
             }
-
-            $path = $request->file('app_logo')->store('branding', 'public');
             Setting::set('app_logo', $path);
         }
 

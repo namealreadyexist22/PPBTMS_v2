@@ -24,9 +24,15 @@ class AoqAttachmentService
     {
         $old = $owner->attachment_path;
 
+        // store() returns false when the file cannot be written (e.g. storage/ not writable by the web server)
+        $path = $file->store("aoq-attachments/{$aoq->uuid}", self::DISK);
+        if (! $path) {
+            throw new \App\Exceptions\ProcurementException("\"{$file->getClientOriginalName()}\" could not be saved on the server (the storage folder is not writable). Ask the administrator to fix the storage permissions.");
+        }
+
         $owner->update([
             'attachment_name' => mb_substr($file->getClientOriginalName(), 0, 255),
-            'attachment_path' => $file->store("aoq-attachments/{$aoq->uuid}", self::DISK),
+            'attachment_path' => $path,
             'attachment_size' => $file->getSize(),
         ]);
 

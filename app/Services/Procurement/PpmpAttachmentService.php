@@ -26,10 +26,16 @@ class PpmpAttachmentService
         foreach (array_values($files) as $i => $file) {
             $kind = $kinds[$i] ?? 'other';
 
+            // store() returns false when the file cannot be written (e.g. storage/ not writable by the web server)
+            $path = $file->store("ppmp-attachments/{$item->ppmp->uuid}", self::DISK);
+            if (! $path) {
+                throw new ProcurementException("\"{$file->getClientOriginalName()}\" could not be saved on the server (the storage folder is not writable). Ask the administrator to fix the storage permissions.");
+            }
+
             $item->attachments()->create([
                 'kind'          => array_key_exists($kind, config('market_scoping.attachment_kinds')) ? $kind : 'other',
                 'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
-                'path'          => $file->store("ppmp-attachments/{$item->ppmp->uuid}", self::DISK),
+                'path'          => $path,
                 'mime_type'     => $file->getMimeType(),
                 'size'          => $file->getSize(),
                 'uploaded_by'   => $user->id,
