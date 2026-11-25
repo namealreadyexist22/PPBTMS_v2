@@ -15,6 +15,10 @@
                 @csrf
                 @if ($line)<input type="hidden" name="id" value="{{ $line->id }}">@endif
                 <div class="modal-body p-4">
+                    {{-- The department's budget left before this line, and after it as the amount is typed --}}
+                    <div id="line_budget_left" class="alert py-2 px-3 small mb-3 {{ $budgetLeft === null ? 'alert-secondary' : '' }}" data-left="{{ $budgetLeft }}">
+                        @if ($budgetLeft === null)<i class="fas fa-coins me-1"></i> No budget allocation set for this department yet — not checked.@endif
+                    </div>
                     <div class="row g-3">
                         <div class="col-12">
                             <label class="form-label small fw-semibold text-muted mb-1">PAP</label>
@@ -96,5 +100,20 @@
             const n = parseFloat(this.value.replace(/,/g, ''));
             if (!isNaN(n)) this.value = peso(n);
         });
+
+        // Budget left: before this line, and after it (red when it would go over)
+        const box = document.getElementById('line_budget_left');
+        if (box.dataset.left !== '') {
+            const before = parseInt(box.dataset.left, 10) / 100;
+            const show = () => {
+                const after = Math.round((before - (parseFloat(amount.value.replace(/,/g, '')) || 0)) * 100) / 100;
+                box.classList.toggle('alert-danger', after < 0);
+                box.classList.toggle('alert-success', after >= 0);
+                box.innerHTML = '<i class="fas fa-coins me-1"></i> Department budget left: <strong>₱' + peso(before) + '</strong> → after this line: <strong>'
+                    + (after < 0 ? '−₱' + peso(-after) + ' (over budget; the proposal cannot be submitted)' : '₱' + peso(after)) + '</strong>';
+            };
+            amount.addEventListener('input', show);
+            show();
+        }
     })();
 </script>

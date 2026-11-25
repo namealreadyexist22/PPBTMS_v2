@@ -201,7 +201,14 @@ class PpmpPageTest extends TestCase
         $service->addItem($research, array_merge($this->project($pap->id), ['proc_start' => '2027-02-01', 'proc_end' => '2027-04-01', 'estimated_budget' => '26000']));
         $service->submit($research, $this->staff2);
 
-        $this->actingAs($this->staff)->postJson(route('procurement.ppmp.amend', $mis))->assertOk();
+        // Amending needs an amendment period open today (set by the budget officer); the page shows the button locked until then
+        $this->actingAs($this->staff)->get(route('procurement.ppmp.show', $mis))->assertOk()->assertSee('Amendments are closed');
+        $this->postJson(route('procurement.ppmp.amend', $mis))->assertStatus(422)->assertJsonFragment(['message' => 'FY 2027 PPMPs cannot be amended now: no amendment period is open. The budget officer sets it.']);
+        \App\Models\Procurement\PpmpAmendmentPeriod::create(['fiscal_year' => 2027, 'name' => 'Past', 'opens_on' => now()->subMonth(), 'closes_on' => now()->subDay()]);
+        $this->postJson(route('procurement.ppmp.amend', $mis))->assertStatus(422);
+        \App\Models\Procurement\PpmpAmendmentPeriod::create(['fiscal_year' => 2027, 'name' => '1st amendment', 'opens_on' => today(), 'closes_on' => now()->addMonth()]);
+        $this->get(route('procurement.ppmp.show', $mis))->assertOk()->assertSee('id="btn_amend"', false);
+        $this->postJson(route('procurement.ppmp.amend', $mis))->assertOk();
         $misV2 = Ppmp::where('amended_from_id', $mis->id)->sole();
         $this->assertSame('05012-2027-V2', $misV2->ppmp_no);
         $this->assertSame(['27-05012-01'], $misV2->paps->pluck('code')->all());

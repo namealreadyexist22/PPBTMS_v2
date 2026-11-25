@@ -62,7 +62,37 @@ class BudgetAllocationController extends Controller
                 'used'   => $rows->whereNotNull('allocation')->sum('used'),
                 'ps'     => $rows->sum(fn ($r) => $r['personnel'] ? Money::toCents((string) $r['personnel']->amount) : 0),
             ],
+            'amendmentPeriods' => \App\Models\Procurement\PpmpAmendmentPeriod::where('fiscal_year', $fiscalYear)->orderBy('opens_on')->get(),
         ]);
+    }
+
+    /** Open a PPMP amendment period for a fiscal year (e.g. "1st amendment", Mar 23 – Apr 23). */
+    public function storeAmendmentPeriod(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'fiscal_year' => ['required', 'integer', 'between:2000,2100'],
+            'name'        => ['required', 'string', 'max:100'],
+            'opens_on'    => ['required', 'date'],
+            'closes_on'   => ['required', 'date', 'after_or_equal:opens_on'],
+        ], [], ['opens_on' => 'opening date', 'closes_on' => 'closing date']);
+
+        if ($validator->fails()) {
+            return response()->json(['status' => 'error', 'errors' => $validator->errors()], 422);
+        }
+
+        $period = \App\Models\Procurement\PpmpAmendmentPeriod::create($validator->validated() + ['created_by' => $request->user()->id]);
+        activity()->causedBy($request->user())->log("opened the FY {$period->fiscal_year} PPMP {$period->name} ({$period->range()})");
+
+        return response()->json(['status' => 'success', 'message' => "{$period->name} set: {$period->range()}."]);
+    }
+
+    public function destroyAmendmentPeriod(Request $request)
+    {
+        $period = \App\Models\Procurement\PpmpAmendmentPeriod::findOrFail($request->integer('id'));
+        $period->delete();
+        activity()->causedBy($request->user())->log("removed the FY {$period->fiscal_year} PPMP {$period->name} ({$period->range()})");
+
+        return response()->json(['status' => 'success', 'message' => "{$period->name} removed."]);
     }
 
     public function store(Request $request)

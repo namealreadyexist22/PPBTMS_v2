@@ -68,7 +68,7 @@ class BiddingTest extends TestCase
         $this->bac = User::factory()->create(['is_activated' => 1, 'fname' => 'Ana', 'lname' => 'Santos']);
         $this->bac->givePermissionTo([Bidding::MANAGE_PERMISSION, 'manage rfq']);
 
-        $this->ppmp = $ppmps->create($section, 2027, $this->staff);
+        $this->ppmp = $ppmps->create($section, 2026, $this->staff);
         $pap = $ppmps->addPap($this->ppmp, '27-05012-01', 'ICT Infrastructure');
         $this->desktop = $ppmps->addItem($this->ppmp, $this->project($pap->id, 'Desktop Computer', 10, '60000', 'CB', 'COB'));
         $this->laptop = $ppmps->addItem($this->ppmp, $this->project($pap->id, 'Laptop', 10, '80000', 'CB', 'COB'));
@@ -84,7 +84,7 @@ class BiddingTest extends TestCase
         $this->sidaStaff = User::factory()->create(['is_activated' => 1, 'office_id' => $sidaSection->id]);
         $this->sidaStaff->givePermissionTo(['manage requests', 'manage ppmp']);
         $sidaHead->givePermissionTo(['manage requests', 'manage ppmp']);
-        $this->sidaPpmp = $ppmps->create($sidaSection, 2027, $this->sidaStaff);
+        $this->sidaPpmp = $ppmps->create($sidaSection, 2026, $this->sidaStaff);
         $sidaPap = $ppmps->addPap($this->sidaPpmp, '27-06011-01', 'Laboratory Systems');
         $this->server = $ppmps->addItem($this->sidaPpmp, $this->project($sidaPap->id, 'Server', 2, '900000', 'CB', 'SIDA'));
         $ppmps->submit($this->sidaPpmp, $this->sidaStaff);

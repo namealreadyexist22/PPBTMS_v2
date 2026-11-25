@@ -35,17 +35,17 @@ class BudgetAllocationService
     }
 
     /** Centavos used by the department's offices, optionally with $candidate replacing its office's version. */
-    public function usedCents(BudgetAllocation $allocation, ?Ppmp $candidate = null, bool $proposalCounts = false): int
+    public function usedCents(BudgetAllocation $allocation, ?Ppmp $candidate = null): int
     {
-        return array_sum($this->usedByOffice($allocation, $candidate, $proposalCounts));
+        return array_sum($this->usedByOffice($allocation, $candidate));
     }
 
     /**
      * Centavos used per office of the department: [office_id => cents]. What uses the budget: the procurement
-     * projects of the counted PPMPs, and the budget lines (travel, training, ...) of the department's Budget
-     * Proposal once it is submitted ($proposalCounts: as if it were, to check it before submitting).
+     * projects of the counted PPMPs, and every budget line (travel, training, ...) of the department's Budget
+     * Proposal from the moment it is written, whatever the proposal's status, so the remaining budget is known early.
      */
-    public function usedByOffice(BudgetAllocation $allocation, ?Ppmp $candidate = null, bool $proposalCounts = false): array
+    public function usedByOffice(BudgetAllocation $allocation, ?Ppmp $candidate = null): array
     {
         $officeIds = $allocation->department->departmentOfficeIds();
         $ppmpIds = $this->countedPpmpIds($allocation->fiscal_year, $officeIds, $candidate);
@@ -59,26 +59,23 @@ class BudgetAllocationService
             $used[$office] = ($used[$office] ?? 0) + Money::toCents($item->estimated_budget);
         }
 
-        $proposal = BudgetProposal::where('department_id', $allocation->department_id)->where('fiscal_year', $allocation->fiscal_year)->first();
-        if ($proposal && ($proposalCounts || $proposal->status->holdsBudget())) {
-            $lines = BudgetLine::whereHas('pap', fn ($q) => $q->where('budget_proposal_id', $proposal->id))
-                ->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
-                ->with('pap:id,office_id')->get(['budget_pap_id', 'amount']);
-            foreach ($lines as $line) {
-                $office = $line->pap->office_id;
-                $used[$office] = ($used[$office] ?? 0) + Money::toCents($line->amount);
-            }
+        $lines = BudgetLine::whereHas('pap.proposal', fn ($q) => $q->where('department_id', $allocation->department_id)->where('fiscal_year', $allocation->fiscal_year))
+            ->whereHas('fundSource', fn ($q) => $q->where('fund_group', $allocation->fund_group))
+            ->with('pap:id,office_id')->get(['budget_pap_id', 'amount']);
+        foreach ($lines as $line) {
+            $office = $line->pap->office_id;
+            $used[$office] = ($used[$office] ?? 0) + Money::toCents($line->amount);
         }
 
         return $used;
     }
 
-    /** Block submitting a Budget Proposal whose budget lines would take the department over its allocations. */
+    /** Block submitting a Budget Proposal whose budget lines, with the PPMPs, take the department over its allocations. */
     public function assertProposalWithinBudget(BudgetProposal $proposal): void
     {
         foreach (BudgetAllocation::where('department_id', $proposal->department_id)->where('fiscal_year', $proposal->fiscal_year)->get() as $allocation) {
             $allocation->setRelation('department', $proposal->department);
-            $used = $this->usedCents($allocation, null, true);
+            $used = $this->usedCents($allocation);
             $amount = Money::toCents((string) $allocation->amount);
 
             if ($used > $amount) {

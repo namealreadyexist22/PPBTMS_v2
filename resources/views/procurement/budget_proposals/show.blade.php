@@ -48,7 +48,19 @@
         <div class="row g-3 mt-1 small">
             <div class="col-6 col-md-3"><div class="text-muted">PAPs</div><div class="fw-semibold">{{ $proposal->paps->count() }}</div></div>
             <div class="col-6 col-md-3"><div class="text-muted">Budget lines (not procured)</div><div class="fw-semibold">₱ {{ $peso($lineTotal) }}</div></div>
-            <div class="col-12 col-md-6">
+            {{-- The department's budget: allocation less its PPMPs and budget lines --}}
+            <div class="col-6 col-md-3">
+                <div class="text-muted">Department budget left</div>
+                @forelse ($budgetRows as $row)
+                    <div class="fw-semibold {{ $row['remaining'] < 0 ? 'text-danger' : 'text-success' }}" title="₱{{ $peso($row['used']) }} used of ₱{{ $peso($row['amount']) }} (PPMPs and budget lines)">
+                        ₱ {{ $peso($row['remaining']) }}@if ($row['remaining'] < 0) <span class="fw-normal">(over)</span>@endif
+                    </div>
+                    <div class="small text-muted">of ₱{{ $peso($row['amount']) }}</div>
+                @empty
+                    <div class="text-muted">No allocation set</div>
+                @endforelse
+            </div>
+            <div class="col-6 col-md-3">
                 <div class="text-muted">Submitted by (printed)</div>
                 <div class="fw-semibold">{{ $submitters->pluck('fullname')->join(', ') ?: 'Not set' }}@if (! $submitterIds && $submitters->isNotEmpty()) <span class="text-muted fw-normal">(department head)</span>@endif</div>
             </div>
@@ -291,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ----- Workflow -----
     $(document).on('click', '#btn_submit', function () {
-        Swal.fire({ title: 'Submit the Budget Proposal?', text: 'The evaluator gives the PAP codes. It can no longer be changed unless returned. Its budget lines then count against the budget.', icon: 'question', showCancelButton: true, confirmButtonText: 'Submit', reverseButtons: true })
+        Swal.fire({ title: 'Submit the Budget Proposal?', text: 'The evaluator gives the PAP codes. It can no longer be changed unless returned.', icon: 'question', showCancelButton: true, confirmButtonText: 'Submit', reverseButtons: true })
             .then((r) => { if (r.isConfirmed) send('{{ route("procurement.budget-proposals.submit", $proposal) }}'); });
     });
     $(document).on('click', '#btn_save_codes', function () { send('{{ route("procurement.budget-proposals.codes", $proposal) }}', Object.fromEntries(new FormData(document.getElementById('form_codes')))); });

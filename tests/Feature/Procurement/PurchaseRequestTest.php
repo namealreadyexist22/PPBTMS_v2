@@ -143,6 +143,82 @@ class PurchaseRequestTest extends TestCase
         $this->assertSame('2026-07-0001', $this->requests->submit($jr->fresh(), $this->staff)->request_no);
     }
 
+    public function test_requests_are_charged_to_the_fiscal_year_in_progress_only(): void
+    {
+        $draft = $this->draft();
+        $this->requests->saveLine($draft, $this->line($this->hdd, 1, '5000'));
+        $submitted = $this->draft();
+        $this->requests->saveLine($submitted, $this->line($this->ram, 1, '3000'));
+        $submitted = $this->requests->submit($submitted->fresh(), $this->staff);
+
+        // FY 2026 has ended: no new request, and a draft from December cannot be submitted
+        Carbon::setTestNow('2027-01-05 09:00:00');
+
+        try {
+            $this->draft();
+            $this->fail('A request was charged to last year\'s PPMP.');
+        } catch (ProcurementException $e) {
+            $this->assertStringContainsString('Requests can only be charged to FY 2027 PPMPs', $e->getMessage());
+        }
+
+        $this->expectExceptionMessage('Requests can only be charged to FY 2027 PPMPs');
+
+        try {
+            $this->requests->submit($draft->fresh(), $this->staff);
+        } finally {
+            // A request already submitted last year can still be revised and resubmitted
+            $revision = $this->requests->revise($this->returnedFor($submitted), $this->staff);
+            $this->assertSame(RequestStatus::Submitted, $this->requests->submit($revision->fresh(), $this->staff)->status);
+        }
+    }
+
+    public function test_next_years_epa_projects_open_once_its_app_is_approved(): void
+    {
+        $next = $this->ppmps->create($this->section, 2027, $this->staff);
+        $pap = $this->ppmps->addPap($next, '27-05012-51', 'Systems Development and Maintenance');
+        $epa = $this->ppmps->addItem($next, ['is_epa' => true] + $this->project($pap->id, 'Laptop', 2, '60000'));
+        $regular = $this->ppmps->addItem($next, $this->project($pap->id, 'Printer Ink', 10, '500'));
+        $this->ppmps->submit($next, $this->staff);
+        $next = $this->ppmps->approve($next->fresh(), $this->head);
+        $this->assertTrue($epa->fresh()->is_epa);
+
+        // No approved FY 2027 APP yet: closed, and not offered when starting a request
+        $this->assertNull($this->requests->yearAccess($next));
+        $this->actingAs($this->staff)->get(route('procurement.requests.entry'))->assertOk()
+            ->assertDontSee('27-05012-51');
+
+        try {
+            $this->requests->create(RequestKind::Pr, $next->paps()->first(), $this->staff, $this->signed());
+            $this->fail('A FY 2027 request was started before its APP was approved.');
+        } catch (ProcurementException $e) {
+            $this->assertStringContainsString('once the FY 2027', $e->getMessage());
+        }
+
+        \App\Models\Procurement\AnnualProcurementPlan::create(['fiscal_year' => 2027, 'region' => $next->region, 'type' => 'indicative', 'status' => 'approved', 'approved_at' => now()]);
+        $this->assertSame(PurchaseRequestService::YEAR_EPA, $this->requests->yearAccess($next));
+        $this->actingAs($this->staff)->get(route('procurement.requests.entry'))->assertOk()
+            ->assertSee('EPA projects only')->assertSee('1 EPA project');
+
+        $pr = $this->requests->create(RequestKind::Pr, $next->paps()->first(), $this->staff, $this->signed());
+        $this->assertSame(['Laptop'], $this->requests->availableLines($pr)->pluck('description')->all());
+
+        try {
+            $this->requests->saveLine($pr, $this->line($regular, 1, '500'));
+            $this->fail('A non-EPA project went on a FY 2027 request.');
+        } catch (ProcurementException $e) {
+            $this->assertStringContainsString('is not an Early Procurement Activity', $e->getMessage());
+        }
+
+        $this->requests->saveLine($pr, $this->line($epa, 2, '60000'));
+        $this->assertSame(RequestStatus::Submitted, $this->requests->submit($pr->fresh(), $this->staff)->status);
+
+        // Once FY 2027 starts, all of its projects are open
+        Carbon::setTestNow('2027-01-05 09:00:00');
+        $this->assertSame(PurchaseRequestService::YEAR_OPEN, $this->requests->yearAccess($next));
+        $open = $this->requests->create(RequestKind::Pr, $next->paps()->first(), $this->staff, $this->signed());
+        $this->assertCount(2, $this->requests->availableLines($open));
+    }
+
     public function test_partial_requests_cannot_go_over_the_ppmp_project(): void
     {
         $first = $this->draft();

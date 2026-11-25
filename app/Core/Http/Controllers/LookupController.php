@@ -25,14 +25,14 @@ class LookupController extends Controller
 {
     /** type => [model, label, tables (and columns) that use it] */
     protected const TYPES = [
-        'fund-sources'      => [FundSource::class, 'Fund Sources', ['ppmp_items' => 'fund_source_id', 'app_items' => 'fund_source_id']],
+        'fund-sources'      => [FundSource::class, 'Fund Sources', ['ppmp_items' => 'fund_source_id', 'app_items' => 'fund_source_id', 'budget_lines' => 'fund_source_id']],
         'procurement-modes' => [ProcurementMode::class, 'Modes of Procurement', ['ppmp_items' => 'procurement_mode_id', 'app_items' => 'procurement_mode_id']],
         'units'             => [Unit::class, 'Units', ['ppmp_items' => 'unit_id', 'items' => 'unit_id']],
         'item-categories'   => [ItemCategory::class, 'Item Categories', ['items' => 'item_category_id']],
         // MOOE objects of expenditure: the columns of the COB's Details of MOOE (Form B), in their order
-        'expense-classes'   => [ExpenseClass::class, 'Expense Classes', ['ppmp_items' => 'expense_class_id', 'ppmp_budget_lines' => 'expense_class_id', 'item_categories' => 'expense_class_id']],
+        'expense-classes'   => [ExpenseClass::class, 'Expense Classes', ['ppmp_items' => 'expense_class_id', 'budget_lines' => 'expense_class_id', 'item_categories' => 'expense_class_id']],
         // Where a PAP's budget is spent, to break it down on the COB
-        'locations'         => [Location::class, 'Locations', ['ppmp_items' => 'location_id', 'ppmp_budget_lines' => 'location_id']],
+        'locations'         => [Location::class, 'Locations', ['ppmp_items' => 'location_id', 'budget_lines' => 'location_id']],
         // The checklist of each bidder's documents in a competitive bidding
         'bid-documents'     => [BidDocument::class, 'Bid Documents', []],
     ];

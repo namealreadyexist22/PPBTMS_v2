@@ -157,7 +157,7 @@ class BudgetProposalService
 
         return DB::transaction(function () use ($proposal, $user) {
             $proposal->update(['status' => BudgetProposalStatus::Submitted, 'submitted_at' => now(), 'submitted_by' => $user->id]);
-            // Its budget lines now hold budget: within the department's allocations
+            // Still within the department's allocations with the PPMPs submitted since its lines were written
             app(BudgetAllocationService::class)->assertProposalWithinBudget($proposal->fresh());
 
             return $proposal;
@@ -170,7 +170,8 @@ class BudgetProposalService
         $this->assertStatus($proposal, [BudgetProposalStatus::Submitted]);
 
         $codes = collect($codes)->map(fn ($c) => trim((string) $c) === '' ? null : trim((string) $c));
-        $taken = $codes->filter()->duplicates();
+        // Against the codes the other PAPs keep too, not just the ones sent (else the unique index fails with a 500)
+        $taken = $proposal->paps()->pluck('code', 'id')->replace($codes)->filter()->duplicates();
         if ($taken->isNotEmpty()) {
             throw new ProcurementException('PAP code ' . $taken->first() . ' is given to more than one PAP.');
         }

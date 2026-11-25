@@ -41,7 +41,6 @@
                     <th class="ps-4">Department</th>
                     <th class="text-end" title="Personnel Services (salaries): printed on the COB; PPMPs are not checked against it">Personnel Services</th>
                     <th class="text-end" title="CO and MOOE: what the PPMPs use">Allocated</th><th class="text-end">Used</th><th class="text-end">Remaining</th>
-                    <th style="width: 140px;"></th>
                     <th class="pe-4"></th>
                 </tr>
             </thead>
@@ -64,17 +63,11 @@
                             @endif
                         </td>
                         @if ($a)
-                            @php $pct = $row['amount'] > 0 ? min(100, round($row['used'] / $row['amount'] * 100)) : ($row['used'] > 0 ? 100 : 0); @endphp
                             <td class="text-end">{{ $peso($row['amount']) }}</td>
                             <td class="text-end">{{ $peso($row['used']) }}</td>
                             <td class="text-end fw-semibold {{ $row['remaining'] < 0 ? 'text-danger' : 'text-success' }}">{{ $peso($row['remaining']) }}</td>
-                            <td>
-                                <div class="progress" style="height: 6px;" title="{{ $pct }}% used">
-                                    <div class="progress-bar {{ $row['remaining'] < 0 ? 'bg-danger' : ($pct >= 90 ? 'bg-warning' : 'bg-success') }}" style="width: {{ $pct }}%"></div>
-                                </div>
-                            </td>
                         @else
-                            <td class="text-end text-muted">Not set</td><td></td><td></td><td></td>
+                            <td class="text-end text-muted">Not set</td><td></td><td></td>
                         @endif
                         <td class="pe-4 text-end text-nowrap">
                             @if ($a)
@@ -87,7 +80,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted py-5"><i class="fas fa-building fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} departments yet. Add them in Settings → Organization.</td></tr>
+                    <tr><td colspan="6" class="text-center text-muted py-5"><i class="fas fa-building fa-2x mb-2 d-block opacity-50"></i>No {{ $fund->label() }} departments yet. Add them in Settings → Organization.</td></tr>
                 @endforelse
             </tbody>
             @if ($rows->isNotEmpty())
@@ -98,13 +91,36 @@
                         <td class="text-end">{{ $peso($totals['amount']) }}</td>
                         <td class="text-end">{{ $peso($totals['used']) }}</td>
                         <td class="text-end">{{ $peso($totals['amount'] - $totals['used']) }}</td>
-                        <td colspan="2"></td>
+                        <td></td>
                     </tr>
                 </tfoot>
             @endif
         </table>
     </div>
-    <div class="small text-muted px-4 py-2">Used = latest submitted or approved PPMPs of the department's offices (drafts do not hold budget).</div>
+    <div class="small text-muted px-4 py-2">Used = latest submitted or approved PPMPs of the department's offices (drafts do not hold budget), and the Budget Proposal's budget lines.</div>
+</div>
+
+{{-- When this year's PPMPs may be amended: offices can only start and submit amendments inside an open period --}}
+<div class="card border-0 shadow-sm mt-3" style="border-radius: 12px; overflow: hidden;">
+    <div class="card-header bg-white py-3 px-4 d-flex align-items-center gap-2" style="border-bottom: 1px solid #f1f5f9;">
+        <h6 class="m-0 fw-bold"><i class="fas fa-code-branch text-muted me-2"></i>PPMP Amendment Periods — FY {{ $fiscalYear }}</h6>
+        <button class="btn btn-sm btn-outline-success ms-auto" id="btn_add_period"><i class="fas fa-plus me-1"></i> Open amendment period</button>
+    </div>
+    <table class="table table-sm align-middle small mb-0">
+        <tbody>
+            @forelse ($amendmentPeriods as $period)
+                @php $isOpen = today()->between($period->opens_on, $period->closes_on); @endphp
+                <tr>
+                    <td class="ps-4 fw-semibold">{{ $period->name }}</td>
+                    <td>{{ $period->range() }}</td>
+                    <td><span class="badge {{ $isOpen ? 'bg-success' : ($period->closes_on->isPast() ? 'bg-secondary' : 'bg-info text-dark') }}">{{ $isOpen ? 'Open' : ($period->closes_on->isPast() ? 'Closed' : 'Upcoming') }}</span></td>
+                    <td class="pe-4 text-end"><button class="btn btn-sm btn-link p-0 text-danger btn-delete-period" data-id="{{ $period->id }}" data-name="{{ $period->name }}" title="Remove"><i class="fas fa-trash-alt"></i></button></td>
+                </tr>
+            @empty
+                <tr><td class="ps-4 text-muted py-3">None yet: approved FY {{ $fiscalYear }} PPMPs cannot be amended until a period is opened.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
 </div>
 
 {{-- History modals --}}
@@ -269,6 +285,33 @@ document.addEventListener('DOMContentLoaded', function () {
         $('#budget_department').text(data.name);
         $('#budget_reason').toggle(!!data.existing);
         modal().show();
+    });
+
+    // PPMP amendment periods of the year shown
+    $(document).on('click', '#btn_add_period', function () {
+        const fy = $('#budget_fy').val();
+        Swal.fire({
+            title: 'Open an amendment period — FY ' + fy,
+            html: '<input id="ap_name" class="swal2-input" placeholder="e.g. 1st amendment">'
+                + '<label class="d-block small text-muted mt-2">Opens</label><input id="ap_opens" type="date" class="swal2-input mt-1">'
+                + '<label class="d-block small text-muted mt-2">Closes (last day to amend)</label><input id="ap_closes" type="date" class="swal2-input mt-1">',
+            showCancelButton: true, confirmButtonText: 'Save', focusConfirm: false,
+            preConfirm: () => {
+                const data = { fiscal_year: fy, name: $('#ap_name').val(), opens_on: $('#ap_opens').val(), closes_on: $('#ap_closes').val() };
+                return $.post('{{ route("procurement.budget.amendment-periods.store") }}', Object.assign({ _token: '{{ csrf_token() }}' }, data))
+                    .catch((xhr) => { const res = xhr.responseJSON || {}; Swal.showValidationMessage(res.errors ? Object.values(res.errors)[0][0] : (res.message || 'Could not save.')); });
+            },
+        }).then((r) => { if (r.isConfirmed && r.value) { toastr.success(r.value.message, 'Saved'); loadView(window.location.href, false); } });
+    });
+    $(document).on('click', '.btn-delete-period', function () {
+        const data = $(this).data();
+        Swal.fire({ title: 'Remove "' + data.name + '"?', text: 'Amendments already started stay; new ones need an open period.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Remove', reverseButtons: true })
+            .then((r) => {
+                if (!r.isConfirmed) return;
+                $.ajax({ url: '{{ route("procurement.budget.amendment-periods.destroy") }}', type: 'POST', data: { _token: '{{ csrf_token() }}', _method: 'DELETE', id: data.id } })
+                    .done((res) => { toastr.success(res.message); loadView(window.location.href, false); })
+                    .fail((xhr) => toastr.error(xhr.responseJSON?.message || 'Could not remove it.'));
+            });
     });
 
     // Personnel Services: its own setting

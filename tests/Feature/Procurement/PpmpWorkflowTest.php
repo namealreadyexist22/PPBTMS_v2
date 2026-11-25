@@ -386,6 +386,7 @@ class PpmpWorkflowTest extends TestCase
 
         // Through the page: Amend -> "Final PPMP"
         $this->staff->givePermissionTo(\Spatie\Permission\Models\Permission::findOrCreate('manage ppmp'));
+        \App\Models\Procurement\PpmpAmendmentPeriod::create(['fiscal_year' => 2027, 'name' => 'GAA', 'opens_on' => today(), 'closes_on' => today()]);
         $this->actingAs($this->staff)->postJson(route('procurement.ppmp.amend', $ppmp), ['type' => 'final', 'remarks' => 'GAA approved'])->assertOk();
 
         $final = Ppmp::where('amended_from_id', $ppmp->id)->sole();

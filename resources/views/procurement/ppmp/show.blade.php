@@ -50,7 +50,9 @@
                     <i class="fas fa-history me-1"></i> History <span class="badge bg-secondary ms-1">{{ $ppmp->signatories->count() }}</span>
                 </button>
                 @if ($canEdit)
-                    <button class="btn btn-sm btn-primary" id="btn_submit" @disabled($budgetOver) title="{{ $budgetOver ? 'Over budget allocation' : '' }}"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
+                    @php $amendClosed = $ppmp->amended_from_id && ! $amendmentPeriod; @endphp
+                    <button class="btn btn-sm btn-primary" id="btn_submit" @disabled($budgetOver || $amendClosed)
+                            title="{{ $budgetOver ? 'Over budget allocation' : ($amendClosed ? 'The amendment period is closed' : ($ppmp->amended_from_id ? 'Submit by ' . $amendmentPeriod->closes_on->format('M d, Y') . ' (' . $amendmentPeriod->name . ')' : '')) }}"><i class="fas fa-paper-plane me-1"></i> Submit for Approval</button>
                 @endif
                 @if ($canReturn)
                     @if (auth()->user()->canAccessPermission('menu.division-ppmp'))
@@ -58,8 +60,11 @@
                     @endif
                     <button class="btn btn-sm btn-warning" id="btn_return"><i class="fas fa-undo me-1"></i> Return</button>
                 @endif
-                @if ($canAmend)
-                    <button class="btn btn-sm btn-outline-primary" id="btn_amend"><i class="fas fa-code-branch me-1"></i> Amend</button>
+                @if ($canAmend && $amendmentPeriod)
+                    <button class="btn btn-sm btn-outline-primary" id="btn_amend" title="{{ $amendmentPeriod->name }}: {{ $amendmentPeriod->range() }}"><i class="fas fa-code-branch me-1"></i> Amend</button>
+                @elseif ($canAmend)
+                    {{-- Approved, but no amendment period is open now --}}
+                    <span class="d-inline-block" tabindex="0" title="Amendments are closed. The budget officer opens an amendment period."><button class="btn btn-sm btn-outline-secondary" disabled><i class="fas fa-lock me-1"></i> Amend</button></span>
                 @endif
                 @if ($canDelete)
                     <button class="btn btn-sm btn-outline-danger" id="btn_delete_ppmp"><i class="fas fa-trash-alt me-1"></i> Delete</button>

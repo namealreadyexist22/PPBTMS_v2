@@ -153,6 +153,8 @@ use Illuminate\Support\Facades\Route;
             Route::get('budget', [BudgetAllocationController::class, 'index'])->name('budget.index');
             Route::post('budget/store', [BudgetAllocationController::class, 'store'])->name('budget.store');
             Route::post('budget/personnel-services', [BudgetAllocationController::class, 'storePersonnelServices'])->name('budget.personnel-services');
+            Route::post('budget/amendment-periods', [BudgetAllocationController::class, 'storeAmendmentPeriod'])->name('budget.amendment-periods.store');
+            Route::delete('budget/amendment-periods', [BudgetAllocationController::class, 'destroyAmendmentPeriod'])->name('budget.amendment-periods.destroy');
             // Corporate Operating Budget printouts
             Route::get('budget/cob/breakdown', [\App\Http\Controllers\Procurement\CobReportController::class, 'breakdown'])->name('budget.cob.breakdown');
             Route::get('budget/cob/organization', [\App\Http\Controllers\Procurement\CobReportController::class, 'organization'])->name('budget.cob.organization');

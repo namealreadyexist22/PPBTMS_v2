@@ -101,33 +101,31 @@ class CobReportTest extends TestCase
         return app(\App\Services\Procurement\BudgetProposalService::class);
     }
 
-    public function test_budget_lines_count_once_the_proposal_is_submitted_and_the_evaluator_codes_it(): void
+    public function test_budget_lines_count_from_the_moment_they_are_written(): void
     {
         $this->budget->save($this->ppspd, 2027, FundGroup::Regular, '100000', User::factory()->create());
         [$ppmp, $pap, $staff] = $this->draft($this->research);
         $this->project($ppmp, $pap, ['estimated_budget' => '60000']);
-        $this->line($ppmp, $pap, 'TRV', '50000');
+        $this->line($ppmp, $pap, 'TRV', '50000');   // the proposal is still a draft
         $proposal = $pap->budgetPap->proposal;
         $this->assertSame($this->ppspd->id, $proposal->department_id);
         $pap->budgetPap->update(['code' => null]);   // no code until the evaluator gives it
         $pap->refresh();
 
-        // A draft proposal's lines hold no budget: the PPMP (60,000) submits
-        $this->assertSame(6000000, $this->budget->checkPpmp($ppmp->fresh())->first()['mine']);
-        $this->ppmps->submit($ppmp->fresh(), $staff);
+        // The draft proposal's 50,000 already counts: the PPMP's 60,000 does not fit (110,000 > 100,000)
+        $rows = $this->budget->checkPpmp($ppmp->fresh());
+        $this->assertSame([6000000, 5000000], [$rows->first()['mine'], $rows->first()['others']]);
+        $this->refused(fn () => $this->ppmps->submit($ppmp->fresh(), $staff), 'over by ₱10,000.00');
 
-        // Submitting the proposal: 60,000 procured + 50,000 travel > 100,000
-        try {
-            $this->proposals()->submit($proposal, $staff);
-            $this->fail('Expected the budget check to refuse.');
-        } catch (ProcurementException $e) {
-            $this->assertStringContainsString('over by ₱10,000.00', $e->getMessage());
-        }
-        $this->assertSame(\App\Enums\BudgetProposalStatus::Draft, $proposal->fresh()->status);
-
+        // Lowered to 40,000: the PPMP submits, and so does the proposal
         $pap->budgetPap->budgetLines()->sole()->update(['amount' => '40000']);
+        $this->ppmps->submit($ppmp->fresh(), $staff);
         $this->proposals()->submit($proposal->fresh(), $staff);
         $this->assertSame(10000000, $this->budget->usedCents(\App\Models\Procurement\BudgetAllocation::sole()));
+
+        // The proposal page shows what is left
+        $staff->givePermissionTo(Permission::findOrCreate('manage budget proposals'));
+        $this->actingAs($staff)->get(route('procurement.budget-proposals.show', $proposal))->assertOk()->assertSee('Department budget left')->assertSee('₱ 0.00');
 
         // Locked once submitted; a PAP used by a PPMP cannot be removed
         $this->refused(fn () => $this->line($ppmp, $pap, 'TRN', '1000'), 'submitted');

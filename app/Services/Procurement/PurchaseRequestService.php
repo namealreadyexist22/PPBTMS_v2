@@ -2,10 +2,12 @@
 
 namespace App\Services\Procurement;
 
+use App\Enums\AppStatus;
 use App\Enums\PpmpStatus;
 use App\Enums\RequestKind;
 use App\Enums\RequestStatus;
 use App\Exceptions\ProcurementException;
+use App\Models\Procurement\AnnualProcurementPlan;
 use App\Models\Procurement\Ppmp;
 use App\Models\Procurement\PpmpItem;
 use App\Models\Procurement\PpmpPap;
@@ -41,6 +43,10 @@ class PurchaseRequestService
 
         if (! $user->hasRole('Super Admin') && ! in_array((int) $ppmp->office_id, $user->prOfficeIds(), true)) {
             throw new ProcurementException("You cannot prepare requests for {$ppmp->office->shortName()}.");
+        }
+
+        if ($this->assertYearOpen($ppmp) === self::YEAR_EPA && ! $pap->items()->where('is_epa', true)->exists()) {
+            throw new ProcurementException("{$pap->label()} has no Early Procurement Activity (EPA) project. Before FY {$ppmp->fiscal_year} starts, only EPA projects can be requested.");
         }
 
         $request = PurchaseRequest::create($this->header($kind, $data) + [
@@ -81,6 +87,56 @@ class PurchaseRequestService
 
     public const SIGNATORY_FIELDS = ['requested_by_name', 'requested_by_designation', 'approved_by_name', 'approved_by_designation'];
 
+    /** A PPMP of this year: any of its projects may be requested. */
+    public const YEAR_OPEN = 'open';
+
+    /** A PPMP of next year: only its EPA projects, once an APP of its region for that year is approved (RA 12009 Sec. 12). */
+    public const YEAR_EPA = 'epa';
+
+    /**
+     * Whether new requests may be charged to a PPMP of its fiscal year: YEAR_OPEN, YEAR_EPA,
+     * or null (an earlier year, a later one, or next year before its APP is approved).
+     */
+    public function yearAccess(Ppmp $ppmp): ?string
+    {
+        $year = (int) now()->year;
+
+        return match (true) {
+            (int) $ppmp->fiscal_year === $year => self::YEAR_OPEN,
+            (int) $ppmp->fiscal_year === $year + 1 && $this->hasApprovedApp($ppmp) => self::YEAR_EPA,
+            default => null,
+        };
+    }
+
+    /** A request of next fiscal year (an Early Procurement Activity): it may hold EPA projects only. */
+    public function isEarly(PurchaseRequest $request): bool
+    {
+        return (int) $request->fiscal_year > (int) now()->year;
+    }
+
+    /** yearAccess(), or why the PPMP's year takes no new requests. */
+    protected function assertYearOpen(Ppmp $ppmp): string
+    {
+        if ($access = $this->yearAccess($ppmp)) {
+            return $access;
+        }
+
+        $year = (int) now()->year;
+
+        if ((int) $ppmp->fiscal_year === $year + 1) {
+            throw new ProcurementException("FY {$ppmp->fiscal_year} requests open for Early Procurement Activity (EPA) projects once the FY {$ppmp->fiscal_year} {$ppmp->region?->label()} APP is approved.");
+        }
+
+        throw new ProcurementException("PPMP {$ppmp->ppmp_no} is for FY {$ppmp->fiscal_year}. Requests can only be charged to FY {$year} PPMPs, or to FY " . ($year + 1) . ' EPA projects.');
+    }
+
+    /** An approved APP (Indicative or Final) of the PPMP's year and region. */
+    protected function hasApprovedApp(Ppmp $ppmp): bool
+    {
+        return AnnualProcurementPlan::where('fiscal_year', $ppmp->fiscal_year)->where('region', $ppmp->region)
+            ->where('status', AppStatus::Approved)->exists();
+    }
+
     /**
      * PPMP projects of the request's PAP in the office's currently approved PPMP (an amendment
      * may have been approved since the request was started), with what each has left to charge:
@@ -89,7 +145,8 @@ class PurchaseRequestService
      */
     public function availableLines(PurchaseRequest $request, ?PurchaseRequestItem $except = null): Collection
     {
-        $lines = $this->currentPap($request)->items()->with(['unit', 'item', 'procurementMode'])->get();
+        $lines = $this->currentPap($request)->items()->with(['unit', 'item', 'procurementMode'])
+            ->when($this->isEarly($request), fn ($q) => $q->where('is_epa', true))->get();
 
         return $this->withRemaining($request, $lines, $except);
     }
@@ -127,6 +184,10 @@ class PurchaseRequestService
 
         if (! $project) {
             throw new ProcurementException("Choose a procurement project under {$request->pap->label()}.");
+        }
+
+        if ($this->isEarly($request) && ! $project->is_epa) {
+            throw new ProcurementException("\"{$project->description}\" is not an Early Procurement Activity (EPA) project. Before FY {$request->fiscal_year} starts, only EPA projects can be requested.");
         }
 
         // Catalog (standard) items keep the PPMP unit cost and the TWG specifications the project took
@@ -216,6 +277,16 @@ class PurchaseRequestService
             }
 
             $this->assertReady($request);
+
+            // A new request (not a revision of one already submitted) is checked against the year again:
+            // a draft started last December cannot be submitted in January
+            if (! $request->revised_from_id) {
+                $this->assertYearOpen($request->ppmp);
+            }
+
+            if ($this->isEarly($request) && $request->items()->whereHas('ppmpItem', fn ($q) => $q->where('is_epa', false))->exists()) {
+                throw new ProcurementException("Before FY {$request->fiscal_year} starts, only Early Procurement Activity (EPA) projects can be requested. Remove the other items first.");
+            }
 
             if ($request->revised_from_id) {
                 $previous = PurchaseRequest::whereKey($request->revised_from_id)->lockForUpdate()->firstOrFail();

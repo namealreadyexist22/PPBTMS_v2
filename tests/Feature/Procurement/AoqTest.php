@@ -71,7 +71,7 @@ class AoqTest extends TestCase
         $this->bac = User::factory()->create(['is_activated' => 1, 'fname' => 'Ana', 'lname' => 'Santos', 'designation' => 'Head, BAC Secretariat']);
         $this->bac->givePermissionTo(['manage rfq', 'manage aoq']);
 
-        $this->ppmp = $this->ppmps->create($section, 2027, $this->staff);
+        $this->ppmp = $this->ppmps->create($section, 2026, $this->staff);
         $pap = $this->ppmps->addPap($this->ppmp, '27-05012-01', 'ICT Infrastructure');
         $this->hdd = $this->ppmps->addItem($this->ppmp, $this->project($pap->id, 'Hard Drive (4 TB)', 8, '5000', 'SVP'));
         $this->ram = $this->ppmps->addItem($this->ppmp, $this->project($pap->id, 'RAM 16 GB', 10, '3000', 'SVP'));

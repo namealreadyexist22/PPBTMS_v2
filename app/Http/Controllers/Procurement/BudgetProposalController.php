@@ -119,6 +119,7 @@ class BudgetProposalController extends Controller
             'submitters'   => app(CobSignatoryService::class)->submitters($department),
             'users'        => User::where('is_activated', true)->orderBy('fname')->orderBy('lname')->get(['id', 'fullname', 'designation']),
             'lineTotal'    => $proposal->paps->flatMap->budgetLines->sum(fn ($l) => Money::toCents($l->amount)),
+            'budgetRows'   => $this->budgetRows($proposal),
         ]);
     }
 
@@ -248,6 +249,8 @@ class BudgetProposalController extends Controller
             'locations'      => $activeOr(Location::class, $line?->location_id)->orderBy('name')->get(),
             'fundSources'    => $fundSources,
             'defaultFundId'  => $line?->fund_source_id ?? $fundSources->first()?->id,
+            // Left before this line (an edited line's own amount added back); null: no allocation set
+            'budgetLeft'     => ($row = $this->budgetRows($proposal)->first()) ? $row['remaining'] + ($line ? Money::toCents($line->amount) : 0) : null,
         ]);
     }
 
@@ -361,6 +364,20 @@ class BudgetProposalController extends Controller
     }
 
     // ----- Helpers -----
+
+    /** The department's allocations for the year: [['fund', 'amount', 'used', 'remaining'], ...] in centavos (PPMPs and budget lines). */
+    protected function budgetRows(BudgetProposal $proposal): \Illuminate\Support\Collection
+    {
+        $budget = app(\App\Services\Procurement\BudgetAllocationService::class);
+
+        return \App\Models\Procurement\BudgetAllocation::where('department_id', $proposal->department_id)->where('fiscal_year', $proposal->fiscal_year)->get()
+            ->map(function ($allocation) use ($budget, $proposal) {
+                $amount = Money::toCents((string) $allocation->setRelation('department', $proposal->department)->amount);
+                $used = $budget->usedCents($allocation);
+
+                return ['fund' => $allocation->fund_group, 'amount' => $amount, 'used' => $used, 'remaining' => $amount - $used];
+            });
+    }
 
     protected function papOf(BudgetProposal $proposal, int $id): BudgetPap
     {

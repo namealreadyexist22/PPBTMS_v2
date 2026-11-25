@@ -94,6 +94,8 @@ class PpmpController extends Controller
             // Approval happens on the Division PPMP page; the head can return a section's PPMP here
             'canReturn'  => $ppmp->isApprovableBy($user),
             'canAmend'   => $ppmp->status === PpmpStatus::Approved && $ppmp->isEditableBy($user) && ! $hasOpenAmendment,
+            // Amend only while the budget officer has an amendment period open
+            'amendmentPeriod' => \App\Models\Procurement\PpmpAmendmentPeriod::openFor($ppmp->fiscal_year),
             'canDelete'  => $ppmp->status === PpmpStatus::Draft && $ppmp->isEditableBy($user)
                             && $user->canAccessPermission('menu.ppmp-destroy'),
             'versions'   => Ppmp::where('office_id', $ppmp->office_id)
@@ -431,10 +433,21 @@ class PpmpController extends Controller
         $this->authorizeEdit($request, $ppmp);
 
         return $this->attempt(function () use ($request, $ppmp) {
+            if ($ppmp->amended_from_id) {
+                $this->assertAmendmentOpen($ppmp);
+            }
             $this->ppmpService->submit($ppmp, $request->user(), $request->input('remarks'));
 
             return "PPMP {$ppmp->ppmp_no} submitted for approval.";
         });
+    }
+
+    /** Amendments are started and submitted only while the budget officer has an amendment period open. */
+    protected function assertAmendmentOpen(Ppmp $ppmp): void
+    {
+        if (! \App\Models\Procurement\PpmpAmendmentPeriod::openFor($ppmp->fiscal_year)) {
+            throw new ProcurementException("FY {$ppmp->fiscal_year} PPMPs cannot be amended now: no amendment period is open. The budget officer sets it.");
+        }
     }
 
     public function returnToOffice(Request $request, Ppmp $ppmp)
@@ -456,6 +469,7 @@ class PpmpController extends Controller
         $this->authorizeEdit($request, $ppmp);
 
         try {
+            $this->assertAmendmentOpen($ppmp);
             // An approved Indicative PPMP is amended into the Final one once the GAA is approved
             $copy = $this->ppmpService->amend($ppmp, $request->user(), PpmpType::tryFrom((string) $request->input('type')), $request->input('remarks'));
 

@@ -44,6 +44,14 @@ class LookupManagementTest extends TestCase
         $this->get(route('core.lookups.index', ['type' => 'nope']))->assertNotFound();
     }
 
+    public function test_every_lookup_page_opens(): void
+    {
+        // Each type counts its uses in other tables: a renamed or dropped table breaks its page
+        foreach (['fund-sources', 'procurement-modes', 'units', 'item-categories', 'expense-classes', 'locations', 'bid-documents'] as $type) {
+            $this->get(route('core.lookups.index', ['type' => $type]))->assertOk();
+        }
+    }
+
     public function test_used_entries_cannot_be_deleted(): void
     {
         $cob = FundSource::where('code', 'COB')->sole();

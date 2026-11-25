@@ -53,16 +53,22 @@ class PurchaseRequestController extends Controller
         $user = $request->user();
         $officeIds = $user->hasRole('Super Admin') ? null : $user->prOfficeIds();
 
-        $ppmps = Ppmp::with(['office', 'paps' => fn ($q) => $q->withCount('items')])
+        // This year's approved PPMPs, and next year's once its APP is approved (EPA projects only)
+        $ppmps = Ppmp::with(['office', 'paps' => fn ($q) => $q->withCount(['items', 'items as epa_items_count' => fn ($i) => $i->where('is_epa', true)])])
             ->where('status', PpmpStatus::Approved)
+            ->whereIn('fiscal_year', [now()->year, now()->year + 1])
             ->when($officeIds !== null, fn ($q) => $q->whereIn('office_id', $officeIds))
-            ->orderByDesc('fiscal_year')->orderBy('ppmp_no')
-            ->get();
+            ->orderBy('fiscal_year')->orderBy('ppmp_no')
+            ->get()
+            ->each(fn (Ppmp $ppmp) => $ppmp->setAttribute('year_access', $this->service->yearAccess($ppmp)))
+            ->filter(fn (Ppmp $ppmp) => $ppmp->year_access !== null)
+            ->values();
 
         return view('procurement.requests.extras.request_entry', [
             'modalName' => 'REQUEST_ENTRY_MODAL',
             'kind'      => RequestKind::tryFrom((string) $request->query('kind')) ?? RequestKind::Pr,
             'ppmps'     => $ppmps,
+            'year'      => (int) now()->year,
             'jrTypes'   => config('procurement.jr_types'),
         ]);
     }

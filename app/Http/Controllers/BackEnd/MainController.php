@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\BackEnd;
 
 use App\Http\Controllers\Controller;
+use App\Services\BackEnd\DashboardService;
 use App\Services\BackEnd\MainService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;     // <-- Fixes all auth/logout errors cleanly
@@ -18,8 +19,12 @@ class MainController extends Controller
         
     }
 
-    public function main_home(){
-        return view('BackEnd.content.main.home');
+    public function main_home(Request $request, DashboardService $dashboard)
+    {
+        $years = $dashboard->years();
+        $year = in_array((int) $request->query('year'), $years, true) ? (int) $request->query('year') : (int) now()->year;
+
+        return view('BackEnd.content.main.home', $dashboard->build($request->user(), $year));
     }
 
     public function main_profile(Request $request)

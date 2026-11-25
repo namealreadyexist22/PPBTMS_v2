@@ -16,7 +16,8 @@
                     @if ($ppmps->isEmpty())
                         <div class="alert alert-warning small mb-0">
                             <i class="fas fa-info-circle me-1"></i>
-                            Your office has no approved PPMP yet. A request can only be charged to a project in an approved PPMP.
+                            Your office has no approved FY {{ $year }} PPMP. A request can only be charged to a project in an approved PPMP of this fiscal year
+                            (or, once the FY {{ $year + 1 }} APP is approved, to an Early Procurement Activity project of FY {{ $year + 1 }}).
                         </div>
                     @else
                         <div class="mb-3">
@@ -34,14 +35,20 @@
                             <select name="ppmp_pap_id" class="form-select form-select-sm" required>
                                 <option value="">Choose…</option>
                                 @foreach ($ppmps as $ppmp)
-                                    <optgroup label="FY {{ $ppmp->fiscal_year }} · {{ $ppmp->ppmp_no }} · {{ $ppmp->office->shortName() }}">
+                                    @php $epaOnly = $ppmp->year_access === \App\Services\Procurement\PurchaseRequestService::YEAR_EPA; @endphp
+                                    <optgroup label="FY {{ $ppmp->fiscal_year }} · {{ $ppmp->ppmp_no }} · {{ $ppmp->office->shortName() }}{{ $epaOnly ? ' · EPA projects only' : '' }}">
                                         @foreach ($ppmp->paps as $pap)
-                                            <option value="{{ $pap->id }}" @disabled(! $pap->items_count)>{{ $pap->label() }} ({{ $pap->items_count }} {{ \Illuminate\Support\Str::plural('project', $pap->items_count) }})</option>
+                                            @php $count = $epaOnly ? $pap->epa_items_count : $pap->items_count; @endphp
+                                            <option value="{{ $pap->id }}" @disabled(! $count)>{{ $pap->label() }} ({{ $count }} {{ $epaOnly ? 'EPA ' : '' }}{{ \Illuminate\Support\Str::plural('project', $count) }})</option>
                                         @endforeach
                                     </optgroup>
                                 @endforeach
                             </select>
-                            <div class="form-text">One request charges one PAP. Its items can come from several projects under it.</div>
+                            <div class="form-text">One request charges one PAP. Its items can come from several projects under it.
+                                @if ($ppmps->contains('year_access', \App\Services\Procurement\PurchaseRequestService::YEAR_EPA))
+                                    Before FY {{ $year + 1 }} starts, its requests can hold Early Procurement Activity (EPA) projects only.
+                                @endif
+                            </div>
                         </div>
 
                         <div class="mb-3" id="jr_type_group" @if ($kind !== \App\Enums\RequestKind::Jr) style="display: none" @endif>

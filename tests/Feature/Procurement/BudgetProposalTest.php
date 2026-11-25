@@ -117,6 +117,8 @@ class BudgetProposalTest extends TestCase
             ->assertSee('value="27-05011-01"', false)->assertSee('value="27-05012-01"', false)->assertSee('value="27-05012-02"', false);
         $this->postJson(route('procurement.budget-proposals.codes', $proposal), ['codes' => [$ict->id => '27-05012-01', $systems->id => '27-05012-01']])->assertStatus(422);
         $this->postJson(route('procurement.budget-proposals.codes', $proposal), ['codes' => [$ict->id => '27-05012-02', $systems->id => '27-05012-01']])->assertOk();
+        // A code another PAP already has, sent alone: refused with a message, not a database error
+        $this->postJson(route('procurement.budget-proposals.codes', $proposal), ['codes' => [$plans->id => '27-05012-01']])->assertStatus(422)->assertJsonFragment(['message' => 'PAP code 27-05012-01 is given to more than one PAP.']);
         $this->postJson(route('procurement.budget-proposals.evaluate', $proposal))->assertStatus(422);   // PPRS's PAP has no code
         $this->postJson(route('procurement.budget-proposals.codes', $proposal), ['codes' => [$plans->id => '27-05011-01']])->assertOk();
         $this->postJson(route('procurement.budget-proposals.evaluate', $proposal))->assertOk();

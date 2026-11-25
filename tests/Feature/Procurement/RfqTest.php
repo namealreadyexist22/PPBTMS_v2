@@ -61,7 +61,7 @@ class RfqTest extends TestCase
         $this->bac = User::factory()->create(['is_activated' => 1, 'fname' => 'Ana', 'lname' => 'Santos', 'designation' => 'Head, BAC Secretariat']);
         $this->bac->givePermissionTo('manage rfq');
 
-        $this->ppmp = $this->ppmps->create($section, 2027, $this->staff);
+        $this->ppmp = $this->ppmps->create($section, 2026, $this->staff);
         $pap = $this->ppmps->addPap($this->ppmp, '27-05012-01', 'ICT Infrastructure');
         $this->hdd = $this->ppmps->addItem($this->ppmp, $this->project($pap->id, 'Hard Drive (4 TB)', 8, '5000', 'SVP'));
         $this->ram = $this->ppmps->addItem($this->ppmp, $this->project($pap->id, 'RAM 16 GB', 10, '3000', 'SVP'));
@@ -288,7 +288,7 @@ class RfqTest extends TestCase
     /** An approved APP whose line for the project has the given mode (the BAC's decision). */
     protected function approvedAppSetting(PpmpItem $project, string $mode): void
     {
-        $app = \App\Models\Procurement\AnnualProcurementPlan::create(['fiscal_year' => 2027, 'region' => 'lm', 'status' => 'approved', 'approved_at' => now()]);
+        $app = \App\Models\Procurement\AnnualProcurementPlan::create(['fiscal_year' => 2026, 'region' => 'lm', 'status' => 'approved', 'approved_at' => now()]);
         $line = $app->items()->create([
             'project_title' => $project->description, 'end_user' => 'MIS', 'description' => $project->description,
             'procurement_mode_id' => ProcurementMode::where('code', $mode)->value('id'), 'proc_start' => '2027-02-01', 'proc_end' => '2027-04-01',

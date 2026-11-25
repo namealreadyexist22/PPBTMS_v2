@@ -21,12 +21,6 @@ enum BudgetProposalStatus: string
         return in_array($this, [self::Draft, self::Returned], true);
     }
 
-    /** Its budget lines hold budget (like a submitted or approved PPMP) */
-    public function holdsBudget(): bool
-    {
-        return in_array($this, [self::Submitted, self::Evaluated], true);
-    }
-
     public function badge(): string
     {
         return match ($this) {

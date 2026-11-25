@@ -216,6 +216,12 @@ class BudgetAllocationTest extends TestCase
             ->assertSee('SIDA-HRD')->assertDontSee('PLANNING, POLICY');
 
         $this->postJson(route('procurement.budget.store'), ['department_id' => $this->dept->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '3,000,000.00'])->assertOk();
+
+        // The budget officer opens and removes amendment periods
+        $this->postJson(route('procurement.budget.amendment-periods.store'), ['fiscal_year' => 2027, 'name' => '1st amendment', 'opens_on' => '2027-04-23', 'closes_on' => '2027-03-23'])->assertStatus(422);
+        $this->postJson(route('procurement.budget.amendment-periods.store'), ['fiscal_year' => 2027, 'name' => '1st amendment', 'opens_on' => '2027-03-23', 'closes_on' => '2027-04-23'])->assertOk();
+        $this->get(route('procurement.budget.index', ['fy' => 2027]))->assertOk()->assertSee('1st amendment')->assertSee('Mar 23 – Apr 23, 2027')->assertDontSee('class="progress"', false);
+        $this->deleteJson(route('procurement.budget.amendment-periods.destroy'), ['id' => \App\Models\Procurement\PpmpAmendmentPeriod::sole()->id])->assertOk();
         $this->postJson(route('procurement.budget.store'), ['department_id' => $this->dept->id, 'fiscal_year' => 2027, 'fund_group' => 'sida', 'amount' => '1,000,000'])
             ->assertStatus(422)->assertJson(['status' => 'error']);   // PPSPD is COB
         $this->postJson(route('procurement.budget.store'), ['department_id' => $this->pppd->id, 'fiscal_year' => 2027, 'fund_group' => 'regular', 'amount' => '1,000,000'])
